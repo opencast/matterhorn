@@ -31,7 +31,6 @@ import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.attachment.AttachmentImpl;
-import org.opencastproject.util.MimeType;
 import org.opencastproject.util.doc.rest.RestParameter;
 import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
@@ -40,14 +39,18 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.opencastproject.util.MimeType.mimeType;
+
 @Path("/")
-@RestService(abstractText = "",
-name = "mediapackage",
-notes = {
-  "All paths above are relative to the REST endpoint base (something like http://your.server/mediapackage)",
-  "This Service doesn't manipulate data in the storage but simply changes the given XML data"
-},
-title = "Mediapackage manipulator RestService")
+@RestService(name = "mediapackage", title = "Mediapackage manipulator RestService",
+  abstractText = "",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class MediapackageRestService {
 
   private MediaPackageBuilderFactory factory;
@@ -226,7 +229,7 @@ public class MediapackageRestService {
 
       Attachment a = new AttachmentImpl();
       a.setFlavor(new MediaPackageElementFlavor(flavors[0], flavors[1]));
-      a.setMimeType(new MimeType(types[0], types[1]));
+      a.setMimeType(mimeType(types[0], types[1]));
       a.setURI(new URI(attachmentUri));
 
       mp.add(a);

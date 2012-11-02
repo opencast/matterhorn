@@ -123,6 +123,28 @@
 
   <operations>
     
+    <!-- tag the incoming source material for archival -->
+
+    <operation
+      id="tag"
+      description="Tagging source material for archival">
+      <configurations>
+        <configuration key="source-flavors">*/source</configuration>
+        <configuration key="target-tags">+archive</configuration>
+      </configurations>
+    </operation>
+
+    <!-- tag the dublin core catalogs so they will be distributed and added to search -->
+    
+    <operation
+      id="tag"
+      description="Tagging dublin core catalogs for publishing">
+      <configurations>
+        <configuration key="source-flavors">dublincore/*</configuration>
+        <configuration key="target-tags">+engage</configuration>
+      </configurations>
+    </operation> 
+
     <!-- inspect the media -->
     
     <operation
@@ -231,6 +253,9 @@
       fail-on-error="true"
       exception-handler-workflow="error"
       description="Waiting for user to upload captions">
+      <configurations>
+        <configuration key="target-tags">engage,archive</configuration>
+      </configurations>
     </operation>
 
    <!-- encode to engage player preview images -->
@@ -248,6 +273,7 @@
         <configuration key="time">1</configuration>
       </configurations>
     </operation>
+
     <operation
       id="image"
       fail-on-error="true"
@@ -276,6 +302,7 @@
         <configuration key="encoding-profile">flash.http</configuration>
       </configurations>
     </operation>
+
     <operation
       id="compose"
       fail-on-error="true"
@@ -288,6 +315,7 @@
         <configuration key="encoding-profile">flash-vga.http</configuration>
       </configurations>
     </operation>
+
     <operation
       id="compose"
       fail-on-error="false"
@@ -311,6 +339,7 @@
       description="Extracting segments from presentation">
       <configurations>
         <configuration key="source-flavor">presentation/trimmed</configuration>
+        <configuration key="target-tags">archive</configuration>
       </configurations>
     </operation>
 
@@ -342,7 +371,6 @@
         <configuration key="target-flavor">presentation/search+preview</configuration>
         <configuration key="target-tags">engage</configuration>
         <configuration key="encoding-profile">search-cover.http</configuration>
-
         <configuration key="time">1</configuration>
       </configurations>
     </operation>
@@ -378,6 +406,7 @@
         <configuration key="time">1</configuration>
       </configurations>
     </operation>
+
     <operation
       id="image"
       fail-on-error="true"
@@ -390,7 +419,6 @@
         <configuration key="target-tags">rss, atom</configuration>
         <configuration key="encoding-profile">feed-cover.http</configuration>
         <configuration key="time">1</configuration>
-
       </configurations>
     </operation>
 
@@ -422,9 +450,8 @@
       <configurations>
         <configuration key="source-flavor">presentation/trimmed</configuration>
         <configuration key="source-tags"></configuration>
-        <configuration key="target-tags">engage</configuration>
+        <configuration key="target-tags">engage,archive</configuration>
       </configurations>
-
     </operation>
 
     <!-- Apply ACL from series to the mediapackage -->
@@ -470,17 +497,19 @@
       id="archive"
       fail-on-error="true"
       exception-handler-workflow="error"
-      description="Archived">
+      description="Archiving">
+      <configurations>
+        <configuration key="source-tags">archive</configuration>
+      </configurations>
     </operation>
  
     <!-- Publish to engage search index -->
 
- 
     <operation
       id="publish"
       fail-on-error="true"
       exception-handler-workflow="error"
-      description="Published">
+      description="Publishing">
       <configurations>
         <configuration key="source-tags">publish</configuration>
       </configurations>

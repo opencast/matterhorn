@@ -124,14 +124,14 @@
           <span class="ui-icon ui-icon-info"></span> <b>Notice</b>
         </h3>
         <ul>
-          <li id="noticeOffline" class="missing-fields-item">
-            <span class="ui-icon ui-icon-carat-1-e" title=""></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
+          <li id="noticeOffline" class="missing-fields-item ui-helper-hidden">
+			<span class="ui-icon ui-icon-carat-1-e"></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
           </li>
-          <li id="noticeTzDiff" class="missing-fields-item">
+          <li id="noticeTzDiff" class="missing-fields-item ui-helper-hidden">
             <span class="ui-icon ui-icon-carat-1-e" title=""></span>The timezone for this <a href="javascript:document.getElementById('agent').focus();">capture agent</a> is <span id="tzdiff"></span>. Capture will occur according to the time local to the agent, though when you look at your list of Recordings it will be shown in your local time.
           </li>
-          <li id="noticeOffline" class="ui-state-error-text">
-            <span class="ui-icon ui-icon-carat-1-e"></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
+          <li id="noticeStartDateMoved" class="missing-fields-item ui-helper-hidden">
+            <span class="ui-icon ui-icon-carat-1-e" title=""></span>The start date of the Series has been changed to be in the future.
           </li>
         </ul>
       </div>
@@ -319,8 +319,8 @@
               <ul class="oc-ui-form-list">
                 <li>
                   <label for="scheduleRepeat" class="scheduler-label form-box-label"><span id="i18n_sched_repeats">Repeats</span>:</label>
-                  <select id="scheduleRepeat" disabled="disabled">
-                    <option value="norepeat" selected="selected" id="i18n_sched_no_repeat">Don't Repeat</option>
+                  <select id="scheduleRepeat" disabled="true">
+                    <option value="norepeat" id="i18n_sched_no_repeat">Don't Repeat</option>
                     <option value="weekly" selected="selected" id="i18n_sched_weekly">Weekly</option>
                   </select>
                 </li>

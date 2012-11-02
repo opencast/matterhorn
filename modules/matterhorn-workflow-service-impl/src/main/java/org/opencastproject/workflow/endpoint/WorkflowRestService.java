@@ -19,6 +19,7 @@ import static javax.servlet.http.HttpServletResponse.SC_CREATED;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static org.opencastproject.util.doc.rest.RestParameter.Type.INTEGER;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.TEXT;
 
@@ -98,7 +99,13 @@ import javax.ws.rs.core.Response.Status;
  * A REST endpoint for the {@link WorkflowService}
  */
 @Path("/")
-@RestService(name = "workflowservice", title = "Workflow Service", abstractText = "This service lists available workflows and starts, stops, suspends and resumes workflow instances.", notes = { "$Rev$" })
+@RestService(name = "workflowservice", title = "Workflow Service", abstractText = "This service lists available workflows and starts, stops, suspends and resumes workflow instances.", notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+                + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+                + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+                + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
   /** The default number of results returned */
@@ -356,8 +363,8 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @RestParameter(name = "sort", isRequired = false, description = "The sort order.  May include any "
                   + "of the following: DATE_CREATED, TITLE, SERIES_TITLE, SERIES_ID, MEDIA_PACKAGE_ID, WORKFLOW_DEFINITION_ID, CREATOR, "
                   + "CONTRIBUTOR, LANGUAGE, LICENSE, SUBJECT.  Add '_DESC' to reverse the sort order (e.g. TITLE_DESC).", type = STRING),
-          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = STRING),
-          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = STRING),
+          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = INTEGER),
+          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = INTEGER),
           @RestParameter(name = "compact", isRequired = false, description = "Whether to return a compact version of "
                   + "the workflow instance, with mediapackage elements, workflow and workflow operation configurations and "
                   + "non-current operations removed.", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the workflow set.") })
@@ -405,6 +412,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
     q.withText(text);
     q.withSeriesId(seriesId);
     q.withSeriesTitle(seriesTitle);
+    q.withSubject(subject);
     q.withMediaPackage(mediapackageId);
     q.withCreator(creator);
     q.withContributor(contributor);
@@ -469,7 +477,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
         // Remove all mediapackage elements (but keep the duration)
         MediaPackage mediaPackage = instance.getMediaPackage();
-        long duration = instance.getMediaPackage().getDuration();
+        Long duration = instance.getMediaPackage().getDuration();
         for (MediaPackageElement element : mediaPackage.elements()) {
           mediaPackage.remove(element);
         }
@@ -503,8 +511,8 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @RestParameter(name = "sort", isRequired = false, description = "The sort order.  May include any "
                   + "of the following: DATE_CREATED, TITLE, SERIES_TITLE, SERIES_ID, MEDIA_PACKAGE_ID, WORKFLOW_DEFINITION_ID, CREATOR, "
                   + "CONTRIBUTOR, LANGUAGE, LICENSE, SUBJECT.  Add '_DESC' to reverse the sort order (e.g. TITLE_DESC).", type = STRING),
-          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = STRING),
-          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = STRING),
+          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = INTEGER),
+          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = INTEGER),
           @RestParameter(name = "compact", isRequired = false, description = "Whether to return a compact version of "
                   + "the workflow instance, with mediapackage elements, workflow and workflow operation configurations and "
                   + "non-current operations removed.", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "A JSON representation of the workflow set.") })

@@ -15,6 +15,7 @@
  */
 package org.opencastproject.distribution.acl.endpoint;
 
+import static javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 
 import org.opencastproject.distribution.api.DistributionService;
@@ -47,12 +48,15 @@ import javax.ws.rs.core.Response.Status;
  * Rest endpoint for distributing media to the local distribution channel.
  */
 @Path("")
-@RestService(name = "localdistributionservice", title = "Local Distribution Service", abstractText = "This service "
-        + "distributes access control lists to the Matterhorn feed and engage services.", notes = { "All paths above are "
-        + "relative to the REST endpoint base (something like http://your.server/files).  If the service is down "
-        + "or not working it will return a status 503, this means the the underlying service is not working and is "
-        + "either restarting or has failed. A status code 500 means a general failure has occurred which is not "
-        + "recoverable and was not anticipated. In other words, there is a bug!" })
+@RestService(name = "localdistributionservice", title = "Local Distribution Service",
+  abstractText = "This service distributes access control lists to the Matterhorn feed and engage services.", 
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class AclDistributionRestService extends AbstractJobProducerEndpoint {
 
   /** The logger */
@@ -96,7 +100,9 @@ public class AclDistributionRestService extends AbstractJobProducerEndpoint {
   @Produces(MediaType.TEXT_XML)
   @RestQuery(name = "distribute", description = "Distribute an access control list to control a media package element to this distribution channel", returnDescription = "The job that can be used to track the distribution", restParameters = {
           @RestParameter(name = "mediapackage", isRequired = true, description = "The mediapackage", type = Type.TEXT),
-          @RestParameter(name = "elementId", isRequired = true, description = "The element to distribute", type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the distribution job") })
+          @RestParameter(name = "elementId", isRequired = true, description = "The element to distribute", type = Type.STRING) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "An XML representation of the distribution job"),
+          @RestResponse(responseCode = SC_INTERNAL_SERVER_ERROR, description = "The given mediapackage could not be distributed") })
   public Response distribute(@FormParam("mediapackage") String mediaPackageXml, @FormParam("elementId") String elementId)
           throws Exception {
     Job job = null;
@@ -115,7 +121,9 @@ public class AclDistributionRestService extends AbstractJobProducerEndpoint {
   @Produces(MediaType.TEXT_XML)
   @RestQuery(name = "retract", description = "Retract an access control list to control a media package element from this distribution channel", returnDescription = "The job that can be used to track the retraction", restParameters = {
           @RestParameter(name = "mediapackage", isRequired = true, description = "The mediapackage", type = Type.TEXT),
-          @RestParameter(name = "elementId", isRequired = true, description = "The element to retract", type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the retraction job") })
+          @RestParameter(name = "elementId", isRequired = true, description = "The element to retract", type = Type.STRING) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "An XML representation of the retraction job"),
+          @RestResponse(responseCode = SC_INTERNAL_SERVER_ERROR, description = "The given mediapackage could not be retracted") })
   public Response retract(@FormParam("mediapackage") String mediaPackageXml, @FormParam("elementId") String elementId)
           throws Exception {
     Job job = null;

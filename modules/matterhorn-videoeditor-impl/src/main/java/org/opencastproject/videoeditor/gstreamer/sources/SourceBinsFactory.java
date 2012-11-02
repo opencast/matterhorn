@@ -15,7 +15,6 @@
  */
 package org.opencastproject.videoeditor.gstreamer.sources;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import org.gstreamer.Bin;
 import org.opencastproject.videoeditor.gstreamer.GstreamerTypeFinder;
@@ -65,11 +64,6 @@ public class SourceBinsFactory {
         videoSourceBin = new GnonlinSourceBin(GnonlinSourceBin.SourceType.Video, typeFinder.getVideoCaps());
       }
       videoSourceBin.addFileSource(inputFilePath, mediaStartMillis, durationMillis);
-    }
-    
-    if (audioSourceBin != null && videoSourceBin != null 
-            && audioSourceBin.getLengthMilliseconds() != videoSourceBin.getLengthMilliseconds()) {
-      throw new InputSourceTypeException(new File(inputFilePath));
     }
   }
 

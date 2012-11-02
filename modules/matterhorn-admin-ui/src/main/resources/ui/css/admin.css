@@ -8,7 +8,7 @@ input:focus, button:focus { outline: 1px #999 solid; }
 table tr td { background: white!important; color: black; }
 table tr.highlight td { background: #d1e8ff!important; color: black; }
 table tr:hover td { background: silver!important; color: black!important; }
-table tr:hover a { color: black!important; font-weight: bold!important; }
+table tr:hover a { color: black!important; }
 table tr:hover a:hover { text-decoration: underline!important; }
 
 .layout-centered { margin-left: auto; margin-right: auto}
@@ -34,7 +34,7 @@ li#titleNote {padding:0 0 4px 0;}
 .icon-add {         background-image: url(/admin/img/icons/add.png); margin-right: 10px; }
 .icon-delete {      background-image: url(/admin/img/icons/delete.png); }
 .icon-idle 	{   background-image: url(/admin/img/icons/cup.png); margin: 0px 10px; }
-.icon-capturing {   background-image: url(/admin/img/icons/camera.png); }
+.icon-capturing {   background-image: url(/admin/img/icons/camera.png); margin: 0px 10px; }
 .icon-online {	    background-image: url(/admin/img/icons/available.png); }
 .icon-offline {     background-image: url(/admin/img/icons/offline.png); margin: 0px 10px; }
 .icon-arrow-right { background-image: url(/admin/img/icons/arrow-right.png); background-position: 0 0;}
@@ -250,4 +250,11 @@ a.secondaryButton, a.secondaryButton:link, a.secondaryButton:visited {
 a.secondaryButton:hover, a.secondaryButton:focus {
   color: #2d8f8b;
   text-decoration: underline;
+}
+
+/* Fix for correctly displaying Highcharts on hidden tabs */
+.ui-tabs .ui-tabs-hide {
+  position: absolute;
+  top: -10000px;
+  display: block !important;  
 }

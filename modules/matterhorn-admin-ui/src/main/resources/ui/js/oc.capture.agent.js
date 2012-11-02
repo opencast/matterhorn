@@ -33,9 +33,10 @@ ocCaptureAgent = new (function ()
           }				
         });	
       }				
-      if (ocCaptureAgent.polling_time >0) {	
+      if (ocCaptureAgent.polling_time > 0) {	
         $.each(ocCaptureAgent.agentsObj["agents"],function(i,item){
-          if ((item.name == agent_name)&&(item["time-since-last-update"] > ocCaptureAgent.polling_time*1000 )) {						
+                // Added a 5 second slack to account for overheard processing the http request.
+		if ((item.name == agent_name) && (item["time-since-last-update"] > (ocCaptureAgent.polling_time + 5) * 1000 )) {						
             item.state = "offline";
             return false;
           }	
@@ -49,7 +50,8 @@ ocCaptureAgent = new (function ()
         var devices,devices_arr;
         if (b==="url"){
           if (property=="") property="#";
-          else if(property.lastIndexOf("http://")!=0) property = "http://"+property;	
+          else if(property.lastIndexOf("http://")!=0 && property.lastIndexOf("https://")!=0)
+            property = "http://"+property;
         }			
         if (b==="name") {
           $.ajax({
@@ -88,7 +90,7 @@ ocCaptureAgent = new (function ()
             var index = $.inArray( prop[2].toLowerCase(), devices_arr);
             if ( index != -1) {														
               agent.devices[index]["properties"].push({
-                "key":name.trim(),
+                "key":$.trim(name),
                 "value":device.value
               });	
             }

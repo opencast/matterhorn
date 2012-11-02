@@ -17,6 +17,7 @@ package org.opencastproject.inspection.impl;
 
 import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ANONYMOUS;
 import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ID;
+import static org.opencastproject.util.MimeType.mimeType;
 
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobBarrier;
@@ -73,7 +74,7 @@ public class MediaInspectionServiceImplTest {
       // Mediainfo requires a track in order to return a status code of 0, indicating that it is workinng as expected
       URI uriTrack = MediaInspectionServiceImpl.class.getResource("/av.mov").toURI();
       File f = new File(uriTrack);
-      p = new ProcessBuilder("/usr/local/bin/" + MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT, f.getAbsolutePath())
+      p = new ProcessBuilder(MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT, f.getAbsolutePath())
               .start();
       stdout = new StreamHelper(p.getInputStream());
       stderr = new StreamHelper(p.getErrorStream());
@@ -153,6 +154,7 @@ public class MediaInspectionServiceImplTest {
       Assert.assertEquals(track.getChecksum(), cs);
       Assert.assertEquals(track.getMimeType().getType(), "video");
       Assert.assertEquals(track.getMimeType().getSubtype(), "quicktime");
+      Assert.assertNotNull(track.getDuration());
       Assert.assertTrue(track.getDuration() > 0);
     } catch (IllegalStateException e) {
       System.err.println("Skipped MediaInspectionServiceImplTest#testInspection");
@@ -170,11 +172,13 @@ public class MediaInspectionServiceImplTest {
       JobBarrier barrier = new JobBarrier(serviceRegistry, 1000, job);
       barrier.waitForJobs();
 
+      Assert.assertEquals(Job.Status.FINISHED, job.getStatus());
+      Assert.assertNotNull(job.getPayload());
       Track track = (Track) MediaPackageElementParser.getFromXml(job.getPayload());
       // make changes to metadata
       Checksum cs = track.getChecksum();
       track.setChecksum(null);
-      MimeType mt = new MimeType("video", "flash");
+      MimeType mt = mimeType("video", "flash");
       track.setMimeType(mt);
       // test the enrich scenario
       Job newJob = service.enrich(track, false);
@@ -184,6 +188,7 @@ public class MediaInspectionServiceImplTest {
       Track newTrack = (Track) MediaPackageElementParser.getFromXml(newJob.getPayload());
       Assert.assertEquals(newTrack.getChecksum(), cs);
       Assert.assertEquals(newTrack.getMimeType(), mt);
+      Assert.assertNotNull(newTrack.getDuration());
       Assert.assertTrue(newTrack.getDuration() > 0);
       // test the override scenario
       newJob = service.enrich(track, true);
