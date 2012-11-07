@@ -15,6 +15,8 @@
  */
 package org.opencastproject.security.api;
 
+import org.apache.commons.lang.StringUtils;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -132,7 +134,7 @@ public class Organization {
     this();
     this.id = id;
     this.name = name;
-    this.serverName = serverName;
+    this.serverName = StringUtils.strip(serverName, "/");
     this.serverPort = serverPort;
     this.adminRole = adminRole;
     this.anonymousRole = anonymousRole;
@@ -239,7 +241,7 @@ public class Organization {
    * An organization property. To read about why this class is necessary, see http://java.net/jira/browse/JAXB-223
    */
   @XmlAccessorType(XmlAccessType.FIELD)
-  @XmlType(name = "property", namespace = "org.opencastproject.security")
+  @XmlType(name = "property", namespace = "http://org.opencastproject.security")
   public static class OrgProperty {
 
     /** The property key */

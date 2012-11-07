@@ -20,6 +20,7 @@ import static org.opencastproject.workflow.impl.WorkflowServiceImpl.PROPERTY_PAT
 import static org.opencastproject.workflow.impl.WorkflowServiceImpl.YES;
 
 import org.opencastproject.security.api.UnauthorizedException;
+import org.opencastproject.util.JobCanceledException;
 import org.opencastproject.workflow.api.ResumableWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowDatabaseException;
 import org.opencastproject.workflow.api.WorkflowInstance;
@@ -136,6 +137,7 @@ final class WorkflowOperationWorker {
       WorkflowOperationResult result = null;
       switch (operation.getState()) {
         case INSTANTIATED:
+        case RETRY:
           result = start();
           break;
         case PAUSED:
@@ -151,6 +153,8 @@ final class WorkflowOperationWorker {
         }
       }
       workflow = service.handleOperationResult(workflow, result);
+    } catch (JobCanceledException e) {
+      logger.info(e.getMessage());
     } catch (Exception e) {
       Throwable t = e.getCause();
       if (t != null) {
@@ -163,7 +167,6 @@ final class WorkflowOperationWorker {
       } catch (Exception e2) {
         logger.error("Error handling workflow operation '{}' failure: {}",
                 new Object[] { handler, e2.getMessage(), e2 });
-        e.printStackTrace();
       }
     }
     return workflow;

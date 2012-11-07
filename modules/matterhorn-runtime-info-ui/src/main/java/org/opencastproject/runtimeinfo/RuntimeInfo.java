@@ -36,6 +36,8 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map.Entry;
@@ -43,10 +45,12 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import javax.servlet.Servlet;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
 /**
@@ -62,15 +66,31 @@ public class RuntimeInfo {
   private static final long serialVersionUID = 1L;
   private static final Logger logger = LoggerFactory.getLogger(RuntimeInfo.class);
 
+  /** Configuration properties id */
+  private static final String HTTP_PORT_PROPERTY = "org.osgi.service.http.port";
+  private static final String HTTPS_PORT_PROPERTY = "org.osgi.service.http.port.secure";
+  private static final String HTTP_ENABLE_PROPERTY = "org.apache.felix.http.enable";
+  private static final String HTTPS_ENABLE_PROPERTY = "org.apache.felix.https.enable";
+  private static final String ADMIN_URL_PROPERTY = "org.opencastproject.admin.ui.url";
+  private static final String ENGAGE_URL_PROPERTY = "org.opencastproject.engage.ui.url";
+  private static final String SERVER_URL_PROPERTY = "org.opencastproject.server.url";
+
+  private static final int DEFAULT_HTTP_PORT = -1;
+  private static final int DEFAULT_HTTPS_PORT = 8443;
+
   /** The rest publisher looks for any non-servlet with the 'opencast.service.path' property */
   public static final String SERVICE_FILTER = "(&(!(objectClass=javax.servlet.Servlet))("
           + RestConstants.SERVICE_PATH_PROPERTY + "=*))";
 
   private SecurityService securityService;
   private BundleContext bundleContext;
-  private String serverUrl;
-  private String engageBaseUrl;
-  private String adminBaseUrl;
+  private URL serverUrl;
+  private URL engageBaseUrl;
+  private URL adminBaseUrl;
+  private boolean httpEnable;
+  private boolean httpsEnable;
+  private int httpPort;
+  private int httpsPort;
 
   protected void setSecurityService(SecurityService securityService) {
     this.securityService = securityService;
@@ -84,16 +104,51 @@ public class RuntimeInfo {
     return bundleContext.getAllServiceReferences(Servlet.class.getName(), "(&(alias=*)(classpath=*))");
   }
 
-  public void activate(ComponentContext cc) {
+  public void activate(ComponentContext cc) throws MalformedURLException {
     logger.debug("start()");
+
     this.bundleContext = cc.getBundleContext();
-    this.adminBaseUrl = bundleContext.getProperty("org.opencastproject.admin.ui.url");
-    if (adminBaseUrl == null)
+
+    serverUrl = new URL(bundleContext.getProperty(SERVER_URL_PROPERTY));
+
+    // Get admin UI url
+    String adminBaseUrlStr = bundleContext.getProperty(ADMIN_URL_PROPERTY);
+    if (StringUtils.isBlank(adminBaseUrlStr))
       adminBaseUrl = serverUrl;
-    this.engageBaseUrl = bundleContext.getProperty("org.opencastproject.engage.ui.url");
-    if (engageBaseUrl == null)
+    else
+      adminBaseUrl = new URL(adminBaseUrlStr);
+
+    // Get engage UI url
+    String engageBaseUrlStr = bundleContext.getProperty(ENGAGE_URL_PROPERTY);
+    if (StringUtils.isBlank(engageBaseUrlStr))
       engageBaseUrl = serverUrl;
-    this.serverUrl = bundleContext.getProperty("org.opencastproject.server.url");
+    else
+      engageBaseUrl = new URL(engageBaseUrlStr);
+
+    // Get http/https settings
+    String httpEnableStr = bundleContext.getProperty(HTTP_ENABLE_PROPERTY);
+    if (StringUtils.isBlank(httpEnableStr))
+      httpEnable = true;
+    else
+      httpEnable = Boolean.parseBoolean(httpEnableStr);
+
+    String httpsEnableStr = bundleContext.getProperty(HTTPS_ENABLE_PROPERTY);
+    if (StringUtils.isBlank(httpsEnableStr))
+      httpsEnable = false;
+    else
+      httpsEnable = Boolean.parseBoolean(httpsEnableStr);
+
+    String httpPortStr = bundleContext.getProperty(HTTP_PORT_PROPERTY);
+    if (StringUtils.isBlank(httpPortStr))
+      httpPort = DEFAULT_HTTP_PORT;
+    else
+      httpPort = Integer.parseInt(httpPortStr);
+
+    String httpsPortStr = bundleContext.getProperty(HTTPS_PORT_PROPERTY);
+    if (StringUtils.isBlank(httpsPortStr))
+      httpsPort = DEFAULT_HTTPS_PORT;
+    else
+      httpsPort = Integer.parseInt(httpsPortStr);
   }
 
   public void deactivate() {
@@ -105,12 +160,23 @@ public class RuntimeInfo {
   @Path("components.json")
   @RestQuery(name = "services", description = "List the REST services and user interfaces running on this host", reponses = { @RestResponse(description = "The components running on this host", responseCode = HttpServletResponse.SC_OK) }, returnDescription = "")
   @SuppressWarnings("unchecked")
-  public String getRuntimeInfo() {
+  public String getRuntimeInfo(@Context HttpServletRequest request) throws MalformedURLException {
+
+    // Get request protocol and port
+    String targetScheme = request.getScheme();
+
+    // Create the target URL
+    URL targetEngageBaseUrl = new URL(targetScheme, engageBaseUrl.getHost(), engageBaseUrl.getPort(),
+            engageBaseUrl.getFile());
+    URL targetAdminBaseUrl = new URL(targetScheme, adminBaseUrl.getHost(), adminBaseUrl.getPort(),
+            adminBaseUrl.getFile());
+
     JSONObject json = new JSONObject();
-    json.put("engage", engageBaseUrl);
-    json.put("admin", adminBaseUrl);
+    json.put("engage", targetEngageBaseUrl.toString());
+    json.put("admin", targetAdminBaseUrl.toString());
     json.put("rest", getRestEndpointsAsJson());
     json.put("ui", getUserInterfacesAsJson());
+
     return json.toJSONString();
   }
 
@@ -134,7 +200,7 @@ public class RuntimeInfo {
 
     // Add the current user's organizational information
     Organization org = securityService.getOrganization();
-    
+
     JSONObject jsonOrg = new JSONObject();
     jsonOrg.put("id", org.getId());
     jsonOrg.put("name", org.getName());
@@ -166,10 +232,12 @@ public class RuntimeInfo {
     for (ServiceReference servletRef : sort(serviceRefs)) {
       String version = servletRef.getBundle().getVersion().toString();
       String description = (String) servletRef.getProperty(Constants.SERVICE_DESCRIPTION);
+      String type = (String) servletRef.getProperty(RestConstants.SERVICE_TYPE_PROPERTY);
       String servletContextPath = (String) servletRef.getProperty(RestConstants.SERVICE_PATH_PROPERTY);
       JSONObject endpoint = new JSONObject();
       endpoint.put("description", description);
       endpoint.put("version", version);
+      endpoint.put("type", type);
       endpoint.put("path", servletContextPath);
       endpoint.put("docs", serverUrl + servletContextPath + "/docs"); // This is a Matterhorn convention
       endpoint.put("wadl", serverUrl + servletContextPath + "/?_wadl&_type=xml"); // This triggers a CXF-specific

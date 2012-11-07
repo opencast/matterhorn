@@ -15,6 +15,7 @@
  */
 package org.opencastproject.runtimeinfo.rest;
 
+import org.opencastproject.util.doc.DocData;
 import org.opencastproject.util.doc.rest.RestParameter;
 import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
@@ -60,7 +61,7 @@ public class RestDocData extends DocData {
   /**
    * Regular expression used to validate a path.
    */
-  //FIXME: This regex doesn't match all valid paths that can occur in rest endpoint @Path;
+  // FIXME: This regex doesn't match all valid paths that can occur in rest endpoint @Path;
   public static final String PATH_VALIDATION_REGEX = "^[\\w\\/{}|\\:\\.\\*\\+|\\[\\w-\\w\\]\\+]+$";
 
   /**

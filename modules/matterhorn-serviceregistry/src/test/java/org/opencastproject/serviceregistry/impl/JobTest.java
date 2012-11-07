@@ -147,7 +147,7 @@ public class JobTest {
 
   @Test
   public void testGetJobs() throws Exception {
-    Job job = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false);
+    Job job = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, null);
     job.setStatus(Status.RUNNING);
     serviceRegistry.updateJob(job);
 
@@ -177,10 +177,48 @@ public class JobTest {
   }
 
   @Test
+  public void testGetChildJobs() throws Exception {
+    Job rootJob = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, null);
+    Job job = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, rootJob);
+    Job job1 = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, job);
+    Job job3 = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, job);
+    Job job4 = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, job3);
+    Job job2 = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, job1);
+    Job job5 = serviceRegistry.createJob(LOCALHOST, JOB_TYPE_1, OPERATION_NAME, null, null, false, job4);
+    serviceRegistry.updateJob(job);
+    serviceRegistry.updateJob(job1);
+    serviceRegistry.updateJob(job2);
+    serviceRegistry.updateJob(job3);
+    serviceRegistry.updateJob(job4);
+    serviceRegistry.updateJob(job5);
+
+    // Search children by root job
+    List<Job> jobs = serviceRegistry.getChildJobs(rootJob.getId());
+    Assert.assertEquals(6, jobs.size());
+    Assert.assertEquals(job, jobs.get(0));
+    Assert.assertEquals(job1, jobs.get(1));
+    Assert.assertEquals(job3, jobs.get(2));
+    Assert.assertEquals(job4, jobs.get(3));
+    Assert.assertEquals(job2, jobs.get(4));
+    Assert.assertEquals(job5, jobs.get(5));
+
+    // Search children
+    jobs = serviceRegistry.getChildJobs(job.getId());
+    Assert.assertEquals(5, jobs.size());
+    Assert.assertEquals(job1, jobs.get(0));
+    Assert.assertEquals(job3, jobs.get(1));
+    Assert.assertEquals(job4, jobs.get(2));
+    Assert.assertEquals(job2, jobs.get(3));
+    Assert.assertEquals(job5, jobs.get(4));
+  }
+
+  @Test
   public void testCount() throws Exception {
     // create a receipt on each service instance
-    serviceRegistry.createJob(regType1Localhost, OPERATION_NAME, null, null, false);
-    serviceRegistry.createJob(regType1Remotehost, OPERATION_NAME, null, null, false);
+    serviceRegistry.createJob(regType1Localhost.getHost(), regType1Localhost.getServiceType(), OPERATION_NAME, null,
+            null, false, null);
+    serviceRegistry.createJob(regType1Remotehost.getHost(), regType1Remotehost.getServiceType(), OPERATION_NAME, null,
+            null, false, null);
 
     // Since these jobs have not been dispatched to a host, there shouldn't be any jobs on those hosts
     Assert.assertEquals(0, serviceRegistry.countByHost(JOB_TYPE_1, LOCALHOST, Status.INSTANTIATED));
@@ -193,8 +231,10 @@ public class JobTest {
   @Test
   public void testCountByOperation() throws Exception {
     // create a receipt on each service instance
-    serviceRegistry.createJob(regType1Localhost, OPERATION_NAME, null, null, false);
-    serviceRegistry.createJob(regType1Remotehost, OPERATION_NAME, null, null, false);
+    serviceRegistry.createJob(regType1Localhost.getHost(), regType1Localhost.getServiceType(), OPERATION_NAME, null,
+            null, false, null);
+    serviceRegistry.createJob(regType1Remotehost.getHost(), regType1Remotehost.getServiceType(), OPERATION_NAME, null,
+            null, false, null);
 
     // Counting any job without regard to host should return both jobs
     Assert.assertEquals(2, serviceRegistry.countByOperation(JOB_TYPE_1, OPERATION_NAME, Status.INSTANTIATED));
@@ -235,14 +275,14 @@ public class JobTest {
     localFinished.setStatus(Status.FINISHED);
     serviceRegistry.updateJob(localFinished);
 
-    JobJpaImpl remoteRunning = (JobJpaImpl) serviceRegistry.createJob(regType1Remotehost, OPERATION_NAME, null, null,
-            false);
+    JobJpaImpl remoteRunning = (JobJpaImpl) serviceRegistry.createJob(regType1Remotehost.getHost(),
+            regType1Remotehost.getServiceType(), OPERATION_NAME, null, null, false, null);
     remoteRunning.setStatus(Status.RUNNING);
     remoteRunning.setProcessorServiceRegistration(regType1Remotehost);
     serviceRegistry.updateJob(remoteRunning);
 
-    JobJpaImpl remoteFinished = (JobJpaImpl) serviceRegistry.createJob(regType1Remotehost, OPERATION_NAME, null, null,
-            false);
+    JobJpaImpl remoteFinished = (JobJpaImpl) serviceRegistry.createJob(regType1Remotehost.getHost(),
+            regType1Remotehost.getServiceType(), OPERATION_NAME, null, null, false, null);
     // Simulate starting the job
     remoteFinished.setStatus(Status.RUNNING);
     remoteFinished.setProcessorServiceRegistration(regType1Remotehost);
@@ -439,7 +479,7 @@ public class JobTest {
   @Test
   public void testJobsQueuedOnServiceUnregistration() throws Exception {
     // Create a job
-    JobJpaImpl job = (JobJpaImpl) serviceRegistry.createJob(JOB_TYPE_1, "some operation", null, null, false);
+    JobJpaImpl job = (JobJpaImpl) serviceRegistry.createJob(JOB_TYPE_1, "some operation", null, null, false, null);
 
     // Set its status to running on a localhost
     job.setStatus(Status.RUNNING);
@@ -454,7 +494,7 @@ public class JobTest {
     serviceRegistry.unRegisterService(regType1Localhost.getServiceType(), regType1Localhost.getHost());
 
     // Ensure that the job is queued now
-    Assert.assertEquals("Job should be queued", Status.QUEUED, serviceRegistry.getJob(job.getId()).getStatus());
+    Assert.assertEquals("Job should be queued", Status.RESTART, serviceRegistry.getJob(job.getId()).getStatus());
     Assert.assertNull("Job's processing service should be null", serviceRegistry.getJob(job.getId())
             .getProcessingHost());
   }
@@ -479,7 +519,7 @@ public class JobTest {
     serviceRegistry.unRegisterService(JOB_TYPE_1, LOCALHOST);
 
     // Ensure that the job is once again queued, so it can be dispatched to a server ready to accept it
-    Assert.assertEquals("Job should be queued", Status.QUEUED, serviceRegistry.getJob(job.getId()).getStatus());
+    Assert.assertEquals("Job should be queued", Status.RESTART, serviceRegistry.getJob(job.getId()).getStatus());
     Assert.assertNull("Job should have no associated processor", serviceRegistry.getJob(job.getId())
             .getProcessingHost());
   }
@@ -499,7 +539,7 @@ public class JobTest {
     serviceRegistry.unregisterHost(LOCALHOST);
 
     // Ensure that the job is once again queued, so it can be dispatched to a server ready to accept it
-    Assert.assertEquals("Job should be queued", Status.QUEUED, serviceRegistry.getJob(job.getId()).getStatus());
+    Assert.assertEquals("Job should be queued", Status.RESTART, serviceRegistry.getJob(job.getId()).getStatus());
     Assert.assertNull("Job should have no associated processor", serviceRegistry.getJob(job.getId())
             .getProcessingHost());
   }

@@ -25,7 +25,7 @@ Opencast.search = (function ()
     var dataStor,
         staticInputElem,
         mediaPackageId,
-        staticImg = $('#segment0').css('background'), // 'url("../../img/jquery/ui-bg_flat_75_fde7ce_40x100.png") repeat-x scroll 50% 50% #FDE7CE',
+        staticImg = $('#segment0').css('background'), // 'url("/engage/ui/img/jquery/ui-bg_flat_75_fde7ce_40x100.png") repeat-x scroll 50% 50% #FDE7CE',
         SEARCH = 'Search this Recording',
         colorFirst = '#C0C0C0',
         colorSecond = '#ADD8E6',
@@ -34,7 +34,7 @@ Opencast.search = (function ()
         lastHit = '',         // storage for latest successful search hit
         validSegments = [],   // map of old and new segments
         requestedValidSegments = false,
-        searchOpen = false,
+        isOpen = false,
         currentInputElem = '',
         currentSearchStr = '';
     
@@ -66,15 +66,6 @@ Opencast.search = (function ()
     function getThirdColor()
     {
         return colorThird;
-    }
-    
-    /**
-     * @memberOf Opencast.search
-     * @description Initializes the search view
-     */
-    function initialize()
-    {
-        // Do nothing in here
     }
     
     /**
@@ -226,10 +217,7 @@ Opencast.search = (function ()
             $(staticInputElem).val('');
         }
         // Hide other Tabs
-        Opencast.Description.hideDescription();
-        Opencast.segments.hideSegments();
-        Opencast.segments_text.hideSegmentsText();
-        Opencast.User.hideUserTab();
+	Opencast.Plugin_Controller.hideAll(Opencast.search);
         $("#oc_btn-lecturer-search").attr('aria-pressed', 'true');
         // Show a loading Image
         $('#oc_search-segment').show();
@@ -247,8 +235,6 @@ Opencast.search = (function ()
             success: function (data)
             {
                 $.log("Search AJAX call: Requesting data succeeded");
-                // get rid of every '@' in the JSON data
-                // dataStor = $.parseJSON(JSON.stringify(data).replace(/@/g, ''));
                 dataStor = data;
                 var segmentsAvailable = true;
                 if ((dataStor === undefined) || (dataStor['search-results'] === undefined) || (dataStor['search-results'].result === undefined))
@@ -368,26 +354,29 @@ Opencast.search = (function ()
      */
     function displayResult()
     {
-        searchOpen = true;
         $('#oc_search-segment').show();
         $('#search-loading').hide();
         $('#oc-search-result').show();
+	isOpen = true;
     }
     
     /**
      * @memberOf Opencast.search
      * @description Hides the whole Search
      */
-    function hideSearch()
+    function hide()
     {
-        searchOpen = false;
-        $("#oc_btn-lecturer-search").attr('aria-pressed', 'false');
-        $('#oc_search-segment').hide();
-        // Write the default value if no search value has been given
-        if ($(staticInputElem).val() === '')
-        {
-            $(staticInputElem).val(SEARCH);
-        }
+	if(isOpen)
+	{
+            $("#oc_btn-lecturer-search").attr('aria-pressed', 'false');
+            $('#oc_search-segment').hide();
+            // Write the default value if no search value has been given
+            if ($(staticInputElem).val() === '')
+            {
+		$(staticInputElem).val(SEARCH);
+            }
+            isOpen = false;
+	}
     }
     
     /**
@@ -397,16 +386,8 @@ Opencast.search = (function ()
     function initialize()
     {
         requestedValidSegments = false;
-    }
-    
-    /**
-     * @memberOf Opencast.search
-     * @description Returns if search is opened
-     * @return true if search is opened, false else
-     */
-    function isOpen()
-    {
-        return searchOpen;
+	var reg = Opencast.Plugin_Controller.registerPlugin(Opencast.search);
+	$.log("Opencast.search registered: " + reg);
     }
     
     return {
@@ -417,7 +398,7 @@ Opencast.search = (function ()
         getCurrentInputElement: getCurrentInputElement,
         getCurrentSearchString: getCurrentSearchString,
         showResult: showResult,
-        hideSearch: hideSearch,
+        hide: hide,
         isOpen: isOpen,
         setMediaPackageId: setMediaPackageId
     };

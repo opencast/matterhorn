@@ -2,6 +2,33 @@
   <div>
     <h2 style="text-align:center"><span id="i18n_page_title">Add Series</span></h2>
   </div>
+
+  <!-- missing fields notification -->
+
+  <div id="missingFieldsContainer" class="layout-page-header ui-helper-hidden">
+    <div class="layout-centered ui-state-error ui-corner-all scheduler-info-container">
+      <h3 style="position: relative; padding-left: 20px;">
+        <span class="ui-icon ui-icon-alert"></span> <b>Missing or invalid input</b>
+      </h3>
+
+      <ul>
+        <li id="item-title" class="missing-fields-item">
+          <span class="ui-icon ui-icon-carat-1-e"></span>
+          <span>
+            Please enter a <a href="javascript:document.getElementById('title').focus();">title</a> for the Series.
+          </span>
+        </li>
+        <li id="item-title-existing" class="missing-fields-item">
+
+          <span class="ui-icon ui-icon-carat-1-e"></span>
+          <span>
+            The <a href="javascript:document.getElementById('title').focus();">title</a> you have entered is already used by another Series. 
+          </span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
   <div class="form-box layout-centered ui-widget">
     <div class="form-box-content ui-widget-content ui-corner-all">
       <ul class="oc-ui-form-list">
@@ -29,7 +56,6 @@
       <div id="additionalContentTabs" style="border: none;">
         <ul>
           <li><a href="#commonTab" id="i18n_common_tab">Common Descriptors</a></li>
-          <!--<li><a href="#additionalTab" id="i18n_additional_tab">Additional Metadata</a></li>-->
         </ul>
         <div id="commonTab">
           <ul class="oc-ui-form-list">
@@ -73,6 +99,7 @@
             <th>Role</th>
             <th>View</th>
             <th>Administer</th>
+            <th>Analyze</th>
             <th></th>
           </tr>
         </thead>
@@ -87,14 +114,34 @@
       </table>
     </div>
   </div>
+  <!-- SETTINGS -->
+  <div class="form-box layout-centered ui-widget oc-ui-collapsible-widget">
+    <div class="form-box-head ui-widget-header ui-corner-top oc-ui-cursor">
+      <div class="ui-icon ui-icon-triangle-1-e fold-icon"></div>
+      <div id="i18n_content_descriptors" class="fold-icon-text">Settings</div>
+    </div>
+    <div class="ui-widget-content ui-corner-bottom">
+      <div id="commonTab">
+        <ul class="oc-ui-form-list">
+          <li>
+            <label class="scheduler-label"></label>
+            <input type="checkbox" class="oc-ui-form-field oc-metadata-field" id="annotation" />
+            <label for="annotation" style="text-align: left; width: 300px;">
+              Allow Annotations
+            </label>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
   <div class="form-box layout-centered ui-widget">
     <div class="form-box-content ui-widget-content ui-corner-all">
       <form action="">
         <ul class="oc-ui-form-list">
           <li>
             <label class="scheduler-label">&nbsp;</label>
-            <input type="button" value="Save" id="submitButton" />
-            <input type="button" value="Cancel" id="cancelButton" />
+            <input type="button" value="Save" id="submitButton" class="mouseover-pointer control-button" />
+            <a id="cancelButton" title="Cancel" class="secondaryButton">Cancel</a>
             <input type="hidden" id="id" />
           </li>
           <li>

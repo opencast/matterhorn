@@ -15,6 +15,8 @@
  */
 package org.opencastproject.capture.impl;
 
+import static org.opencastproject.util.MimeType.mimeType;
+
 import org.opencastproject.capture.CaptureParameters;
 import org.opencastproject.capture.admin.api.AgentState;
 import org.opencastproject.capture.admin.api.Recording;
@@ -47,8 +49,8 @@ import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryException;
 import org.opencastproject.util.Checksum;
 import org.opencastproject.util.ChecksumType;
-import org.opencastproject.util.MimeType;
 import org.opencastproject.util.UrlSupport;
+import org.opencastproject.util.XProperties;
 import org.opencastproject.util.ZipUtil;
 
 import org.apache.commons.io.FileUtils;
@@ -69,7 +71,6 @@ import org.quartz.SimpleTrigger;
 import org.quartz.impl.StdSchedulerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -81,6 +82,8 @@ import java.io.ObjectOutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.security.NoSuchAlgorithmException;
@@ -98,15 +101,6 @@ import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.activation.MimetypesFileTypeMap;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Result;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import org.opencastproject.capture.impl.monitoring.ConfidenceMonitorImpl;
 
 /**
  * Implementation of the Capture Agent: using gstreamer, generates several Pipelines to store several tracks from a
@@ -571,6 +565,16 @@ public class CaptureAgentImpl implements CaptureAgent, StateService,  ManagedSer
         flavor = MediaPackageElementFlavor.parseFlavor(flavorString);
 
         String outputProperty = CaptureParameters.CAPTURE_DEVICE_PREFIX + name + CaptureParameters.CAPTURE_DEVICE_DEST;
+        if (null == recording.getProperty(outputProperty)) {
+          logger.error(CaptureParameters.CAPTURE_DEVICE_PREFIX + name + CaptureParameters.CAPTURE_DEVICE_DEST
+                  + "does not exist in the recording's properties.  Your CA's configuration file, or the configuration "
+                  + "received from the core is missing information.  This should be checked ASAP.");
+          // FIXME: Is the admin reading the agent logs? (jt)
+          // FIXME: Who will find out why one of the tracks is missing from the media package? (jt)
+          // FIXME: Think about a notification scheme, this looks like an emergency to me (jt)
+          setRecordingState(recording.getID(), RecordingState.MANIFEST_ERROR);
+          return false;
+        }
         File outputFile = new File(recording.getBaseDir(), recording.getProperty(outputProperty));
 
         // Adds the file to the MediaPackage
@@ -581,7 +585,7 @@ public class CaptureAgentImpl implements CaptureAgent, StateService,  ManagedSer
                   flavor);
           t.setSize(outputFile.length());
           String[] detectedMimeType = new MimetypesFileTypeMap().getContentType(outputFile).split("/");
-          t.setMimeType(new MimeType(detectedMimeType[0], detectedMimeType[1]));
+          t.setMimeType(mimeType(detectedMimeType[0], detectedMimeType[1]));
           t.setChecksum(Checksum.create(ChecksumType.DEFAULT_TYPE, outputFile));
           if (recording.getProperty(CaptureParameters.RECORDING_DURATION) != null) {
             t.setDuration(Long.parseLong(recording.getProperty(CaptureParameters.RECORDING_DURATION)));
@@ -619,18 +623,19 @@ public class CaptureAgentImpl implements CaptureAgent, StateService,  ManagedSer
     FileOutputStream fos = null;
     try {
       logger.debug("Serializing metadata and MediaPackage...");
-
+      
       // Gets the manifest.xml as a Document object and writes it to a file
       MediaPackageSerializer serializer = new DefaultMediaPackageSerializerImpl(recording.getBaseDir());
       File manifestFile = new File(recording.getBaseDir(), CaptureParameters.MANIFEST_NAME);
-      Result outputFile = new StreamResult(manifestFile);
-      Document manifest = MediaPackageParser.getAsXml(recording.getMediaPackage(), serializer);
 
-      TransformerFactory tf = TransformerFactory.newInstance();
-      Transformer t = tf.newTransformer();
-      t.setOutputProperty(OutputKeys.INDENT, "yes");
-      t.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
-      t.transform(new DOMSource(manifest), outputFile);
+      MediaPackage mp = recording.getMediaPackage();
+      for (MediaPackageElement element : mp.elements()) {
+        if (element.getURI() != null) {
+          element.setURI(new URI(serializer.encodeURI(element.getURI())));
+        }
+      }
+      fos = new FileOutputStream(manifestFile);
+      MediaPackageParser.getAsXml(mp, fos, true);
 
     } catch (MediaPackageException e) {
       logger.error("MediaPackage Exception: {}.", e);
@@ -640,12 +645,8 @@ public class CaptureAgentImpl implements CaptureAgent, StateService,  ManagedSer
       logger.error("I/O Exception: {}.", e);
       setRecordingState(recording.getID(), RecordingState.MANIFEST_ERROR);
       return false;
-    } catch (TransformerConfigurationException e) {
-      logger.error("Transformer configuration exception: {}.", e);
-      setRecordingState(recording.getID(), RecordingState.MANIFEST_ERROR);
-      return false;
-    } catch (TransformerException e) {
-      logger.error("Transformer exception: {}.", e);
+    } catch (URISyntaxException e) {
+      logger.error("URI Syntax Exception: {}.", e);
       setRecordingState(recording.getID(), RecordingState.MANIFEST_ERROR);
       return false;
     } finally {
@@ -870,23 +871,23 @@ public class CaptureAgentImpl implements CaptureAgent, StateService,  ManagedSer
    */
   protected void setAgentState(String state) {
     // ConfidenceMonitorImp shoud be an singelton service and allways active
-    if (confidence && ConfidenceMonitorImpl.getInstance() != null) {
-      if (state.equalsIgnoreCase(AgentState.CAPTURING)) {
-        ConfidenceMonitorImpl.getInstance().stopMonitoring();
-        logger.info("Confidence monitoring has been shut down.");
-        // Gst.deinit();
-      } else if (state.equalsIgnoreCase(AgentState.IDLE)) {
-        
-        try {
-          if (ConfidenceMonitorImpl.getInstance().startMonitoring()) {
-            logger.info("Confidence monitoring started.");
-          }
-          // TODO: What if the pipeline crashes out? We just run without it?
-        } catch (Exception e) {
-          logger.warn("Confidence monitoring not started: {}", e);
-        }
-      }
-    }
+//    if (confidence && ConfidenceMonitorImpl.getInstance() != null) {
+//      if (state.equalsIgnoreCase(AgentState.CAPTURING)) {
+//        ConfidenceMonitorImpl.getInstance().stopMonitoring();
+//        logger.info("Confidence monitoring has been shut down.");
+//        // Gst.deinit();
+//      } else if (state.equalsIgnoreCase(AgentState.IDLE)) {
+//        
+//        try {
+//          if (ConfidenceMonitorImpl.getInstance().startMonitoring()) {
+//            logger.info("Confidence monitoring started.");
+//          }
+//          // TODO: What if the pipeline crashes out? We just run without it?
+//        } catch (Exception e) {
+//          logger.warn("Confidence monitoring not started: {}", e);
+//        }
+//      }
+//    }
 
     agentState = state;
   }

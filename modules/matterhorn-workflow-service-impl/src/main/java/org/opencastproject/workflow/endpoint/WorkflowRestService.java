@@ -19,11 +19,13 @@ import static javax.servlet.http.HttpServletResponse.SC_CREATED;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static org.opencastproject.util.doc.rest.RestParameter.Type.INTEGER;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.TEXT;
 
 import org.opencastproject.job.api.JobProducer;
 import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageImpl;
 import org.opencastproject.rest.AbstractJobProducerEndpoint;
@@ -97,33 +99,31 @@ import javax.ws.rs.core.Response.Status;
  * A REST endpoint for the {@link WorkflowService}
  */
 @Path("/")
-@RestService(name = "workflowservice", title = "Workflow Service", abstractText = "This service lists available workflows and starts, stops, suspends and resumes workflow instances.", notes = { "$Rev$" })
+@RestService(name = "workflowservice", title = "Workflow Service", abstractText = "This service lists available workflows and starts, stops, suspends and resumes workflow instances.", notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+                + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+                + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+                + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
   /** The default number of results returned */
   private static final int DEFAULT_LIMIT = 20;
-
   /** The maximum number of results returned */
   private static final int MAX_LIMIT = 100;
-
   /** The constant used to negate a querystring parameter. This is only supported on some parameters. */
   public static final String NEGATE_PREFIX = "-";
-
   /** The constant used to switch the direction of the sorting querystring parameter. */
   public static final String DESCENDING_SUFFIX = "_DESC";
-
   /** The logger */
   private static final Logger logger = LoggerFactory.getLogger(WorkflowRestService.class);
-
   /** The default server URL */
   protected String serverUrl = UrlSupport.DEFAULT_BASE_URL;
-
   /** The default service URL */
   protected String serviceUrl = serverUrl + "/workflow";
-
   /** The workflow service instance */
   private WorkflowService service;
-
   /** The service registry */
   protected ServiceRegistry serviceRegistry = null;
 
@@ -172,7 +172,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   public String getSampleMediaPackage() {
     String samplesUrl = serverUrl + "/workflow/samples";
 
-    return "<ns2:mediapackage xmlns:ns2=\"http://mediapackage.opencastproject.org\" start=\"2007-12-05T13:40:00\" duration=\"1004400000\">\n"
+    return "<mediapackage xmlns=\"http://mediapackage.opencastproject.org\" start=\"2007-12-05T13:40:00\" duration=\"1004400000\">\n"
             + "  <media>\n"
             + "    <track id=\"track-1\" type=\"presenter/source\">\n"
             + "      <mimetype>audio/mp3</mimetype>\n" + "      <url>"
@@ -212,7 +212,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
             + "/dc-1.xml</url>\n"
             + "      <checksum type=\"md5\">20e466615251074e127a1627fd0dae3e</checksum>\n"
             + "    </catalog>\n"
-            + "  </metadata>\n" + "</ns2:mediapackage>";
+            + "  </metadata>\n" + "</mediapackage>";
   }
 
   public String getSampleWorkflowDefinition() throws IOException {
@@ -333,8 +333,8 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
       JSONObject op = new JSONObject();
       op.put("name", operationDefinition.getId());
       op.put("description", operationDefinition.getDescription());
-      op.put("exception_handler_workflow", operationDefinition.getExceptionHandlingWorkflow());
-      op.put("fail_on_error", operationDefinition.isFailWorkflowOnException());
+      op.put("exception-handler-workflow", operationDefinition.getExceptionHandlingWorkflow());
+      op.put("fail-on-error", operationDefinition.isFailWorkflowOnException());
       opList.add(op);
     }
     json.put("operations", opList);
@@ -363,8 +363,8 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @RestParameter(name = "sort", isRequired = false, description = "The sort order.  May include any "
                   + "of the following: DATE_CREATED, TITLE, SERIES_TITLE, SERIES_ID, MEDIA_PACKAGE_ID, WORKFLOW_DEFINITION_ID, CREATOR, "
                   + "CONTRIBUTOR, LANGUAGE, LICENSE, SUBJECT.  Add '_DESC' to reverse the sort order (e.g. TITLE_DESC).", type = STRING),
-          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = STRING),
-          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = STRING),
+          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = INTEGER),
+          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = INTEGER),
           @RestParameter(name = "compact", isRequired = false, description = "Whether to return a compact version of "
                   + "the workflow instance, with mediapackage elements, workflow and workflow operation configurations and "
                   + "non-current operations removed.", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the workflow set.") })
@@ -395,8 +395,9 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
     if (states != null && states.size() > 0) {
       try {
         for (String state : states) {
-          if (StringUtils.isBlank(state))
+          if (StringUtils.isBlank(state)) {
             continue;
+          }
           if (state.startsWith(NEGATE_PREFIX)) {
             q.withoutState(WorkflowState.valueOf(state.substring(1).toUpperCase()));
           } else {
@@ -411,6 +412,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
     q.withText(text);
     q.withSeriesId(seriesId);
     q.withSeriesTitle(seriesTitle);
+    q.withSubject(subject);
     q.withMediaPackage(mediapackageId);
     q.withCreator(creator);
     q.withContributor(contributor);
@@ -423,8 +425,9 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
     if (currentOperations != null && currentOperations.size() > 0) {
       for (String op : currentOperations) {
-        if (StringUtils.isBlank(op))
+        if (StringUtils.isBlank(op)) {
           continue;
+        }
         if (op.startsWith(NEGATE_PREFIX)) {
           q.withoutCurrentOperation(op.substring(1));
         } else {
@@ -474,7 +477,7 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
         // Remove all mediapackage elements (but keep the duration)
         MediaPackage mediaPackage = instance.getMediaPackage();
-        long duration = instance.getMediaPackage().getDuration();
+        Long duration = instance.getMediaPackage().getDuration();
         for (MediaPackageElement element : mediaPackage.elements()) {
           mediaPackage.remove(element);
         }
@@ -508,8 +511,8 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @RestParameter(name = "sort", isRequired = false, description = "The sort order.  May include any "
                   + "of the following: DATE_CREATED, TITLE, SERIES_TITLE, SERIES_ID, MEDIA_PACKAGE_ID, WORKFLOW_DEFINITION_ID, CREATOR, "
                   + "CONTRIBUTOR, LANGUAGE, LICENSE, SUBJECT.  Add '_DESC' to reverse the sort order (e.g. TITLE_DESC).", type = STRING),
-          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = STRING),
-          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = STRING),
+          @RestParameter(name = "startPage", isRequired = false, description = "The paging offset", type = INTEGER),
+          @RestParameter(name = "count", isRequired = false, description = "The number of results to return.", type = INTEGER),
           @RestParameter(name = "compact", isRequired = false, description = "Whether to return a compact version of "
                   + "the workflow instance, with mediapackage elements, workflow and workflow operation configurations and "
                   + "non-current operations removed.", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "A JSON representation of the workflow set.") })
@@ -562,10 +565,12 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   public WorkflowInstanceImpl start(@FormParam("definition") String workflowDefinitionXml,
           @FormParam("mediapackage") MediaPackageImpl mp, @FormParam("parent") String parentWorkflowId,
           @FormParam("properties") LocalHashMap localMap) {
-    if (mp == null)
+    if (mp == null) {
       throw new WebApplicationException(Status.BAD_REQUEST);
-    if (StringUtils.isBlank(workflowDefinitionXml))
+    }
+    if (StringUtils.isBlank(workflowDefinitionXml)) {
       throw new WebApplicationException(Status.BAD_REQUEST);
+    }
     WorkflowDefinition workflowDefinition;
     try {
       workflowDefinition = WorkflowParser.parseWorkflowDefinition(workflowDefinitionXml);
@@ -573,10 +578,11 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
       throw new WebApplicationException(e);
     }
     Map<String, String> properties = null;
-    if (localMap != null)
+    if (localMap != null) {
       properties = localMap.getMap();
-    else
+    } else {
       properties = new HashMap<String, String>();
+    }
     Long parentIdAsLong = null;
     if (StringUtils.isNotEmpty(parentWorkflowId)) {
       try {
@@ -608,22 +614,15 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   @DELETE
   @Path("remove/{id}")
   @Produces(MediaType.TEXT_PLAIN)
-  @RestQuery(name = "remove", description = "Danger! Permenantly removes a workflow instance. This does not remove associated jobs, and there are potential harmful effects by removing a workflow. In most circumstances, /stop is what you should use.",
-          returnDescription = "HTTP 204 No Content",
-          pathParameters = {
-            @RestParameter(name = "id", isRequired = true,
-            description = "The workflow instance identifier", type = STRING)
-          },
-          reponses = {
-            @RestResponse(responseCode = HttpServletResponse.SC_NO_CONTENT , description = "No Conent."),
-            @RestResponse(responseCode = SC_NOT_FOUND, description = "No running workflow instance with that identifier exists.")
-          })
+  @RestQuery(name = "remove", description = "Danger! Permenantly removes a workflow instance. This does not remove associated jobs, and there are potential harmful effects by removing a workflow. In most circumstances, /stop is what you should use.", returnDescription = "HTTP 204 No Content", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow instance identifier", type = STRING) }, reponses = {
+          @RestResponse(responseCode = HttpServletResponse.SC_NO_CONTENT, description = "No Conent."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "No running workflow instance with that identifier exists.") })
   public Response remove(@PathParam("id") long workflowInstanceId) throws WorkflowException, NotFoundException,
           UnauthorizedException {
     service.remove(workflowInstanceId);
     return Response.noContent().build();
   }
-  
+
   @POST
   @Path("suspend")
   @Produces(MediaType.TEXT_XML)
@@ -664,12 +663,14 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   @POST
   @Path("replaceAndresume")
   @Produces(MediaType.TEXT_XML)
-  @RestQuery(name = "replaceAndresume", description = "Replaces a suspended workflow instance with an updated version, and resumes the workflow.", returnDescription = "An XML representation of the updated and resumed workflow instance", restParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow instance identifier", type = STRING) }, reponses = {
+  @RestQuery(name = "replaceAndresume", description = "Replaces a suspended workflow instance with an updated version, and resumes the workflow.", returnDescription = "An XML representation of the updated and resumed workflow instance", restParameters = {
+          @RestParameter(name = "id", isRequired = true, description = "The workflow instance identifier", type = STRING),
+          @RestParameter(name = "mediapackage", isRequired = false, description = "The new Mediapackage", type = TEXT),
+          @RestParameter(name = "properties", isRequired = false, description = "Properties", type = TEXT) }, reponses = {
           @RestResponse(responseCode = SC_OK, description = "An XML representation of the updated and resumed workflow instance."),
           @RestResponse(responseCode = SC_NOT_FOUND, description = "No suspended workflow instance with that identifier exists.") })
-  public Response resume(@FormParam("id") long workflowInstanceId,
-          @FormParam("mediapackage") MediaPackageImpl mediaPackage, @FormParam("properties") LocalHashMap properties)
-          throws NotFoundException, UnauthorizedException {
+  public Response resume(@FormParam("id") long workflowInstanceId, @FormParam("mediapackage") String mediaPackage,
+          @FormParam("properties") LocalHashMap properties) throws NotFoundException, UnauthorizedException {
     Map<String, String> map;
     if (properties == null) {
       map = new HashMap<String, String>();
@@ -679,12 +680,17 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
     try {
       WorkflowInstance workflow = service.getWorkflowById(workflowInstanceId);
       if (mediaPackage != null) {
-        workflow.setMediaPackage(mediaPackage);
+        MediaPackage mp = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().loadFromXml(mediaPackage);
+        workflow.setMediaPackage(mp);
         service.update(workflow);
       }
       service.resume(workflowInstanceId, map);
       return Response.ok(workflow).build();
     } catch (WorkflowException e) {
+      logger.error(e.getMessage(), e);
+      throw new WebApplicationException(e);
+    } catch (Exception e) {
+      logger.error(e.getMessage(), e);
       throw new WebApplicationException(e);
     }
   }
@@ -798,10 +804,20 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
    */
   @Override
   public JobProducer getService() {
-    if (service instanceof JobProducer)
+    if (service instanceof JobProducer) {
       return (JobProducer) service;
-    else
+    } else {
       return null;
+    }
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.rest.AbstractJobProducerEndpoint#getServiceRegistry()
+   */
+  @Override
+  public ServiceRegistry getServiceRegistry() {
+    return serviceRegistry;
+  }
 }

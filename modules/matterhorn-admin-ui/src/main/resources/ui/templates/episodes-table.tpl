@@ -1,8 +1,9 @@
 <table id="episodesTable" class="ui-widget" cellspacing="0" width="100%">
   <thead>
   <tr>
-    <!--<th class="ui-state-default"><input type="checkbox" id="selectAllRecordings"-->
-    <!--onclick="ocArchive.selectAll(this.checked);"/></th>-->
+    <th class="ui-state-default">
+      <input type="checkbox" id="selectAllEpisodes" title="Select all episodes on this page"/>
+    </th>
     <th id="sortTitle" width="25%" class="ui-widget-header sortable">
       <div>Title
         <div class="sort-icon ui-icon ui-icon-triangle-2-n-s"></div>
@@ -24,14 +25,17 @@
       </div>
     </th>
     <th class="ui-widget-header">Process</th>
-    <th class="ui-widget-header">Start Workflow</th>
+    <th class="ui-widget-header">State</th>
+    <th class="ui-widget-header"></th>
     <th class="ui-widget-header"></th>
   </tr>
   </thead>
   <tbody>
     <% _.each(this.episodes, function(e) { %>
       <tr valign="top">
-        <!--<td class="ui-state-active"><input type="checkbox" value="${mp.id}" class="selectRecording"/></td>-->
+        <td class="ui-state-active">
+          <input type="checkbox" value="<%= e.id %>" class="selectEpisode"/>
+        </td>
         <td class="ui-state-active"><%= e.title %></td>
         <td class="ui-state-active"><%= e.creators %></td>
         <td class="ui-state-active"><%= ocUtils.dflt(e.seriesTitle) %></td>
@@ -42,11 +46,12 @@
           <% } %>
         </td>
         <td class="ui-state-active">
-          <% if (e.media.length > 0) { %>
-            <a onclick="ocArchive.retract('<%= e.id %>'); return false;" href="#">Retract</a>
-          <% } else { %>
+          <% if (e.media.length == 0) { %>
             retracted
           <% } %>
+        </td>
+        <td class="ui-state-active">
+          <a href="#" class="edit" data-eid="<%= e.id %>">Edit</a>
         </td>
         <td class="ui-state-active" style="text-align: center">
           <a href="#/episodedetails?id=<%= e.id %>">Details</a>

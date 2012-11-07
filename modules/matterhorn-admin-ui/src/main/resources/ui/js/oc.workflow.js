@@ -35,7 +35,7 @@ ocWorkflow.loadDefinitions = function(selector, container) {
         if (data.workflow_definitions[i].id != 'error') {
           var option = document.createElement("option");
           option.setAttribute("value", data.workflow_definitions[i].id);
-          option.innerHTML = data.workflow_definitions[i].title;
+          option.innerHTML = data.workflow_definitions[i].title || data.workflow_definitions[i].id;
           if (data.workflow_definitions[i].id == "full") {
             option.setAttribute("selected", "true");
           }
@@ -48,6 +48,8 @@ ocWorkflow.loadDefinitions = function(selector, container) {
 }
 
 ocWorkflow.definitionSelected = function(defId, container, callback) {
+  if(typeof ocWorkflowPanel != 'undefined')
+    ocWorkflowPanel = null;
   $(container).load('/workflow/configurationPanel?definitionId=' + defId,
     function() {
       $('.holdCheckbox').attr('checked', false);
@@ -59,7 +61,7 @@ ocWorkflow.definitionSelected = function(defId, container, callback) {
         ocScheduler.workflowComponents = {}; //Clear the previously selected panel's components
         ocWorkflowPanel.registerComponents(ocScheduler.capture.components);
       }else{
-        ocUtils.log("component registration handler not found.", ocWorkflowPanel, ocWorkflowPanel.registerComponents);
+        ocUtils.log("component registration handler not found in workflow.", defId);
       }
     }
   );

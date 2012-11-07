@@ -63,9 +63,15 @@ import javax.xml.transform.stream.StreamResult;
  * Rest endpoint for {@link CaptionService}.
  */
 @Path("/")
-@RestService(name = "caption", title = "Caption Service", notes = { "If you notice that this service is not working as expected, there might be a bug! "
-        + "You should file an error report with your server logs from the time when the error occurred: "
-        + "<a href=\"http://opencast.jira.com\">Opencast Issue Tracker</a>" }, abstractText = "This service enables conversion from one caption format to another.")
+@RestService(name = "caption", title = "Caption Service", 
+  abstractText = "This service enables conversion from one caption format to another.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class CaptionServiceRestEndpoint extends AbstractJobProducerEndpoint {
 
   /** The logger */
@@ -146,14 +152,18 @@ public class CaptionServiceRestEndpoint extends AbstractJobProducerEndpoint {
           @RestParameter(description = "Caption language (for those formats that store such information).", isRequired = false, defaultValue = "en", name = "language", type = RestParameter.Type.STRING) }, reponses = { @RestResponse(description = "OK, Conversion successfully completed.", responseCode = HttpServletResponse.SC_OK) }, returnDescription = "The converted captions file")
   public Response convert(@FormParam("input") String inputType, @FormParam("output") String outputType,
           @FormParam("captions") String catalogAsXml, @FormParam("language") String lang) {
+    MediaPackageElement element;
     try {
-
-      MediaPackageElement element = toMediaPackageElement(catalogAsXml);
-      if (!Catalog.TYPE.equals(element.getElementType())) {
+      element = toMediaPackageElement(catalogAsXml);
+      if (!Catalog.TYPE.equals(element.getElementType()))
         return Response.status(Response.Status.BAD_REQUEST).entity("Captions must be of type catalog.").build();
-      }
-      Job job = service.convert((Catalog) element, inputType, outputType, lang);
+    } catch (Exception e) {
+      logger.info("Unable to parse serialized captions");
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
 
+    try {
+      Job job = service.convert((Catalog) element, inputType, outputType, lang);
       return Response.ok().entity(new JaxbJob(job)).build();
     } catch (Exception e) {
       logger.error(e.getMessage());
@@ -248,6 +258,16 @@ public class CaptionServiceRestEndpoint extends AbstractJobProducerEndpoint {
       return (JobProducer) service;
     else
       return null;
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.rest.AbstractJobProducerEndpoint#getServiceRegistry()
+   */
+  @Override
+  public ServiceRegistry getServiceRegistry() {
+    return serviceRegistry;
   }
 
 }

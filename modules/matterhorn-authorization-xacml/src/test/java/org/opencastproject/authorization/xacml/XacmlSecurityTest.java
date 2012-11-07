@@ -214,7 +214,7 @@ public class XacmlSecurityTest {
      * @see org.opencastproject.workspace.api.Workspace#getCollectionContents(java.lang.String)
      */
     @Override
-    public URI[] getCollectionContents(String collectionId) throws IOException {
+    public URI[] getCollectionContents(String collectionId) throws NotFoundException {
       // TODO Auto-generated method stub
       return null;
     }
@@ -307,6 +307,18 @@ public class XacmlSecurityTest {
     @Override
     public URI getURI(String mediaPackageID, String mediaPackageElementID, String filename) {
       return file.toURI();
+    }
+
+    @Override
+    public long getTotalSpace() {
+      // TODO Auto-generated method stub
+      return 0;
+    }
+
+    @Override
+    public long getUsableSpace() {
+      // TODO Auto-generated method stub
+      return 0;
     }
 
   }

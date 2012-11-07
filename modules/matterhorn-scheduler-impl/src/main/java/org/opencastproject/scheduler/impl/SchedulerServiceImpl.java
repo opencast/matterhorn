@@ -15,9 +15,12 @@
  */
 package org.opencastproject.scheduler.impl;
 
+import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.mediapackage.EName;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
+import org.opencastproject.mediapackage.MediaPackageElement;
+import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.metadata.dublincore.DCMIPeriod;
 import org.opencastproject.metadata.dublincore.DublinCore;
@@ -33,6 +36,7 @@ import org.opencastproject.scheduler.api.SchedulerQuery.Sort;
 import org.opencastproject.scheduler.api.SchedulerService;
 import org.opencastproject.security.api.UnauthorizedException;
 import org.opencastproject.series.api.SeriesService;
+import org.opencastproject.series.endpoint.SeriesRestService;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workflow.api.WorkflowDefinition;
 import org.opencastproject.workflow.api.WorkflowException;
@@ -58,6 +62,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -99,6 +104,12 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
   /** The series service */
   protected SeriesService seriesService;
 
+  /** The series rest service */
+  protected SeriesRestService seriesRestService;
+
+  /** The ingest service */
+  protected IngestService ingestService;
+
   /** The workflow service */
   protected WorkflowService workflowService;
 
@@ -124,6 +135,16 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
    */
   public void setSeriesService(SeriesService seriesService) {
     this.seriesService = seriesService;
+  }
+
+  /** OSGi callback */
+  public void setSeriesRestService(SeriesRestService seriesRestService) {
+    this.seriesRestService = seriesRestService;
+  }
+
+  /** OSGi callback */
+  public void setIngestService(IngestService ingestService) {
+    this.ingestService = ingestService;
   }
 
   /**
@@ -324,36 +345,41 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
    * Populates MediaPackage with standard values from DublinCore such as: title, language, license, series id, creators,
    * contributors and subjects.
    * 
-   * @param mediapackage
+   * @param mp
    *          {@link MediaPackage} to be updated
-   * @param catalog
+   * @param dc
    *          {@link DublinCoreCatalog} for event
    */
-  private void populateMediapackageWithStandardDCFields(MediaPackage mediapackage, DublinCoreCatalog catalog) throws Exception {
-    mediapackage.setTitle(catalog.getFirst(DublinCore.PROPERTY_TITLE));
-    mediapackage.setLanguage(catalog.getFirst(DublinCore.PROPERTY_LANGUAGE));
-    mediapackage.setLicense(catalog.getFirst(DublinCore.PROPERTY_LICENSE));
-    mediapackage.setSeries(catalog.getFirst(DublinCore.PROPERTY_IS_PART_OF));
+  private void populateMediapackageWithStandardDCFields(MediaPackage mp, DublinCoreCatalog dc) throws Exception {
+    final String seriesId = dc.getFirst(DublinCore.PROPERTY_IS_PART_OF);
+    mp.setTitle(dc.getFirst(DublinCore.PROPERTY_TITLE));
+    mp.setLanguage(dc.getFirst(DublinCore.PROPERTY_LANGUAGE));
+    mp.setLicense(dc.getFirst(DublinCore.PROPERTY_LICENSE));
+    mp.setSeries(seriesId);
     
-    if (StringUtils.isNotEmpty(mediapackage.getSeries())) {
+    if (StringUtils.isNotEmpty(mp.getSeries())) {
       try {
-        DublinCoreCatalog s = seriesService.getSeries(catalog.getFirst(DublinCore.PROPERTY_IS_PART_OF));
-        mediapackage.setSeriesTitle(s.getFirst(DublinCore.PROPERTY_TITLE));
+        DublinCoreCatalog sdc = seriesService.getSeries(seriesId);
+        mp.setSeriesTitle(sdc.getFirst(DublinCore.PROPERTY_TITLE));
+        // add the series catalog
+        mp.add(new URI(seriesRestService.getSeriesXmlUrl(seriesId)), MediaPackageElement.Type.Catalog, MediaPackageElements.SERIES);
       } catch (Exception e) {
-        logger.error("Unable to find series: " + catalog.getFirst(DublinCore.PROPERTY_IS_PART_OF), e);
+        logger.error("Unable to find series: " + dc.getFirst(DublinCore.PROPERTY_IS_PART_OF), e);
         throw e;
       }
     }
     
-    for (DublinCoreValue value : catalog.get(DublinCore.PROPERTY_CREATOR)) {
-      mediapackage.addCreator(value.getValue());
+    for (DublinCoreValue value : dc.get(DublinCore.PROPERTY_CREATOR)) {
+      mp.addCreator(value.getValue());
     }
-    for (DublinCoreValue value : catalog.get(DublinCore.PROPERTY_CONTRIBUTOR)) {
-      mediapackage.addContributor(value.getValue());
+    for (DublinCoreValue value : dc.get(DublinCore.PROPERTY_CONTRIBUTOR)) {
+      mp.addContributor(value.getValue());
     }
-    for (DublinCoreValue value : catalog.get(DublinCore.PROPERTY_SUBJECT)) {
-      mediapackage.addSubject(value.getValue());
+    for (DublinCoreValue value : dc.get(DublinCore.PROPERTY_SUBJECT)) {
+      mp.addSubject(value.getValue());
     }
+    // add the episode catalog
+    ingestService.addCatalog(IOUtils.toInputStream(dc.toXmlString(), "UTF-8"), "dublincore.xml", MediaPackageElements.EPISODE, mp);
   }
 
   /**
@@ -696,16 +722,6 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
    * 
    * @param template
    *          {@link DublinCoreCatalog} used as template
-   * @param rrule
-   *          recurrence pattern
-   * @param start
-   *          date when series of event will start
-   * @param end
-   *          date when series of event will end
-   * @param duration
-   *          duration of each even in milliseconds
-   * @param timeZone
-   *          time zone in which event will take place
    * @return list of {@link DublinCoreCatalog}s
    * @throws ParseException
    *           if recurrence pattern cannot be parsed
@@ -725,7 +741,7 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
     
     Date start = temporal.getStart();
     Date end   = temporal.getEnd();
-    Long duration = (end.getTime() % (60 * 60 * 1000)) - (start.getTime() % (60 * 60 * 1000));
+    Long duration = 0L;
     
     TimeZone tz = null; // Create timezone based on CA's reported TZ.
     if (template.hasValue(DublinCoreCatalogImpl.PROPERTY_AGENT_TIMEZONE)) {
@@ -740,12 +756,15 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
     if (tz.inDaylightTime(start) && !tz.inDaylightTime(end)) {
       seed.setTime(start.getTime() + 3600000);
       period.setTime(end.getTime());
+      duration = (end.getTime() - (start.getTime() + 3600000)) % (24 * 60 * 60 * 1000);
     } else if (!tz.inDaylightTime(start) && tz.inDaylightTime(end)) {
       seed.setTime(start.getTime());
       period.setTime(end.getTime() + 3600000);
+      duration = ((end.getTime() + 3600000) - start.getTime()) % (24 * 60 * 60 * 1000);
     } else {
       seed.setTime(start.getTime());
       period.setTime(end.getTime());
+      duration = (end.getTime() - start.getTime()) % (24 * 60 * 60 * 1000);
     }
     DateList dates = recur.getDates(seed, period, Value.DATE_TIME);
     logger.debug("DateList: {}", dates);
@@ -837,10 +856,7 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
   @Override
   public DublinCoreCatalogList search(SchedulerQuery query) throws SchedulerException {
     try {
-      List<DublinCoreCatalog> resultList = index.search(query);
-      DublinCoreCatalogList dcList = new DublinCoreCatalogList();
-      dcList.setCatalogList(resultList);
-      return dcList;
+      return index.search(query);
     } catch (SchedulerServiceDatabaseException e) {
       logger.error("Could not execute query: {}", e.getMessage());
       throw new SchedulerException(e);
@@ -858,10 +874,7 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
           throws SchedulerException {
     SchedulerQuery q = new SchedulerQuery().setSpatial(captureDeviceID).setEndsFrom(startDate).setStartsTo(endDate);
     try {
-      List<DublinCoreCatalog> result = index.search(q);
-      DublinCoreCatalogList dcList = new DublinCoreCatalogList();
-      dcList.setCatalogList(result);
-      return dcList;
+      return index.search(q);
     } catch (SchedulerServiceDatabaseException e) {
       logger.error("Could not complete search after conflicting events for device '{}': {}", captureDeviceID,
               e.getMessage());
@@ -877,7 +890,7 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
    */
   @Override
   public DublinCoreCatalogList findConflictingEvents(String captureDeviceID, String rrule, Date startDate,
-          Date endDate, long duration) throws SchedulerException {
+          Date endDate, long duration, String timezone) throws SchedulerException {
     RRule rule;
     try {
       rule = new RRule(rrule);
@@ -887,24 +900,42 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
       throw new SchedulerException(e);
     }
     Recur recur = rule.getRecur();
-    DateTime start = new DateTime(startDate.getTime());
-    start.setUtc(true);
-    DateTime end = new DateTime(endDate.getTime());
-    end.setUtc(true);
-    DateList dates = recur.getDates(start, end, Value.DATE_TIME);
+    TimeZone tz = TimeZone.getTimeZone(timezone);
+    DateTime seed = new DateTime(true);
+    DateTime period = new DateTime(true);
+    if (tz.inDaylightTime(startDate) && !tz.inDaylightTime(endDate)) {
+      seed.setTime(startDate.getTime() + 3600000);
+      period.setTime(endDate.getTime());
+    } else if (!tz.inDaylightTime(startDate) && tz.inDaylightTime(endDate)) {
+      seed.setTime(startDate.getTime());
+      period.setTime(endDate.getTime() + 3600000);
+    } else {
+      seed.setTime(startDate.getTime());
+      period.setTime(endDate.getTime());
+    }
+    DateList dates = recur.getDates(seed, period, Value.DATE_TIME);
     List<DublinCoreCatalog> events = new ArrayList<DublinCoreCatalog>();
 
-    for (Object d : dates) {
-      Date filterStart = (Date) d;
+    for (Object date : dates) {
+      //Date filterStart = (Date) d;
+      Date d = (Date) date;
+      // Adjust for DST, if start of event
+      if (tz.inDaylightTime(seed)) { // Event starts in DST
+        if (!tz.inDaylightTime(d)) { // Date not in DST?
+          d.setTime(d.getTime() + tz.getDSTSavings()); // Ajust for Fall back one hour
+        }
+      } else { // Event doesn't start in DST
+        if (tz.inDaylightTime(d)) {
+          d.setTime(d.getTime() - tz.getDSTSavings()); // Adjust for Spring forward one hour
+        }
+      }
       // TODO optimize: create only one query and execute it
-      List<DublinCoreCatalog> filterEvents = findConflictingEvents(captureDeviceID, filterStart,
-              new Date(filterStart.getTime() + duration)).getCatalogList();
+      List<DublinCoreCatalog> filterEvents = findConflictingEvents(captureDeviceID, d,
+              new Date(d.getTime() + duration)).getCatalogList();
       events.addAll(filterEvents);
     }
 
-    DublinCoreCatalogList dcList = new DublinCoreCatalogList();
-    dcList.setCatalogList(events);
-    return dcList;
+    return new DublinCoreCatalogList(events, events.size());
   }
 
   /*
@@ -917,7 +948,7 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
 
     List<DublinCoreCatalog> eventList;
     try {
-      eventList = index.search(filter);
+      eventList = index.search(filter).getCatalogList();
     } catch (SchedulerServiceDatabaseException e) {
       logger.error("Failed to retrieve events for capture agent '{}'", filter);
       throw new SchedulerException(e);
@@ -956,7 +987,8 @@ public class SchedulerServiceImpl implements SchedulerService, ManagedService {
   @Override
   public Date getScheduleLastModified(SchedulerQuery filter) throws SchedulerException {
     try {
-      return index.getLastModifiedDate(filter);
+      Date lastModified = index.getLastModifiedDate(filter);
+      return lastModified != null ? lastModified : new Date();
     } catch (SchedulerServiceDatabaseException e) {
       logger.error("Failed to retrieve last modified for CA {}: {}", filter, e.getMessage());
       throw new SchedulerException(e);

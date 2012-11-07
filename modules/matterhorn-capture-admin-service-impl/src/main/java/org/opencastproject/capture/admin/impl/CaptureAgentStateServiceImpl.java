@@ -76,8 +76,7 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
   protected PersistenceProvider persistenceProvider;
 
   /** The persistence properties */
-  @SuppressWarnings("unchecked")
-  protected Map persistenceProperties;
+  protected Map<String, Object> persistenceProperties;
 
   /** The factory used to generate the entity manager */
   protected EntityManagerFactory emf = null;
@@ -124,8 +123,7 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    * @param persistenceProperties
    *          the persistenceProperties to set
    */
-  @SuppressWarnings("unchecked")
-  public void setPersistenceProperties(Map persistenceProperties) {
+  public void setPersistenceProperties(Map<String, Object> persistenceProperties) {
     this.persistenceProperties = persistenceProperties;
   }
 
@@ -134,7 +132,6 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
     recordings = new HashMap<String, Recording>();
   }
 
-  @SuppressWarnings("unchecked")
   public void activate(ComponentContext cc) {
     emf = persistenceProvider.createEntityManagerFactory(
             "org.opencastproject.capture.admin.impl.CaptureAgentStateServiceImpl", persistenceProperties);
@@ -154,11 +151,13 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    * @return the agent
    */
   protected AgentImpl getAgent(String name) {
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     try {
+      em = emf.createEntityManager();
       return getAgent(name, securityService.getOrganization().getId(), em);
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -172,8 +171,9 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    * @return the agent
    */
   protected AgentImpl getAgent(String name, String org) {
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     try {
+      em = emf.createEntityManager();
       return getAgent(name, org, em);
     } finally {
       em.close();
@@ -193,13 +193,13 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    */
   protected AgentImpl getAgent(String name, String organization, EntityManager em) {
     try {
-      Query q = em.createQuery("select a from AgentImpl a where a.name = :id and a.organization = :org");
+      Query q = em.createNamedQuery("Agent.get");
       q.setParameter("id", name);
       q.setParameter("org", organization);
       return (AgentImpl) q.getSingleResult();
     } catch (NoResultException e) {
       return null;
-    } //TODO check if closing em helps here.
+    } // TODO check if closing em helps here.
   }
 
   /**
@@ -289,13 +289,14 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    * @see org.opencastproject.capture.admin.api.CaptureAgentStateService#getKnownAgents()
    */
   public Map<String, Agent> getKnownAgents() {
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     User user = securityService.getUser();
     Organization org = securityService.getOrganization();
     String orgAdmin = org.getAdminRole();
     String[] roles = user.getRoles();
     try {
-      Query q = em.createQuery("SELECT a FROM AgentImpl a where a.organization = :org");
+      em = emf.createEntityManager();
+      Query q = em.createNamedQuery("Agent.byOrganization");
       q.setParameter("org", securityService.getOrganization().getId());
 
       // Filter the results in memory if this user is not an administrator
@@ -329,7 +330,8 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
       }
       return map;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -397,9 +399,10 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    *          The Agent you wish to modify or add in the database.
    */
   protected void updateAgentInDatabase(AgentImpl agent) {
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     EntityTransaction tx = null;
     try {
+      em = emf.createEntityManager();
       tx = em.getTransaction();
       tx.begin();
       AgentImpl existing = getAgent(agent.getName(), agent.getOrganization(), em);
@@ -410,6 +413,7 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
         existing.setLastHeardFrom(agent.getLastHeardFrom());
         existing.setState(agent.getState());
         existing.setSchedulerRoles(agent.getSchedulerRoles());
+        existing.setUrl(agent.getUrl());
         em.merge(existing);
       }
       tx.commit();
@@ -417,7 +421,8 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
       logger.warn("Unable to commit to DB in updateAgent.");
       throw e;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -428,9 +433,10 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
    *          The name of the agent you wish to remove.
    */
   private void deleteAgentFromDatabase(String agentName) {
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     EntityTransaction tx = null;
     try {
+      em = emf.createEntityManager();
       tx = em.getTransaction();
       tx.begin();
       Agent existing = getAgent(agentName, securityService.getOrganization().getId(), em);
@@ -441,7 +447,8 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
     } catch (RollbackException e) {
       logger.warn("Unable to commit to DB in deleteAgent.");
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 

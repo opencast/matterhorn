@@ -18,19 +18,19 @@ var ocUtils = ocUtils || {};
 ocUtils.templateRoot = "jst/";
 
 ocUtils.formatInt = function(value){
-   var groupingSeparator= ',',       
-       formatted = '';
+  var groupingSeparator= ',',       
+  formatted = '';
 
-   if (typeof value == 'number') value += '';	
-   var count=0, i=value.length;  
-   while (i--) {
-      if (count !== 0 && count % 3 === 0) {
-	   formatted = groupingSeparator + formatted;    
-      }
-      formatted = value.substr(i, 1) + formatted;
-      count++;
-   }    
-   return formatted;
+  if (typeof value == 'number') value += '';	
+  var count=0, i=value.length;  
+  while (i--) {
+    if (count !== 0 && count % 3 === 0) {
+      formatted = groupingSeparator + formatted;    
+    }
+    formatted = value.substr(i, 1) + formatted;
+    count++;
+  }    
+  return formatted;
 }
 
 ocUtils.internationalize = function(obj, prefix){
@@ -46,11 +46,14 @@ ocUtils.internationalize = function(obj, prefix){
   }
 }
 
-ocUtils.getURLParam = function(name) {
+ocUtils.getURLParam = function(name, url) {
+  if(url == undefined) {
+    url = window.location.href;
+  }
   name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
   var regexS = "[\\?&]"+name+"=([^&#]*)";
   var regex = new RegExp( regexS );
-  var results = regex.exec( window.location.href );
+  var results = regex.exec( url );
   if( results == null ) {
     return "";
   } else {
@@ -66,6 +69,10 @@ ocUtils.xmlToString = function(doc) {
   } else {
     return '';
   }
+}
+
+ocUtils.isChunkedUploadCompliable = function() {
+  return window.File && window.FileReader && window.FileList && window.Blob && window.FormData != undefined;
 }
 
 ocUtils.createDoc = function(rootEl, rootNS){
@@ -157,13 +164,13 @@ ocUtils.fromUTCDateString = function(UTCDate) {
     var dateTime = UTCDate.slice(0,-1).split("T");
     var ymd = dateTime[0].split("-");
     var hms = dateTime[1].split(":");
+    date.setUTCFullYear(parseInt(ymd[0], 10));
+    date.setUTCMonth(parseInt(ymd[1], 10) - 1);
     date.setUTCMilliseconds(0);
     date.setUTCSeconds(parseInt(hms[2], 10));
     date.setUTCMinutes(parseInt(hms[1], 10));
     date.setUTCHours(parseInt(hms[0], 10));
     date.setUTCDate(parseInt(ymd[2], 10));
-    date.setUTCMonth(parseInt(ymd[1], 10) - 1);
-    date.setUTCFullYear(parseInt(ymd[0], 10));
   }
   return date;
 }
@@ -223,8 +230,8 @@ ocUtils.fromUTCDateStringToFormattedTime = function(UTCDate, duration) {
  *
  */
 ocUtils.toISODate = function(date, utc) {
-//align date format
-var date = new Date(date);
+  //align date format
+  var date = new Date(date);
   var out;
   if(typeof utc == 'undefined') {
     utc = true;
@@ -324,7 +331,7 @@ ocUtils.exists = function(obj) {
 };
 
 ocUtils.contains = function(array, value) {
-  return array.indexOf(value) >= 0;
+  return $.inArray(value, array) >= 0;
 }
 
 ocUtils.getDCJSONParam = function(dcJSON, param, namespace) {

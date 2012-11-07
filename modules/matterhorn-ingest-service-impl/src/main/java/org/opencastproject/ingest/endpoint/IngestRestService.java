@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
@@ -74,6 +73,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
@@ -81,10 +81,16 @@ import javax.ws.rs.core.Response.Status;
  * Creates and augments Matterhorn MediaPackages using the api. Stores media into the Working File Repository.
  */
 @Path("/")
-@RestService(name = "ingestservice", title = "Ingest Service", notes = {
+@RestService(name = "ingestservice", title = "Ingest Service",
+  abstractText = "This service creates and augments Matterhorn media packages that include media tracks, metadata "
+               + "catalogs and attachments.",
+  notes = {
         "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
-        "If the service is down or not working it will return a status 503, this means the the underlying service is not working and is either restarting or has failed",
-        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In other words, there is a bug! You should file an error report with your server logs from the time when the error occurred: <a href=\"https://issues.opencastproject.org\">Opencast Issue Tracker</a>" }, abstractText = "This service creates and augments Matterhorn media packages that include media tracks, metadata catalogs and attachments.")
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class IngestRestService {
 
   private static final Logger logger = LoggerFactory.getLogger(IngestRestService.class);
@@ -93,17 +99,20 @@ public class IngestRestService {
   private static final String COLLECTION_ID = "ingest-temp";
 
   /** Key for the default workflow definition in config.properties */
-  private static final String DEFAULT_WORKFLOW_DEFINITION = "org.opencastproject.workflow.default.definition";
+  protected static final String DEFAULT_WORKFLOW_DEFINITION = "org.opencastproject.workflow.default.definition";
+
+  /** Key for the default maximum number of ingests in config.properties */
+  protected static final String MAX_INGESTS_KEY = "org.opencastproject.ingest.max.concurrent";
   
   /** The http request parameter used to provide the workflow instance id */
-  private static final String WORKFLOW_INSTANCE_ID_PARAM = "workflowInstanceId";
+  protected static final String WORKFLOW_INSTANCE_ID_PARAM = "workflowInstanceId";
 
   /** The http request parameter used to provide the workflow definition id */
-  private static final String WORKFLOW_DEFINITION_ID_PARAM = "workflowDefinitionId";
+  protected static final String WORKFLOW_DEFINITION_ID_PARAM = "workflowDefinitionId";
 
   /** The default workflow definition */
   private String defaultWorkflowDefinitionId = null;
-
+  
   private MediaPackageBuilderFactory factory = null;
   private IngestService ingestService = null;
   private Workspace workspace = null;
@@ -113,10 +122,24 @@ public class IngestRestService {
   protected EntityManagerFactory emf = null;
   // For the progress bar -1 bug workaround, keeping UploadJobs in memory rather than saving them using JPA
   private HashMap<String, UploadJob> jobs;
+  // The number of ingests this service can handle concurrently. 
+  private int ingestLimit = -1;
   
   public IngestRestService() {
     factory = MediaPackageBuilderFactory.newInstance();
     jobs = new HashMap<String, UploadJob>();
+  }
+
+  protected synchronized int getIngestLimit() {
+    return ingestLimit;
+  }
+
+  private synchronized void setIngestLimit(int ingestLimit) {
+    this.ingestLimit = ingestLimit;
+  }
+
+  protected synchronized boolean isIngestLimitEnabled() {
+    return ingestLimit >= 0;
   }
 
   public void setIngestService(IngestService ingestService) {
@@ -150,9 +173,23 @@ public class IngestRestService {
       logger.error("Unable to initialize JPA EntityManager: " + e.getMessage());
     }
     if (cc != null) {
-      defaultWorkflowDefinitionId = StringUtils.trimToNull((String) cc.getBundleContext().getProperty(DEFAULT_WORKFLOW_DEFINITION));
-      if (defaultWorkflowDefinitionId == null)
+      defaultWorkflowDefinitionId = StringUtils.trimToNull(cc.getBundleContext().getProperty(
+              DEFAULT_WORKFLOW_DEFINITION));
+      if (defaultWorkflowDefinitionId == null) {
         throw new IllegalStateException("Default workflow definition is null: " + DEFAULT_WORKFLOW_DEFINITION);
+      }
+      if (cc.getBundleContext().getProperty(MAX_INGESTS_KEY) != null) {
+        try {
+          ingestLimit = Integer.parseInt(StringUtils.trimToNull(cc.getBundleContext().getProperty(MAX_INGESTS_KEY)));
+          if (ingestLimit == 0) {
+            ingestLimit = -1;
+          }
+        } catch (NumberFormatException e) {
+          logger.warn("Max ingest property with key " + MAX_INGESTS_KEY
+                  + " isn't defined so no ingest limit will be used.");
+          ingestLimit = -1;
+        }
+      }
     }
   }
 
@@ -484,9 +521,24 @@ public class IngestRestService {
           @RestParameter(description = "The workflow definition ID to run on this mediapackage", isRequired = false, name = WORKFLOW_DEFINITION_ID_PARAM, type = RestParameter.Type.STRING),
           @RestParameter(description = "The workflow instance ID to associate with this zipped mediapackage", isRequired = false, name = WORKFLOW_INSTANCE_ID_PARAM, type = RestParameter.Type.STRING) }, bodyParameter = @RestParameter(description = "The compressed (application/zip) media package file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE), reponses = {
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_OK),
-          @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST) }, returnDescription = "")
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST),
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE) }, returnDescription = "")
   public Response addZippedMediaPackage(@Context HttpServletRequest request) {
     logger.debug("addZippedMediaPackage(HttpRequest)");
+    if (!isIngestLimitEnabled() || getIngestLimit() > 0) {
+      return ingestZippedMediaPackage(request);
+    }
+    else {
+      logger.warn("Delaying ingest because we have exceeded the maximum number of ingests this server is setup to do concurrently.");
+      return Response.status(Status.SERVICE_UNAVAILABLE).build();
+    }
+  }
+
+  private Response ingestZippedMediaPackage(HttpServletRequest request) {
+    if (isIngestLimitEnabled()) {
+      setIngestLimit(getIngestLimit() - 1);
+      logger.debug("An ingest has started so remaining ingest limit is " + getIngestLimit());
+    }
     FileInputStream zipInputStream = null;
     String zipFileName = UUID.randomUUID().toString() + ".zip";
     URI zipFileUri = null;
@@ -542,12 +594,16 @@ public class IngestRestService {
     } finally {
       IOUtils.closeQuietly(zipInputStream);
       try {
-        workspace.delete(zipFileUri);
+        workspace.deleteFromCollection(COLLECTION_ID, zipFileName);
       } catch (NotFoundException nfe) {
         // That's fine, we failed somewhere on the way
         logger.debug("Error removing missing temporary ingest file " + COLLECTION_ID + "/" + zipFileName, nfe);
       } catch (IOException ioe) {
         logger.warn("Error removing temporary ingest file " + zipFileUri, ioe);
+      }
+      if (isIngestLimitEnabled()) {
+        setIngestLimit(getIngestLimit() + 1);
+        logger.debug("An ingest has finished so increased ingest limit to " + getIngestLimit());
       }
     }
   }
@@ -555,32 +611,36 @@ public class IngestRestService {
   @POST
   @Produces(MediaType.TEXT_HTML)
   @Path("ingest")
-  @RestQuery(name = "ingest", description = "Ingest the completed media package into the system, retrieving all URL-referenced files", restParameters = { @RestParameter(description = "The ID of the given media package", isRequired = true, name = "mediaPackage", type = RestParameter.Type.TEXT) }, reponses = {
+  @RestQuery(name = "ingest", description = "Ingest the completed media package into the system, retrieving all URL-referenced files", restParameters = {
+          @RestParameter(description = "The media package", isRequired = true, name = "mediaPackage", type = RestParameter.Type.TEXT),
+          @RestParameter(description = "Workflow definition id", isRequired = false, name = WORKFLOW_DEFINITION_ID_PARAM, type = RestParameter.Type.STRING),
+          @RestParameter(description = "The workflow instance ID to associate with this zipped mediapackage", isRequired = false, name = WORKFLOW_INSTANCE_ID_PARAM, type = RestParameter.Type.STRING) }, reponses = {
           @RestResponse(description = "Returns the media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST) }, returnDescription = "")
-  public Response ingest(@FormParam("mediaPackage") String mpx) {
-    logger.debug("ingest(MediaPackage): {}", mpx);
+  public Response ingest(MultivaluedMap<String, String> formData) {
+    /**
+     * Note: We use a MultivaluedMap here to ensure that we can get any arbitrary form parameters. This is required to
+     * enable things like holding for trim or distributing to YouTube.
+     */
+    logger.debug("ingest(MediaPackage)");
     try {
-      MediaPackage mp = factory.newMediaPackageBuilder().loadFromXml(mpx);
-      WorkflowInstance workflow = ingestService.ingest(mp);
-      return Response.ok(WorkflowParser.toXml(workflow)).build();
+      MediaPackage mp = null;
+      Map<String, String> wfConfig = new HashMap<String, String>();
+      for (String key : formData.keySet()) {
+        if (!"mediaPackage".equals(key)) {
+          wfConfig.put(key, formData.getFirst(key));
+        } else {
+          mp = factory.newMediaPackageBuilder().loadFromXml(formData.getFirst(key));
+        }
+      }
+
+      return ingest(mp, wfConfig);
     } catch (Exception e) {
       logger.warn(e.getMessage(), e);
       return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build();
     }
   }
 
-  /*
-   * @POST
-   * 
-   * @Produces(MediaType.TEXT_HTML)
-   * 
-   * @Path("ingest/{wdID}") public Response ingest(@FormParam("mediaPackage") String mpx, @PathParam("wdID") String
-   * wdID) { logger.debug("ingest(MediaPackage, ID): {}, {}", mpx, wdID); try { MediaPackage mp =
-   * builder.loadFromXml(mpx); WorkflowInstance workflow = ingestService.ingest(mp, wdID); return
-   * Response.ok(WorkflowBuilder.toXml(workflow)).build(); } catch (Exception e) { logger.warn(e.getMessage(), e);
-   * return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build(); } }
-   */
   @POST
   @Produces(MediaType.TEXT_HTML)
   @Path("ingest/{wdID}")
@@ -588,26 +648,70 @@ public class IngestRestService {
   @RestQuery(name = "ingest", description = "Ingest the completed media package into the system, retrieving all URL-referenced files, and starting a specified workflow", pathParameters = { @RestParameter(description = "Workflow definition id", isRequired = true, name = "wdID", type = RestParameter.Type.STRING) }, restParameters = { @RestParameter(description = "The ID of the given media package", isRequired = true, name = "mediaPackage", type = RestParameter.Type.TEXT) }, reponses = {
           @RestResponse(description = "Returns the media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST) }, returnDescription = "")
-  public Response ingest(@PathParam("wdID") String wdID, @Context HttpServletRequest request) {
-    Map<String, String[]> params = request.getParameterMap();
-    HashMap<String, String> wfConfig = new HashMap<String, String>();
-    MediaPackage mp = null;
+  public Response ingest(@PathParam("wdID") String wdID, MultivaluedMap<String, String> formData) {
+    if (StringUtils.isBlank(wdID)) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+
     try {
-      for (Iterator<String> i = params.keySet().iterator(); i.hasNext();) {
-        String key = i.next();
-        if ("MEDIAPACKAGE".equalsIgnoreCase(key)) {
-          mp = factory.newMediaPackageBuilder().loadFromXml(((String[]) params.get(key))[0]);
+      MediaPackage mp = null;
+      Map<String, String> wfConfig = new HashMap<String, String>();
+      wfConfig.put(WORKFLOW_DEFINITION_ID_PARAM, wdID);
+      for (String key : formData.keySet()) {
+        if (!"mediaPackage".equals(key)) {
+          wfConfig.put(key, formData.getFirst(key));
         } else {
-          wfConfig.put(key, ((String[]) params.get(key))[0]); // TODO how do we handle multiple values eg. resulting
-          // from checkboxes
+          mp = factory.newMediaPackageBuilder().loadFromXml(formData.getFirst(key));
         }
       }
-      if (mp != null) {
-        WorkflowInstance workflow = ingestService.ingest(mp, wdID, wfConfig);
-        return Response.ok(WorkflowParser.toXml(workflow)).build();
-      } else {
-        return Response.status(Status.BAD_REQUEST).build();
+
+      return ingest(mp, wfConfig);
+    } catch (Exception e) {
+      logger.warn(e.getMessage(), e);
+      return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  private Response ingest(MediaPackage mp, Map<String, String> wfConfig) {
+    try {
+      String workflowInstance = wfConfig.get(WORKFLOW_INSTANCE_ID_PARAM);
+      String workflowDefinition = wfConfig.get(WORKFLOW_DEFINITION_ID_PARAM);
+
+      // Double check that the required params exist.
+      if (mp == null) {
+        return Response.status(Response.Status.BAD_REQUEST).build();
       }
+
+      WorkflowInstance workflow = null;
+
+      // a workflow instance has been specified
+      if (StringUtils.isNotBlank(workflowInstance)) {
+        Long workflowInstanceId = null;
+        try {
+          workflowInstanceId = Long.parseLong(workflowInstance);
+        } catch (NumberFormatException e) {
+          /*
+           * Eat the exception, we don't *really* care since the system will just make up a new ID if needed. This may
+           * also be an unscheduled capture, which might not have a Long ID.
+           */
+        }
+
+        // a workflow defintion was specified
+        if (StringUtils.isNotBlank(workflowDefinition)) {
+          workflow = ingestService.ingest(mp, workflowDefinition, wfConfig, workflowInstanceId);
+        } else {
+          workflow = ingestService.ingest(mp, null, wfConfig, workflowInstanceId);
+        }
+      }
+      // a workflow definition was specified, but not a workflow id
+      else if (StringUtils.isNotBlank(workflowDefinition)) {
+        workflow = ingestService.ingest(mp, workflowDefinition, wfConfig, null);
+      }
+      // nothing was specified, so we start a new workflow
+      else {
+        workflow = ingestService.ingest(mp, null, wfConfig, null);
+      }
+      return Response.ok(WorkflowParser.toXml(workflow)).build();
     } catch (Exception e) {
       logger.warn(e.getMessage(), e);
       return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build();
@@ -634,7 +738,7 @@ public class IngestRestService {
   @GET
   @Path("filechooser-local.html")
   @Produces(MediaType.TEXT_HTML)
-  public Response createUploadJobHtml(@QueryParam("elementType")String elementType) {
+  public Response createUploadJobHtml(@QueryParam("elementType") String elementType) {
     InputStream is = null;
     elementType = (elementType == null) ? "track" : elementType;
     try {
@@ -674,6 +778,32 @@ public class IngestRestService {
     }
   }
 
+  @GET
+  @Path("filechooser-archive.html")
+  @Produces(MediaType.TEXT_HTML)
+  public Response createArchiveHtml(@QueryParam("elementType") String elementType) {
+    InputStream is = null;
+    elementType = (elementType == null) ? "track" : elementType;
+    try {
+      UploadJob job = createUploadJob();
+      is = getClass().getResourceAsStream("/templates/uploadform.html");
+      String html = IOUtils.toString(is, "UTF-8");
+      // String uploadURL = serverURL + "/ingest/addElementMonitored/" + job.getId();
+      String uploadURL = "/ingest/addZippedMediaPackage";
+      html = html.replaceAll("\\{uploadURL\\}", uploadURL);
+      html = html.replaceAll("\\{jobId\\}", job.getId());
+      html = html.replaceAll("\\{elementType\\}", elementType);
+      logger.debug("New upload job created: " + job.getId());
+      jobs.put(job.getId(), job);
+      return Response.ok(html).build();
+    } catch (Exception ex) {
+      logger.warn(ex.getMessage(), ex);
+      return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build();
+    } finally {
+      IOUtils.closeQuietly(is);
+    }
+  }
+
   /**
    * Add an elements to a MediaPackage and keeps track of the progress of the upload. Returns an HTML that triggers the
    * host sites UploadListener.uploadComplete javascript event Returns an HTML that triggers the host sites
@@ -694,8 +824,9 @@ public class IngestRestService {
     String fileName = null;
     MediaPackageElementFlavor flavor = null;
     String elementType = "track";
-    EntityManager em = emf.createEntityManager();
+    EntityManager em = null;
     try {
+      em = emf.createEntityManager();
       try { // try to get UploadJob, responde 404 if not successful
         // job = em.find(UploadJob.class, jobId);
         if (jobs.containsKey(jobId)) {
@@ -756,10 +887,10 @@ public class IngestRestService {
       return buildUploadFailedRepsonse(job);
     } catch (Exception ex) {
       logger.error(ex.getMessage());
-      ex.printStackTrace();
       return buildUploadFailedRepsonse(job);
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -799,10 +930,10 @@ public class IngestRestService {
   @RestQuery(name = "addDCCatalog", description = "Add a dublincore episode catalog to a given media package using an url", restParameters = {
           @RestParameter(description = "The media package as XML", isRequired = true, name = "mediaPackage", type = RestParameter.Type.TEXT),
           @RestParameter(description = "DublinCore catalog as XML", isRequired = true, name = "dublinCore", type = RestParameter.Type.STRING), // TODO
-                                                                                                                                                                  // should
-                                                                                                                                                                  // this
-                                                                                                                                                                  // be
-                                                                                                                                                                  // TEXT??
+                                                                                                                                               // should
+                                                                                                                                               // this
+                                                                                                                                               // be
+                                                                                                                                               // TEXT??
           @RestParameter(defaultValue = "dublincore/episode", description = "DublinCore Flavor", isRequired = false, name = "flavor", type = RestParameter.Type.STRING) }, reponses = {
           @RestResponse(description = "Returns augmented media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR) }, returnDescription = "")

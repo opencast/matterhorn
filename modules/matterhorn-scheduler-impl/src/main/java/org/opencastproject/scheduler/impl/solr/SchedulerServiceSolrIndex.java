@@ -18,6 +18,7 @@ package org.opencastproject.scheduler.impl.solr;
 import org.opencastproject.metadata.dublincore.DCMIPeriod;
 import org.opencastproject.metadata.dublincore.DublinCore;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
+import org.opencastproject.metadata.dublincore.DublinCoreCatalogList;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
 import org.opencastproject.metadata.dublincore.DublinCoreValue;
 import org.opencastproject.metadata.dublincore.EncodingSchemeUtils;
@@ -61,6 +62,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static org.opencastproject.util.data.Option.option;
 
 /**
  * Implements {@link SchedulerServiceIndex}.
@@ -604,8 +607,6 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
    *          The {@link StringBuilder} containing the query
    * @param key
    *          the key for this search parameter
-   * @param value
-   *          the value for this search parameter
    * @return the appended {@link StringBuilder}
    */
   private StringBuilder append(StringBuilder sb, String key, Date startDate, Date endDate) {
@@ -621,7 +622,7 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
       endDate = new Date(Long.MAX_VALUE);
     sb.append(key);
     sb.append(":");
-    sb.append(SolrUtils.serializeDateRange(startDate, endDate));
+    sb.append(SolrUtils.serializeDateRange(option(startDate), option(endDate)));
     return sb;
   }
 
@@ -741,7 +742,7 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
    * org.opencastproject.scheduler.impl.SchedulerServiceIndex#search(org.opencastproject.scheduler.api.SchedulerQuery)
    */
   @Override
-  public List<DublinCoreCatalog> search(SchedulerQuery query) throws SchedulerServiceDatabaseException {
+  public DublinCoreCatalogList search(SchedulerQuery query) throws SchedulerServiceDatabaseException {
     SolrQuery solrQuery = new SolrQuery();
     if (query == null) {
       query = new SchedulerQuery();
@@ -772,10 +773,10 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
         DublinCoreCatalog dc = parseDublinCore((String) doc.get(SolrFields.XML_KEY));
         resultList.add(dc);
       }
+      return new DublinCoreCatalogList(resultList, response.getResults().getNumFound());
     } catch (Exception e) {
       throw new SchedulerServiceDatabaseException(e);
     }
-    return resultList;
   }
 
   /*
@@ -785,11 +786,20 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
    */
   @Override
   public void delete(final String id) throws SchedulerServiceDatabaseException {
+
     if (synchronousIndexing) {
       try {
         synchronized (solrServer) {
+          DublinCoreCatalog catalog = getDublinCore(id);
           solrServer.deleteById(id);
           solrServer.commit();
+          if (catalog != null) {
+            String spatial = catalog.getFirst(DublinCoreCatalog.PROPERTY_SPATIAL);
+            if (StringUtils.isNotBlank(spatial)) {
+              logger.debug("Marking calendar feed for {} as modified", spatial);
+              touchLastEntry(spatial);
+            }
+          }
         }
       } catch (Exception e) {
         throw new SchedulerServiceDatabaseException(e);
@@ -800,8 +810,16 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
         public void run() {
           try {
             synchronized (solrServer) {
+              DublinCoreCatalog catalog = getDublinCore(id);
               solrServer.deleteById(id);
               solrServer.commit();
+              if (catalog != null) {
+                String spatial = catalog.getFirst(DublinCoreCatalog.PROPERTY_SPATIAL);
+                if (StringUtils.isNotBlank(spatial)) {
+                  logger.debug("Marking calendar feed for {} as modified", spatial);
+                  touchLastEntry(spatial);
+                }
+              }
             }
           } catch (Exception e) {
             logger.warn("Could not delete from index event {}: {}", id, e.getMessage());
@@ -862,6 +880,50 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
     }
   }
 
+  /**
+   * Touches the most recent entry by updating its last modification date.
+   * 
+   * @param spatial
+   *          the spatial parameter aka capture agent identifier
+   * @throws SchedulerServiceDatabaseException
+   *           if updating of the last modified value fails
+   */
+  private void touchLastEntry(String spatial) throws SchedulerServiceDatabaseException {
+    SchedulerQuery filter = new SchedulerQuery().setSpatial(spatial);
+    SolrQuery q = new SolrQuery(buildSolrQueryString(filter));
+    q.addSortField(SolrFields.LAST_MODIFIED + "_sort", SolrQuery.ORDER.desc);
+    q.setRows(1);
+
+    QueryResponse response = null;
+
+    // See if there is a matching entry
+    try {
+      response = solrServer.query(q);
+      if (response.getResults().isEmpty()) {
+        logger.debug("No remaining events scheduled for {}", spatial);
+        return;
+      }
+    } catch (SolrServerException e) {
+      logger.error("Could not complete query request: {}", e);
+      throw new SchedulerServiceDatabaseException(e);
+    }
+
+    // Update that entry and write it back
+    SolrDocument doc = response.getResults().get(0);
+    final SolrInputDocument inputDoc = ClientUtils.toSolrInputDocument(doc);
+    inputDoc.setField(SolrFields.LAST_MODIFIED, new Date());
+    try {
+      solrServer.add(inputDoc);
+      solrServer.commit();
+    } catch (SolrServerException e) {
+      logger.error("Error updating scheduler entry: {}", e);
+      throw new SchedulerServiceDatabaseException(e);
+    } catch (IOException e) {
+      logger.error("Error updating scheduler entry: {}", e);
+      throw new SchedulerServiceDatabaseException(e);
+    }
+  }
+
   /*
    * (non-Javadoc)
    * 
@@ -881,7 +943,7 @@ public class SchedulerServiceSolrIndex implements SchedulerServiceIndex {
       throw new SchedulerServiceDatabaseException(e);
     }
     if (response.getResults().isEmpty()) {
-      logger.info("No events scheduled for {}", filter);
+      logger.debug("No events scheduled for {}", filter);
       return null;
     }
 

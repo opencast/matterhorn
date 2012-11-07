@@ -44,6 +44,7 @@ import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryException;
 import org.opencastproject.util.Checksum;
 import org.opencastproject.util.ChecksumType;
+import org.opencastproject.util.IoSupport;
 import org.opencastproject.util.MimeType;
 import org.opencastproject.util.MimeTypes;
 import org.opencastproject.util.NotFoundException;
@@ -52,13 +53,21 @@ import org.opencastproject.workspace.api.Workspace;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.tika.metadata.HttpHeaders;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.Parser;
+import org.apache.tika.sax.BodyContentHandler;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.cm.ManagedService;
+import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Dictionary;
@@ -96,6 +105,18 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
   /** The organization directory service */
   protected OrganizationDirectoryService organizationDirectoryService = null;
 
+  /** The Apache Tika parser */
+  private Parser tikaParser;
+
+  /**
+   * Sets the Apache Tika parser.
+   * 
+   * @param tikaParser
+   */
+  public void setTikaParser(Parser tikaParser) {
+    this.tikaParser = tikaParser;
+  }
+
   /**
    * Creates a new media inspection service instance.
    */
@@ -103,8 +124,17 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
     super(JOB_TYPE);
   }
 
-  public void activate() {
-    analyzerConfig.put(MediaInfoAnalyzer.MEDIAINFO_BINARY_CONFIG, MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT);
+  public void activate(ComponentContext cc) {
+    // Configure mediainfo
+    String path = (String) cc.getBundleContext().getProperty(MediaInfoAnalyzer.MEDIAINFO_BINARY_CONFIG);
+    if (path == null) {
+      logger.debug("DEFAULT " + MediaInfoAnalyzer.MEDIAINFO_BINARY_CONFIG + ": "
+              + MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT);
+      analyzerConfig.put(MediaInfoAnalyzer.MEDIAINFO_BINARY_CONFIG, MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT);
+    } else {
+      analyzerConfig.put(MediaInfoAnalyzer.MEDIAINFO_BINARY_CONFIG, path);
+      logger.debug("Mediainfo config binary: {}", path);
+    }
   }
 
   /**
@@ -140,7 +170,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
       switch (op) {
         case Inspect:
           URI uri = URI.create(arguments.get(0));
-          inspectedElement = inspect(job, uri);
+          inspectedElement = inspectTrack(job, uri);
           break;
         case Enrich:
           MediaPackageElement element = MediaPackageElementParser.getFromXml(arguments.get(0));
@@ -201,7 +231,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
    * @throws MediaInspectionException
    *           if inspection fails
    */
-  protected Track inspect(Job job, URI trackURI) throws MediaInspectionException {
+  protected Track inspectTrack(Job job, URI trackURI) throws MediaInspectionException {
     logger.debug("inspect(" + trackURI + ") called, using workspace " + workspace);
 
     try {
@@ -224,6 +254,8 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
       MediaContainerMetadata metadata = getFileMetadata(file);
       if (metadata == null) {
         throw new MediaInspectionException("Media analyzer returned no metadata from " + file);
+      } else if (metadata.getAudioStreamMetadata().size() == 0 && metadata.getVideoStreamMetadata().size() == 0) {
+        throw new MediaInspectionException("File at " + trackURI + " does not seem to be a/v media");
       } else {
         MediaPackageElementBuilder elementBuilder = MediaPackageElementBuilderFactory.newInstance().newElementBuilder();
         TrackImpl track;
@@ -236,7 +268,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
         track = (TrackImpl) element;
 
         // Duration
-        if (metadata.getDuration() != null)
+        if (metadata.getDuration() != null && metadata.getDuration() > 0)
           track.setDuration(metadata.getDuration());
 
         // Checksum
@@ -247,10 +279,28 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
         }
 
         // Mimetype
+        InputStream is = null;
         try {
+          // Try to get the Mimetype from Apache Tika
+          is = new FileInputStream(file);
+          MimeType mimeType = extractContentType(is);
+
+          // If Mimetype could not be extracted try to get it from opencast
+          if (mimeType == null) {
+            mimeType = MimeTypes.fromURL(file.toURI().toURL());
+
+            // The mimetype library doesn't know about audio/video metadata, so the type might be wrong.
+            if ("audio".equals(mimeType.getType()) && metadata.hasVideoStreamMetadata()) {
+              mimeType = MimeTypes.parseMimeType("video/" + mimeType.getSubtype());
+            } else if ("video".equals(mimeType.getType()) && !metadata.hasVideoStreamMetadata()) {
+              mimeType = MimeTypes.parseMimeType("audio/" + mimeType.getSubtype());
+            }
+          }
           track.setMimeType(MimeTypes.fromURL(file.toURI().toURL()));
         } catch (Exception e) {
-          logger.info("Unable to find mimetype for {}", file.getAbsolutePath());
+          logger.error("Unable to find mimetype for {}", file.getAbsolutePath());
+        } finally {
+          IoSupport.closeQuietly(is);
         }
 
         // Audio metadata
@@ -276,6 +326,31 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
       } else {
         throw new MediaInspectionException(e);
       }
+    }
+  }
+
+  /**
+   * Determines the content type of an input stream. This method reads part of the stream, so it is typically best to
+   * close the stream immediately after calling this method.
+   * 
+   * @param in
+   *          the input stream
+   * @return the content type
+   */
+  private MimeType extractContentType(InputStream in) {
+    try {
+      // Find the content type, based on the stream content
+      BodyContentHandler contenthandler = new BodyContentHandler();
+      Metadata metadata = new Metadata();
+      ParseContext context = new ParseContext();
+      tikaParser.parse(in, contenthandler, metadata, context);
+      String mimeType = metadata.get(HttpHeaders.CONTENT_TYPE);
+      if (mimeType == null)
+        return null;
+      return MimeTypes.parseMimeType(mimeType);
+    } catch (Exception e) {
+      logger.warn("Unable to extract mimetype from input stream, ", e);
+      return null;
     }
   }
 
@@ -367,7 +442,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
         }
 
         // enrich the new track with basic info
-        if (track.getDuration() == -1L || override)
+        if (track.getDuration() == null || override)
           track.setDuration(metadata.getDuration());
         if (track.getChecksum() == null || override) {
           try {
@@ -381,7 +456,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
         if (track.getMimeType() == null || override) {
           try {
             MimeType mimeType = MimeTypes.fromURI(track.getURI());
-            
+
             // The mimetype library doesn't know about audio/video metadata, so the type might be wrong.
             if ("audio".equals(mimeType.getType()) && metadata.hasVideoStreamMetadata()) {
               mimeType = MimeTypes.parseMimeType("video/" + mimeType.getSubtype());
@@ -555,18 +630,15 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
    *           if metadata extraction fails
    */
   protected MediaContainerMetadata getFileMetadata(File file) throws MediaInspectionException {
-    if (file == null) {
+    if (file == null)
       throw new IllegalArgumentException("file to analyze cannot be null");
-    }
-    MediaContainerMetadata metadata = null;
     try {
       MediaAnalyzer analyzer = new MediaInfoAnalyzer();
       analyzer.setConfig(analyzerConfig);
-      metadata = analyzer.analyze(file);
+      return analyzer.analyze(file);
     } catch (MediaAnalyzerException e) {
       throw new MediaInspectionException(e);
     }
-    return metadata;
   }
 
   protected void setWorkspace(Workspace workspace) {
@@ -607,7 +679,7 @@ public class MediaInspectionServiceImpl extends AbstractJobProducer implements M
   public void setUserDirectoryService(UserDirectoryService userDirectoryService) {
     this.userDirectoryService = userDirectoryService;
   }
-  
+
   /**
    * Sets a reference to the organization directory service.
    * 

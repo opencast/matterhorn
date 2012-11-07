@@ -15,7 +15,7 @@
  */
 package org.opencastproject.caption.impl;
 
-import org.opencastproject.caption.api.CaptionCollection;
+import org.opencastproject.caption.api.Caption;
 import org.opencastproject.caption.api.CaptionConverter;
 import org.opencastproject.caption.api.CaptionConverterException;
 import org.opencastproject.caption.api.CaptionService;
@@ -33,7 +33,6 @@ import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.UserDirectoryService;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryException;
-import org.opencastproject.util.MimeType;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workspace.api.Workspace;
 
@@ -58,6 +57,8 @@ import java.util.HashMap;
 import java.util.List;
 
 import javax.activation.FileTypeMap;
+
+import static org.opencastproject.util.MimeType.mimeType;
 
 /**
  * Implementation of {@link CaptionService}. Uses {@link ComponentContext} to get all registered
@@ -99,7 +100,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
 
   /** The organization directory service */
   protected OrganizationDirectoryService organizationDirectoryService = null;
-  
+
   /** Component context needed for retrieving Converter Engines */
   protected ComponentContext componentContext = null;
 
@@ -194,7 +195,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
 
       logger.debug("Atempting to convert from {} to {}...", inputFormat, outputFormat);
 
-      CaptionCollection collection;
+      List<Caption> collection = null;
       try {
         collection = importCaptions(captionsFile, inputFormat, language);
         logger.debug("Parsing to collection succeeded.");
@@ -220,7 +221,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
       Catalog catalog = (Catalog) elementBuilder.elementFromURI(exported, Catalog.TYPE, new MediaPackageElementFlavor(
               "captions", outputFormat));
       String[] mimetype = FileTypeMap.getDefaultFileTypeMap().getContentType(exported.getPath()).split("/");
-      catalog.setMimeType(new MimeType(mimetype[0], mimetype[1]));
+      catalog.setMimeType(mimeType(mimetype[0], mimetype[1]));
       catalog.addTag("lang:" + language);
 
       return catalog;
@@ -349,13 +350,13 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
    *          format of imported captions
    * @param language
    *          (optional) captions' language
-   * @return {@link CaptionCollection} of parsed captions
+   * @return {@link List} of parsed captions
    * @throws UnsupportedCaptionFormatException
    *           if there is no registered engine for given format
    * @throws IllegalCaptionFormatException
    *           if parser encounters exception
    */
-  private CaptionCollection importCaptions(File input, String inputFormat, String language)
+  private List<Caption> importCaptions(File input, String inputFormat, String language)
           throws UnsupportedCaptionFormatException, CaptionConverterException {
     // get input format
     CaptionConverter converter = getCaptionConverter(inputFormat);
@@ -367,7 +368,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
     FileInputStream fileStream = null;
     try {
       fileStream = new FileInputStream(input);
-      CaptionCollection collection = converter.importCaption(fileStream, language);
+      List<Caption> collection = converter.importCaption(fileStream, language);
       return collection;
     } catch (FileNotFoundException e) {
       throw new CaptionConverterException("Could not locate file " + input);
@@ -377,11 +378,11 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
   }
 
   /**
-   * Exports {@link CaptionCollection} to specified format. Extension is added to exported file name. Throws
+   * Exports captions {@link List} to specified format. Extension is added to exported file name. Throws
    * {@link UnsupportedCaptionFormatException} if format is not supported.
    * 
-   * @param collection
-   *          {@link CaptionCollection} to be exported
+   * @param captions
+   *          {@link {@link List} to be exported
    * @param outputName
    *          name under which exported captions will be stored
    * @param outputFormat
@@ -394,7 +395,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
    * @throws IOException
    *           if exception occurs while writing to output stream
    */
-  private URI exportCaptions(CaptionCollection collection, String outputName, String outputFormat, String language)
+  private URI exportCaptions(List<Caption> captions, String outputName, String outputFormat, String language)
           throws UnsupportedCaptionFormatException, IOException {
     CaptionConverter converter = getCaptionConverter(outputFormat);
     if (converter == null) {
@@ -405,7 +406,7 @@ public class CaptionServiceImpl extends AbstractJobProducer implements CaptionSe
     // TODO instead of first writing it all in memory, write it directly to disk
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     try {
-      converter.exportCaption(outputStream, collection, language);
+      converter.exportCaption(outputStream, captions, language);
     } catch (IOException e) {
       // since we're writing to memory, this should not happen
     }

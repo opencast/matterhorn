@@ -9,7 +9,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-SNAPSHOT</version>
+    <version>1.5-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -65,51 +65,6 @@
       <artifactId>matterhorn-search-service-api</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>javax.persistence</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>org.eclipse.persistence.core</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>org.eclipse.persistence.jpa</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>org.eclipse.persistence.asm</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>org.eclipse.persistence.antlr</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.opencastproject</groupId>
-      <artifactId>matterhorn-json</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>c3p0</groupId>
-      <artifactId>c3p0</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.easymock</groupId>
-      <artifactId>easymock</artifactId>
-      <version>2.5.1</version>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
   <build>
   <plugins>
@@ -154,8 +109,7 @@
                 <resource>
                   <directory>../../shared-resources/</directory>
                   <includes>
-                     <include>jquery/**</include>
-                     <include>trimpath/**</include>
+                     <include>js/jquery/**</include>
                   </includes>                  
                   <filtering>false</filtering>
                 </resource>
@@ -238,6 +192,25 @@
               </resources>
             </configuration>
           </execution>
+          <execution>
+            <id>copy-json</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/classes/ui/json</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>../../shared-resources/json/</directory>
+                  <includes>
+                    <include> **/** </include>
+                  </includes>
+                  <filtering>false</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -248,23 +221,8 @@
         <configuration>
           <instructions>
             <Bundle-SymbolicName> ${project.artifactId} </Bundle-SymbolicName>
-            <Import-Package>
-              org.opencastproject.rest;version=${project.version},
-              javax.persistence,
-              *;resolution:=optional
-            </Import-Package>
+            <Import-Package> org.opencastproject.rest;version=${project.version}</Import-Package>
             <Private-Package>ui.*</Private-Package>
-            <Export-Package>
-              org.opencastproject.clipshow.*;version=${project.version},
-              org.opencastproject.clipshow.impl.jaxb;version=${project.version}
-            </Export-Package>
-            <Service-Component>
-              OSGI-INF/clipshow-service.xml,
-              OSGI-INF/clipshow-service-rest.xml
-            </Service-Component>
-            <JPA-PersistenceUnits>
-              org.opencastproject.clipshow.impl.ClipshowServiceImpl
-            </JPA-PersistenceUnits>
             <Http-Alias>/engage/ui</Http-Alias>
             <Http-Classpath>/ui</Http-Classpath>
             <Http-Welcome>index.html</Http-Welcome>

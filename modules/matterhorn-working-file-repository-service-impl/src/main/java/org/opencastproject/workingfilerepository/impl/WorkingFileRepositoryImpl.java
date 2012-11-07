@@ -21,8 +21,10 @@ import org.opencastproject.util.FileSupport;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.PathSupport;
 import org.opencastproject.util.UrlSupport;
+import org.opencastproject.util.jmx.JmxUtil;
 import org.opencastproject.workingfilerepository.api.PathMappable;
 import org.opencastproject.workingfilerepository.api.WorkingFileRepository;
+import org.opencastproject.workingfilerepository.jmx.WorkingFileRepositoryBean;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
@@ -34,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -42,12 +43,15 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import javax.management.ObjectInstance;
+
 /**
  * A very simple (read: inadequate) implementation that stores all files under a root directory using the media package
  * ID as a subdirectory and the media package element ID as the file name.
  */
 public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMappable {
 
+  /** The logger */
   private static final Logger logger = LoggerFactory.getLogger(WorkingFileRepositoryImpl.class);
 
   /** The extension we use for the md5 hash calculated from the file contents */
@@ -60,19 +64,19 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     }
   };
 
+  /** Working file repository JMX type */
+  private static final String JMX_WORKING_FILE_REPOSITORY_TYPE = "WorkingFileRepository";
+
+  /** The JMX working file repository bean */
+  private WorkingFileRepositoryBean workingFileRepositoryBean = new WorkingFileRepositoryBean(this);
+
+  /** The JMX bean object instance */
+  private ObjectInstance registeredMXBean;
+
   /** The remote service manager */
   protected ServiceRegistry remoteServiceManager;
 
-  /**
-   * Sets the remote service manager.
-   * 
-   * @param remoteServiceManager
-   */
-  public void setRemoteServiceManager(ServiceRegistry remoteServiceManager) {
-    this.remoteServiceManager = remoteServiceManager;
-  }
-
-  /* The root directory for storing files */
+  /** The root directory for storing files */
   protected String rootDirectory = null;
 
   /** The Base URL for this server */
@@ -84,7 +88,7 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
   /**
    * Activate the component
    */
-  public void activate(ComponentContext cc) {
+  public void activate(ComponentContext cc) throws IOException {
     if (rootDirectory != null)
       return; // If the root directory was set, respect that setting
 
@@ -119,41 +123,55 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     } else {
       rootDirectory = cc.getBundleContext().getProperty("org.opencastproject.file.repo.path");
     }
-    createRootDirectory();
+
+    try {
+      createRootDirectory();
+    } catch (IOException e) {
+      logger.error("Unable to create the working file repository root directory at {}", rootDirectory);
+      throw e;
+    }
+
+    registeredMXBean = JmxUtil.registerMXBean(workingFileRepositoryBean, JMX_WORKING_FILE_REPOSITORY_TYPE);
+
     logger.info(getDiskSpace());
   }
 
-  public void delete(String mediaPackageID, String mediaPackageElementID) {
-    checkPathSafe(mediaPackageID);
-    checkPathSafe(mediaPackageElementID);
-    File f = getFile(mediaPackageID, mediaPackageElementID);
-    if (f == null) {
-      logger.info("Unable to delete non existing object {}/{}", mediaPackageID, mediaPackageElementID);
-      return;
-    }
-    File parentDirectory = f.getParentFile();
-    logger.debug("Attempting to delete file {}", parentDirectory.getAbsolutePath());
+  /**
+   * Callback from OSGi on service deactivation.
+   */
+  public void deactivate() {
+    JmxUtil.unregisterMXBean(registeredMXBean);
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#delete(java.lang.String, java.lang.String)
+   */
+  public boolean delete(String mediaPackageID, String mediaPackageElementID) throws IOException {
+    File f;
     try {
+      f = getFile(mediaPackageID, mediaPackageElementID);
+
+      File parentDirectory = f.getParentFile();
+      logger.debug("Attempting to delete {}", parentDirectory.getAbsolutePath());
       FileUtils.forceDelete(parentDirectory);
-    } catch (IOException e) {
-      throw new SecurityException("Can not delete file in mediaPackage/mediaElement: " + mediaPackageID + "/"
-              + mediaPackageElementID);
+      return true;
+    } catch (NotFoundException e) {
+      logger.info("Unable to delete non existing object {}/{}", mediaPackageID, mediaPackageElementID);
+      return false;
     }
   }
 
-  public InputStream get(String mediaPackageID, String mediaPackageElementID) throws NotFoundException {
-    checkPathSafe(mediaPackageID);
-    checkPathSafe(mediaPackageElementID);
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#get(java.lang.String, java.lang.String)
+   */
+  public InputStream get(String mediaPackageID, String mediaPackageElementID) throws NotFoundException, IOException {
     File f = getFile(mediaPackageID, mediaPackageElementID);
-    if (f == null) {
-      throw new NotFoundException("Unable to locate " + f + " in the working file repository");
-    }
     logger.debug("Attempting to read file {}", f.getAbsolutePath());
-    try {
-      return new FileInputStream(f);
-    } catch (FileNotFoundException e) {
-      throw new RuntimeException(e);
-    }
+    return new FileInputStream(f);
   }
 
   /**
@@ -171,6 +189,11 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     }
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getURI(java.lang.String, java.lang.String)
+   */
   public URI getURI(String mediaPackageID, String mediaPackageElementID) {
     return getURI(mediaPackageID, mediaPackageElementID, null);
   }
@@ -207,12 +230,19 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     try {
       return new URI(uri);
     } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
+      throw new IllegalArgumentException(e);
     }
 
   }
 
-  public URI put(String mediaPackageID, String mediaPackageElementID, String filename, InputStream in) {
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#put(java.lang.String, java.lang.String,
+   *      java.lang.String, java.io.InputStream)
+   */
+  public URI put(String mediaPackageID, String mediaPackageElementID, String filename, InputStream in)
+          throws IOException {
     checkPathSafe(mediaPackageID);
     checkPathSafe(mediaPackageElementID);
     File f = null;
@@ -228,12 +258,8 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
         }
       }
     } else {
-      try {
-        logger.debug("Attempting to create a new directory at {}", dir.getAbsolutePath());
-        FileUtils.forceMkdir(dir);
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      logger.debug("Attempting to create a new directory at {}", dir.getAbsolutePath());
+      FileUtils.forceMkdir(dir);
     }
     f = new File(dir, PathSupport.toSafeName(filename));
     logger.debug("Attempting to write a file to {}", f.getAbsolutePath());
@@ -246,34 +272,38 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
       }
       out = new FileOutputStream(f);
       IOUtils.copy(in, out);
+      createMd5(f);
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      FileUtils.deleteDirectory(dir);
+      throw e;
     } finally {
       IOUtils.closeQuietly(out);
       IOUtils.closeQuietly(in);
     }
-    addMd5(f);
     return getURI(mediaPackageID, mediaPackageElementID, filename);
   }
 
   /**
-   * Creates a file containing the md5 hash for the contents of a source file
+   * Creates a file containing the md5 hash for the contents of a source file.
    * 
    * @param f
-   *          The source file containing the data to hash
+   *          the source file containing the data to hash
+   * @throws IOException
+   *           if the hash cannot be created
    */
-  protected File addMd5(File f) {
-    // Create an md5 file
+  protected File createMd5(File f) throws IOException {
     FileInputStream md5In = null;
+    File md5File = null;
     try {
       md5In = new FileInputStream(f);
       String md5 = DigestUtils.md5Hex(md5In);
       IOUtils.closeQuietly(md5In);
-      File md5File = getMd5File(f);
+      md5File = getMd5File(f);
       FileUtils.writeStringToFile(md5File, md5);
       return md5File;
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      FileUtils.deleteQuietly(md5File);
+      throw e;
     } finally {
       IOUtils.closeQuietly(md5In);
     }
@@ -287,7 +317,7 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    *          The source file
    * @return The md5 file
    */
-  protected File getMd5File(File f) {
+  private File getMd5File(File f) {
     return new File(f.getParent(), f.getName() + MD5_EXTENSION);
   }
 
@@ -310,37 +340,73 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     }
   }
 
-  private File getFile(String mediaPackageID, String mediaPackageElementID) {
+  /**
+   * Returns the file to the media package element.
+   * 
+   * @param mediaPackageID
+   *          the media package identifier
+   * @param mediaPackageElementID
+   *          the media package element identifier
+   * @return the file or <code>null</code> if no such element exists
+   * @throws IllegalStateException
+   *           if more than one matching elements were found
+   * @throws NotFoundException
+   *           if the file cannot be found in the Working File Repository
+   */
+  protected File getFile(String mediaPackageID, String mediaPackageElementID) throws IllegalStateException,
+          NotFoundException {
+    checkPathSafe(mediaPackageID);
+    checkPathSafe(mediaPackageElementID);
     File directory = getElementDirectory(mediaPackageID, mediaPackageElementID);
 
     File[] md5Files = directory.listFiles(MD5_FINAME_FILTER);
     if (md5Files == null) {
       logger.debug("Element directory {} does not exist", directory);
-      return null;
+      throw new NotFoundException("Element directory " + directory + " does not exist");
     } else if (md5Files.length == 0) {
       logger.debug("There are no complete files in the element directory {}", directory.getAbsolutePath());
-      return null;
+      throw new NotFoundException("There are no complete files in the element directory " + directory.getAbsolutePath());
     } else if (md5Files.length == 1) {
       File f = getSourceFile(md5Files[0]);
-      if (f.exists()) {
+      if (f.exists())
         return f;
-      } else {
-        return null;
-      }
+      else
+        throw new NotFoundException("Unable to locate " + f + " in the working file repository");
     } else {
       logger.error("Integrity error: Element directory {} contains more than one element", mediaPackageID + "/"
               + mediaPackageElementID);
-      throw new RuntimeException("Directory " + mediaPackageID + "/" + mediaPackageElementID
+      throw new IllegalStateException("Directory " + mediaPackageID + "/" + mediaPackageElementID
               + "does not contain exactly one element");
     }
   }
 
-  private File getFileFromCollection(String collectionId, String fileName) {
-    File directory = getCollectionDirectory(collectionId);
+  /**
+   * Returns the file from the given collection.
+   * 
+   * @param collectionId
+   *          the collection identifier
+   * @param fileName
+   *          the file name
+   * @return the file
+   * @throws NotFoundException
+   *           if either the collection or the file don't exist
+   */
+  protected File getFileFromCollection(String collectionId, String fileName) throws NotFoundException,
+          IllegalArgumentException {
+    checkPathSafe(collectionId);
+
+    File directory = null;
+    try {
+      directory = getCollectionDirectory(collectionId, false);
+      if (directory == null)
+        throw new NotFoundException(fileName);
+    } catch (IOException e) {
+      // can be ignored, since we don't want the directory to be created, so it will never happen
+    }
     File sourceFile = new File(directory, PathSupport.toSafeName(fileName));
     File md5File = getMd5File(sourceFile);
     if (!sourceFile.exists() || !md5File.exists()) {
-      return null;
+      throw new NotFoundException(fileName);
     }
     return sourceFile;
   }
@@ -350,29 +416,42 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
             mediaPackageElementID }));
   }
 
-  private File getCollectionDirectory(String collectionId) {
+  /**
+   * Returns a <code>File</code> reference to collection. If the collection does not exist, the method either returns
+   * <code>null</code> or creates it, depending on the parameter <code>create</code>.
+   * 
+   * @param collectionId
+   *          the collection identifier
+   * @param create
+   *          whether to create a collection directory if it does not exist
+   * @return the collection directory or <code>null</code> if it does not exist and should not be created
+   * @throws IOException
+   *           if creating a non-existing directory fails
+   */
+  private File getCollectionDirectory(String collectionId, boolean create) throws IOException {
     File collectionDir = new File(
             PathSupport.concat(new String[] { rootDirectory, COLLECTION_PATH_PREFIX, collectionId }));
     if (!collectionDir.exists()) {
+      if (!create)
+        return null;
       try {
         FileUtils.forceMkdir(collectionDir);
-        logger.info("created collection directory " + collectionId);
+        logger.debug("Created collection directory " + collectionId);
       } catch (IOException e) {
-        throw new IllegalStateException("can not create collection directory" + collectionDir);
+        // We check again to see if it already exists because this collection dir may live on a shared disk.
+        // Synchronizing does not help because the other instance is not in the same JVM.
+        if (!collectionDir.exists()) {
+          throw new IllegalStateException("Can not create collection directory" + collectionDir);
+        }
       }
     }
     return collectionDir;
   }
 
-  void createRootDirectory() {
+  void createRootDirectory() throws IOException {
     File f = new File(rootDirectory);
-    if (!f.exists()) {
-      try {
-        FileUtils.forceMkdir(f);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+    if (!f.exists())
+      FileUtils.forceMkdir(f);
   }
 
   /**
@@ -381,13 +460,18 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getCollectionSize(java.lang.String)
    */
   @Override
-  public long getCollectionSize(String id) {
-    File collectionDir = getCollectionDirectory(id);
-    if (!collectionDir.exists() || !collectionDir.canRead())
-      throw new IllegalArgumentException("can not find collection " + id);
+  public long getCollectionSize(String id) throws NotFoundException {
+    File collectionDir = null;
+    try {
+      collectionDir = getCollectionDirectory(id, false);
+      if (collectionDir == null || !collectionDir.canRead())
+        throw new NotFoundException("Can not find collection " + id);
+    } catch (IOException e) {
+      // can be ignored, since we don't want the directory to be created, so it will never happen
+    }
     File[] files = collectionDir.listFiles(MD5_FINAME_FILTER);
     if (files == null)
-      throw new IllegalArgumentException("collection " + id + " is not a directory");
+      throw new IllegalArgumentException("Collection " + id + " is not a directory");
     return files.length;
   }
 
@@ -398,28 +482,26 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    *      java.lang.String)
    */
   @Override
-  public InputStream getFromCollection(String collectionId, String fileName) throws NotFoundException {
-    checkPathSafe(collectionId);
+  public InputStream getFromCollection(String collectionId, String fileName) throws NotFoundException, IOException {
     File f = getFileFromCollection(collectionId, fileName);
     if (f == null || !f.isFile()) {
       throw new NotFoundException("Unable to locate " + f + " in the working file repository");
     }
     logger.debug("Attempting to read file {}", f.getAbsolutePath());
-    try {
-      return new FileInputStream(f);
-    } catch (FileNotFoundException e) {
-      throw new RuntimeException(e);
-    }
+    return new FileInputStream(f);
   }
 
   /**
    * {@inheritDoc}
    * 
+   * @throws IOException
+   *           if the hash can't be created
+   * 
    * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#putInCollection(java.lang.String,
    *      java.lang.String, java.io.InputStream)
    */
   @Override
-  public URI putInCollection(String collectionId, String fileName, InputStream in) {
+  public URI putInCollection(String collectionId, String fileName, InputStream in) throws IOException {
     checkPathSafe(collectionId);
     checkPathSafe(fileName);
     File f = new File(PathSupport.concat(new String[] { rootDirectory, COLLECTION_PATH_PREFIX, collectionId,
@@ -429,7 +511,7 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     try {
       if (!f.exists()) {
         logger.debug("Attempting to create a new file at {}", f.getAbsolutePath());
-        File collectionDirectory = getCollectionDirectory(collectionId);
+        File collectionDirectory = getCollectionDirectory(collectionId, true);
         if (!collectionDirectory.exists()) {
           logger.debug("Attempting to create a new directory at {}", collectionDirectory.getAbsolutePath());
           FileUtils.forceMkdir(collectionDirectory);
@@ -440,13 +522,14 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
       }
       out = new FileOutputStream(f);
       IOUtils.copy(in, out);
+      createMd5(f);
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      FileUtils.deleteQuietly(f);
+      throw e;
     } finally {
       IOUtils.closeQuietly(out);
       IOUtils.closeQuietly(in);
     }
-    addMd5(f);
     return getCollectionURI(collectionId, fileName);
   }
 
@@ -472,9 +555,14 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
                 + "' : " + e);
       }
     }
-    File destFile = new File(destDir, toFileName);
-    FileSupport.copy(source, destFile);
-    addMd5(destFile);
+    File destFile;
+    try {
+      destFile = new File(destDir, toFileName);
+      FileSupport.link(source, destFile);
+      createMd5(destFile);
+    } catch (Exception e) {
+      FileUtils.deleteDirectory(destDir);
+    }
     return getURI(toMediaPackage, toMediaPackageElement, toFileName);
   }
 
@@ -488,8 +576,6 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
   public URI moveTo(String fromCollection, String fromFileName, String toMediaPackage, String toMediaPackageElement,
           String toFileName) throws NotFoundException, IOException {
     File source = getFileFromCollection(fromCollection, fromFileName);
-    if (source == null)
-      throw new IllegalArgumentException("Source file " + fromCollection + "/" + fromFileName + " does not exist");
     File sourceMd5 = getMd5File(source);
     File destDir = getElementDirectory(toMediaPackage, toMediaPackageElement);
     if (!destDir.exists()) {
@@ -501,18 +587,21 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
                 + "' : " + e);
       }
     }
-    File dest = getFile(toMediaPackage, toMediaPackageElement);
-    if (dest == null) {
+
+    File dest = null;
+    try {
+      dest = getFile(toMediaPackage, toMediaPackageElement);
+    } catch (NotFoundException e) {
       dest = new File(getElementDirectory(toMediaPackage, toMediaPackageElement), toFileName);
     }
 
     try {
       FileUtils.moveFile(source, dest);
-      addMd5(dest);
-      if (!sourceMd5.delete()) {
-        throw new IllegalStateException("Unable to delete " + sourceMd5.getAbsolutePath());
-      }
+      if (!sourceMd5.delete())
+        throw new IOException("Unable to delete " + sourceMd5.getAbsolutePath());
+      createMd5(dest);
     } catch (IOException e) {
+      FileUtils.deleteDirectory(destDir);
       throw new IllegalStateException("unable to copy file" + e);
     }
     return getURI(toMediaPackage, toMediaPackageElement, dest.getName());
@@ -525,19 +614,26 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    *      java.lang.String)
    */
   @Override
-  public void deleteFromCollection(String collectionId, String fileName) {
-    File f = getFileFromCollection(collectionId, fileName);
-    if (f == null)
-      throw new IllegalArgumentException("Source file " + collectionId + "/" + fileName + " does not exist");
-    File md5File = getMd5File(f);
-    if (f.exists() && f.isFile() && f.canWrite() && md5File.exists() && md5File.isFile() && md5File.canWrite()) {
-      boolean md5Success = md5File.delete();
-      boolean sourceSuccess = f.delete();
-      if (!sourceSuccess || !md5Success)
-        throw new IllegalStateException("can not delete " + f);
-    } else {
-      throw new IllegalStateException("file " + f + " either does not exist, is not a file, or is not writable");
+  public boolean deleteFromCollection(String collectionId, String fileName) throws IOException {
+    File f = null;
+    try {
+      f = getFileFromCollection(collectionId, fileName);
+    } catch (NotFoundException e) {
+      logger.trace("File {}/{} does not exist", collectionId, fileName);
+      return false;
     }
+    File md5File = getMd5File(f);
+
+    if (!f.isFile())
+      throw new IllegalStateException(f + " is not a regular file");
+    if (!md5File.isFile())
+      throw new IllegalStateException(md5File + " is not a regular file");
+    if (!md5File.delete())
+      throw new IOException("MD5 hash " + md5File + " cannot be deleted");
+    if (!f.delete())
+      throw new IOException(f + " cannot be deleted");
+
+    return true;
   }
 
   /**
@@ -546,8 +642,15 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getCollectionContents(java.lang.String)
    */
   @Override
-  public URI[] getCollectionContents(String collectionId) {
-    File collectionDir = getCollectionDirectory(collectionId);
+  public URI[] getCollectionContents(String collectionId) throws NotFoundException {
+    File collectionDir = null;
+    try {
+      collectionDir = getCollectionDirectory(collectionId, false);
+      if (collectionDir == null)
+        throw new NotFoundException(collectionId);
+    } catch (IOException e) {
+      // We are not asking for the collection to be created, so this exception is never thrown
+    }
 
     File[] files = collectionDir.listFiles(MD5_FINAME_FILTER);
     URI[] uris = new URI[files.length];
@@ -559,29 +662,32 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
         throw new IllegalStateException("Invalid URI for " + files[i]);
       }
     }
+
     return uris;
   }
 
   /**
-   * {@inheritDoc}
+   * Returns the md5 hash value for the given mediapackage element.
    * 
-   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#hashMediaPackageElement(java.lang.String,
-   *      java.lang.String)
+   * @throws NotFoundException
+   *           if the media package element does not exist
    */
-  @Override
-  public String hashMediaPackageElement(String mediaPackageID, String mediaPackageElementID) throws IOException {
-    return md5(getFile(mediaPackageID, mediaPackageElementID));
+  String getMediaPackageElementDigest(String mediaPackageID, String mediaPackageElementID) throws IOException,
+          IllegalStateException, NotFoundException {
+    File f = getFile(mediaPackageID, mediaPackageElementID);
+    if (f == null)
+      throw new NotFoundException(mediaPackageID + "/" + mediaPackageElementID);
+    return getFileDigest(f);
   }
 
   /**
-   * {@inheritDoc}
+   * Returns the md5 hash value for the given collection element.
    * 
-   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#hashCollectionElement(java.lang.String,
-   *      java.lang.String)
+   * @throws NotFoundException
+   *           if the collection element does not exist
    */
-  @Override
-  public String hashCollectionElement(String collectionId, String fileName) throws IOException {
-    return md5(getFileFromCollection(collectionId, fileName));
+  String getCollectionElementDigest(String collectionId, String fileName) throws IOException, NotFoundException {
+    return getFileDigest(getFileFromCollection(collectionId, fileName));
   }
 
   /**
@@ -591,32 +697,76 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
    *          the source file
    * @return the md5 hash
    */
-  protected String md5(File file) throws IOException {
-    if (file == null) {
+  private String getFileDigest(File file) throws IOException {
+    if (file == null)
       throw new IllegalArgumentException("File must not be null");
-    }
-    if (!file.exists() || !file.isFile()) {
+    if (!file.exists() || !file.isFile())
       throw new IllegalArgumentException("File " + file.getAbsolutePath() + " can not be read");
+
+    // Check if there is a precalculated md5 hash
+    File md5HashFile = getMd5File(file);
+    if (file.exists()) {
+      logger.trace("Reading precalculated hash for {} from {}", file, md5HashFile.getName());
+      return FileUtils.readFileToString(md5HashFile, "utf-8");
     }
+
+    // Calculate the md5 hash
     InputStream in = null;
+    String md5 = null;
     try {
       in = new FileInputStream(file);
-      return DigestUtils.md5Hex(in);
+      md5 = DigestUtils.md5Hex(in);
     } finally {
       IOUtils.closeQuietly(in);
     }
+
+    // Write the md5 hash to disk for later reference
+    try {
+      FileUtils.writeStringToFile(md5HashFile, md5, "utf-8");
+    } catch (IOException e) {
+      logger.warn("Error storing cached md5 checksum at {}", md5HashFile);
+      throw e;
+    }
+
+    return md5;
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getTotalSpace()
+   */
   public long getTotalSpace() {
     File f = new File(rootDirectory);
     return f.getTotalSpace();
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getUsableSpace()
+   */
   public long getUsableSpace() {
     File f = new File(rootDirectory);
     return f.getUsableSpace();
   }
 
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getUsedSpace()
+   */
+  @Override
+  public long getUsedSpace() {
+    File f = new File(rootDirectory);
+    return f.getTotalSpace() - f.getUsableSpace();
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workingfilerepository.api.WorkingFileRepository#getDiskSpace()
+   */
   public String getDiskSpace() {
     int usable = Math.round(getUsableSpace() / 1024 / 1024 / 1024);
     int total = Math.round(getTotalSpace() / 1024 / 1024 / 1024);
@@ -652,6 +802,15 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
   @Override
   public URI getBaseUri() {
     return serviceUrl;
+  }
+
+  /**
+   * Sets the remote service manager.
+   * 
+   * @param remoteServiceManager
+   */
+  public void setRemoteServiceManager(ServiceRegistry remoteServiceManager) {
+    this.remoteServiceManager = remoteServiceManager;
   }
 
 }

@@ -57,14 +57,15 @@ import javax.ws.rs.core.Response;
  * The REST endpoint for the capture agent service on the capture device
  */
 @Path("/")
-@RestService(name = "captureadminservice", title = "Capture Admin Service", notes = {
-  "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
-  "If the service is down or not working it will return a status 503, this means the the underlying service is not working and "
-  + "is either restarting or has failed",
-  "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In other words, there is a bug! "
-  + "You should file an error report with your server logs from the time when the error occurred: "
-  + "<a href=\"https://issues.opencastproject.org\">Opencast Issue Tracker</a>" }, abstractText = "This service is a registry of capture agents and their recordings. "
-+ "Please see the <a href='http://wiki.opencastproject.org/confluence/display/open/Capture+Admin+Service'>service contract</a> for further information.")
+@RestService(name = "captureadminservice", title = "Capture Admin Service",
+  abstractText = "This service is a registry of capture agents and their recordings.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class CaptureAgentStateRestService {
 
   private static final Logger logger = LoggerFactory.getLogger(CaptureAgentStateRestService.class);
@@ -274,7 +275,7 @@ public class CaptureAgentStateRestService {
   @Path("agents/{name}/configuration")
   @RestQuery(name = "setAgentStateConfiguration", description = "Set the configuration of a given capture agent, registering it if it does not exist", pathParameters = {
     @RestParameter(description = "The name of a given capture agent", isRequired = true, name = "name", type = Type.STRING) }, restParameters = {
-    @RestParameter(description = "An XML representation of the capabilities, as specified in http://java.sun.com/dtd/properties.dtd (friendly names as keys, device locations as their corresponding values)", type = Type.TEXT, isRequired = true, name = "Configuration") }, reponses = {
+    @RestParameter(description = "An XML representation of the capabilities, as specified in http://java.sun.com/dtd/properties.dtd (friendly names as keys, device locations as their corresponding values)", type = Type.TEXT, isRequired = true, name = "configuration") }, reponses = {
     @RestResponse(description = "{agentName} set to {state}", responseCode = HttpServletResponse.SC_OK),
     @RestResponse(description = "The configuration format is incorrect OR the agent name is blank or null", responseCode = HttpServletResponse.SC_BAD_REQUEST) }, returnDescription = "")
   public Response setConfiguration(@PathParam("name") String agentName, @FormParam("configuration") String configuration) {

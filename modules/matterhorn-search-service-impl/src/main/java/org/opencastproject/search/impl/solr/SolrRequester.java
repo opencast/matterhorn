@@ -16,9 +16,13 @@
 
 package org.opencastproject.search.impl.solr;
 
-import static org.opencastproject.search.api.SearchService.READ_PERMISSION;
-import static org.opencastproject.search.api.SearchService.WRITE_PERMISSION;
-
+import org.apache.commons.lang.StringUtils;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrQuery.ORDER;
+import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilder;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
@@ -33,18 +37,10 @@ import org.opencastproject.search.api.SearchResultItemImpl;
 import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.User;
 import org.opencastproject.util.SolrUtils;
-import org.opencastproject.util.data.CollectionUtil;
 import org.opencastproject.util.data.Function;
 import org.opencastproject.util.data.Function0;
+import org.opencastproject.util.data.Option;
 import org.opencastproject.util.data.Predicate;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrQuery.ORDER;
-import org.apache.solr.client.solrj.SolrServer;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.common.SolrDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +53,12 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.opencastproject.search.api.SearchService.READ_PERMISSION;
+import static org.opencastproject.search.api.SearchService.WRITE_PERMISSION;
+import static org.opencastproject.util.data.Collections.filter;
+import static org.opencastproject.util.data.Collections.head;
+import static org.opencastproject.util.data.Option.option;
 
 /**
  * Class implementing <code>LookupRequester</code> to provide connection to solr indexing facility.
@@ -183,7 +185,7 @@ public class SolrRequester {
         public String getDcTitle() {
           final List<DField<String>> titles = Schema.getDcTitle(doc);
           // try to return the first title without any language information first...
-          return CollectionUtil.head(CollectionUtil.filter(titles, new Predicate<DField<String>>() {
+          return head(filter(titles, new Predicate<DField<String>>() {
             @Override
             public Boolean apply(DField<String> f) {
               return f.getSuffix().equals(Schema.LANGUAGE_UNDEFINED);
@@ -505,6 +507,14 @@ public class SolrRequester {
     sb.append(uq);
     sb.append(") ");
 
+    // see http://wiki.apache.org/lucene-java/LuceneFAQ#Are_Wildcard.2C_Prefix.2C_and_Fuzzy_queries_case_sensitive.3F
+    // for an explanation why .toLowerCase() is used here. This behaviour is tracked in SOLR-219.
+    // It's also important not to stem when using wildcard queries. Please adjust the schema.xml accordingly.
+    sb.append(Schema.FULLTEXT);
+    sb.append(":(*");
+    sb.append(uq.toLowerCase());
+    sb.append("*) ");
+
     sb.append(")");
 
     return sb;
@@ -562,6 +572,19 @@ public class SolrRequester {
       sb.append(")");
     }
 
+    String solrSeriesIdRequest = StringUtils.trimToNull(q.getSeriesId());
+    if (solrSeriesIdRequest != null) {
+      String cleanSolrSeriesIdRequest = SolrUtils.clean(solrSeriesIdRequest);
+      if (sb.length() > 0) {
+        sb.append(" AND ");
+      }
+      sb.append("(");
+      sb.append(Schema.DC_IS_PART_OF);
+      sb.append(":");
+      sb.append(cleanSolrSeriesIdRequest);
+      sb.append(")");
+    }
+    
     String solrTextRequest = StringUtils.trimToNull(q.getText());
     if (solrTextRequest != null) {
       String cleanSolrTextRequest = SolrUtils.clean(q.getText());
@@ -622,7 +645,7 @@ public class SolrRequester {
     if (q.getDeletedDate() != null) {
       if (sb.length() > 0)
         sb.append(" AND ");
-      sb.append(Schema.OC_DELETED + ":" + SolrUtils.serializeDateRange(q.getDeletedDate(), null));
+      sb.append(Schema.OC_DELETED + ":" + SolrUtils.serializeDateRange(option(q.getDeletedDate()), Option.<Date>none()));
     }
 
     if (sb.length() == 0)
@@ -632,6 +655,7 @@ public class SolrRequester {
       sb.append(" AND ").append(Schema.OC_ORGANIZATION).append(":").append(securityService.getOrganization().getId());
       User user = securityService.getUser();
       String[] roles = user.getRoles();
+      boolean userHasAnonymousRole = false;
       if (roles.length > 0) {
         sb.append(" AND (");
         StringBuilder roleList = new StringBuilder();
@@ -639,7 +663,16 @@ public class SolrRequester {
           if (roleList.length() > 0)
             roleList.append(" OR ");
           roleList.append(Schema.OC_ACL_PREFIX).append(action).append(":").append(role);
+          if (role.equalsIgnoreCase(securityService.getOrganization().getAnonymousRole())) {
+            userHasAnonymousRole = true;
+          }
         }
+        if (!userHasAnonymousRole) {
+          if (roleList.length() > 0)
+            roleList.append(" OR ");
+          roleList.append(Schema.OC_ACL_PREFIX).append(action).append(":").append(securityService.getOrganization().getAnonymousRole());
+        }
+
         sb.append(roleList.toString());
         sb.append(")");
       }

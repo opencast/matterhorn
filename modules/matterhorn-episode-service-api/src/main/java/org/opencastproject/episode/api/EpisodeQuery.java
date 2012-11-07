@@ -15,147 +15,212 @@
  */
 package org.opencastproject.episode.api;
 
+import static org.opencastproject.util.data.Collections.list;
+import static org.opencastproject.util.data.Collections.nil;
+import static org.opencastproject.util.data.Option.none;
+import static org.opencastproject.util.data.Option.some;
+
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
+import org.opencastproject.security.api.SecurityService;
+import org.opencastproject.util.data.Option;
 
 import java.util.Date;
+import java.util.List;
 
 /**
- * Represents a query to find search results.
+ * Represents a query to find search results. Note that none of the methods takes null as argument.
  */
-public class EpisodeQuery {
-  private boolean includeLocked = false;
-  private String id;
-  private String text;
-  private String seriesTitle;
-  private String creator;
-  private String contributor;
-  private String language;
-  private String license;
-  private String title;
-  private String query;
-  private int limit = -1;
-  private int offset = -1;
-  private String[] tags = null;
-  private MediaPackageElementFlavor[] flavors = null;
-  private Date deletedDate = null;
+public final class EpisodeQuery {
+  private Option<String> id = none();
+  private Option<String> text = none();
+  private Option<String> seriesId = none();
+  private Option<String> seriesTitle = none();
+  private Option<String> creator = none();
+  private Option<String> contributor = none();
+  private Option<String> language = none();
+  private Option<String> license = none();
+  private Option<String> title = none();
+  private Option<String> query = none();
+  private Integer limit = Integer.MAX_VALUE;
+  private Integer offset = 0;
+  private Option<String> organization = none();
+  private List<String> tags = nil();
+  private List<MediaPackageElementFlavor> flavors = nil();
+  private Option<Date> addedAfter = none();
+  private Option<Date> addedBefore = none();
+  private Option<Date> deletedDate = none();
   private Sort sort = Sort.DATE_CREATED;
   private boolean sortAscending = true;
+  private boolean onlyLastVersion = false;
+  private boolean includeDeleted = false;
 
   public enum Sort {
     DATE_CREATED, TITLE, CREATOR, LANGUAGE, LICENSE, SUBJECT, MEDIA_PACKAGE_ID
   }
 
-  public EpisodeQuery includeLocked(boolean includeLocked) {
-    this.includeLocked = includeLocked;
+  private EpisodeQuery() {
+  }
+
+  /** Create a new user query. This query has the organization set automatically. */
+  public static EpisodeQuery query(SecurityService sec) {
+    return new EpisodeQuery().organization(sec.getOrganization().toString());
+  }
+
+  /** Create a new system query with no restrictions. */
+  public static EpisodeQuery systemQuery() {
+    return new EpisodeQuery();
+  }
+
+  public EpisodeQuery id(String id) {
+    this.id = some(id);
     return this;
   }
 
-  public EpisodeQuery withId(String id) {
-    this.id = id;
-    return this;
-  }
-
-  public EpisodeQuery withLimit(int limit) {
+  public EpisodeQuery limit(int limit) {
+    if (limit < 1) throw new IllegalArgumentException("limit < 1");
     this.limit = limit;
     return this;
   }
 
-  public EpisodeQuery withOffset(int offset) {
+  public EpisodeQuery offset(int offset) {
+    if (offset < 0) throw new IllegalArgumentException("offset < 0");
     this.offset = offset;
     return this;
   }
 
-  public EpisodeQuery withQuery(String q) {
-    this.query = q;
+  public EpisodeQuery query(String q) {
+    this.query = some(q);
     return this;
   }
 
-  public EpisodeQuery withText(String text) {
-    this.text = text;
+  public EpisodeQuery text(String text) {
+    this.text = some(text);
     return this;
   }
 
-  public EpisodeQuery withSeriesTitle(String seriesTitle) {
-    this.seriesTitle = seriesTitle;
+  public EpisodeQuery organization(String organization) {
+    this.organization = some(organization);
     return this;
   }
 
-  public EpisodeQuery withCreator(String creator) {
-    this.creator = creator;
+  public Option<String> getOrganization() {
+    return organization;
+  }
+
+  public EpisodeQuery seriesId(String seriesId) {
+    this.seriesId = some(seriesId);
     return this;
   }
 
-  public EpisodeQuery withContributor(String contributor) {
-    this.contributor = contributor;
+  public EpisodeQuery seriesTitle(String seriesTitle) {
+    this.seriesTitle = some(seriesTitle);
     return this;
   }
 
-  public EpisodeQuery withLanguage(String language) {
-    this.language = language;
+  public EpisodeQuery creator(String creator) {
+    this.creator = some(creator);
     return this;
   }
 
-  public EpisodeQuery withLicense(String license) {
-    this.license = license;
+  public EpisodeQuery contributor(String contributor) {
+    this.contributor = some(contributor);
     return this;
   }
 
-  public EpisodeQuery withTitle(String title) {
-    this.title = title;
+  public EpisodeQuery language(String language) {
+    this.language = some(language);
     return this;
   }
 
-  public String getSeriesTitle() {
+  public EpisodeQuery license(String license) {
+    this.license = some(license);
+    return this;
+  }
+
+  public EpisodeQuery title(String title) {
+    this.title = some(title);
+    return this;
+  }
+
+  /** Find episodes added after or on the given date. */
+  public EpisodeQuery addedAfter(Date date) {
+    this.addedAfter = some(date);
+    return this;
+  }
+
+  public Option<Date> getAddedAfter() {
+    return addedAfter;
+  }
+
+  /** Find episodes added before or on the given date. */
+  public EpisodeQuery addedBefore(Date date) {
+    this.addedBefore = some(date);
+    return this;
+  }
+
+  public Option<Date> getAddedBefore() {
+    return addedBefore;
+  }
+
+  public Option<String> getSeriesId() {
+    return seriesId;
+  }
+
+  public Option<String> getSeriesTitle() {
     return seriesTitle;
   }
 
-  public String getCreator() {
+  public Option<String> getCreator() {
     return creator;
   }
 
-  public String getContributor() {
+  public Option<String> getContributor() {
     return contributor;
   }
 
-  public String getLanguage() {
+  public Option<String> getLanguage() {
     return language;
   }
 
-  public String getLicense() {
+  public Option<String> getLicense() {
     return license;
   }
 
-  public String getTitle() {
+  public Option<String> getTitle() {
     return title;
   }
 
-  public String getId() {
+  public Option<String> getId() {
     return id;
   }
 
-  public int getLimit() {
+  /** Defaults to {@link Integer#MAX_VALUE}. */
+  public Integer getLimit() {
     return limit;
   }
 
-  public int getOffset() {
+  /** Defaults to <code>0</code>. */
+  public Integer getOffset() {
     return offset;
   }
 
-  public String getQuery() {
+  public Option<String> getQuery() {
     return query;
   }
 
-  public String getText() {
+  public Option<String> getText() {
     return text;
   }
 
   /**
    * Sort the results by the specified field, either ascending or descending.
-   *
-   * @param sort the sort field
-   * @param ascending whether to sort ascending (true) or descending (false)
+   * 
+   * @param sort
+   *          the sort field
+   * @param ascending
+   *          whether to sort ascending (true) or descending (false)
    */
-  public EpisodeQuery withSort(Sort sort, boolean ascending) {
+  public EpisodeQuery sort(Sort sort, boolean ascending) {
     this.sort = sort;
     this.sortAscending = ascending;
     return this;
@@ -163,46 +228,76 @@ public class EpisodeQuery {
 
   /**
    * Return the field to use in sorting the results of the query.
-   *
+   * 
    * @return the sort field
    */
   public Sort getSort() {
     return sort;
   }
 
+  public EpisodeQuery onlyLastVersion() {
+    this.onlyLastVersion = true;
+    return this;
+  }
+
   /**
    * Return whether to sort the results in ascending order.
-   *
+   * 
    * @return whether the search results should be sorted in ascending order
    */
-  public boolean isSortAscending() {
+  public boolean getSortAscending() {
     return sortAscending;
   }
 
-  public MediaPackageElementFlavor[] getElementFlavors() {
+  public boolean getOnlyLastVersion() {
+    return onlyLastVersion;
+  }
+
+  public List<MediaPackageElementFlavor> getElementFlavors() {
     return flavors;
   }
 
-  public String[] getElementTags() {
-    return tags;
-  }
-
-  public EpisodeQuery withElementFlavors(MediaPackageElementFlavor[] flavors) {
+  public EpisodeQuery elementFlavors(List<MediaPackageElementFlavor> flavors) {
     this.flavors = flavors;
     return this;
   }
 
-  public EpisodeQuery withElementTags(String[] tags) {
+  public EpisodeQuery elementFlavors(MediaPackageElementFlavor... flavors) {
+    this.flavors = list(flavors);
+    return this;
+  }
+
+  public EpisodeQuery elementTags(List<String> tags) {
     this.tags = tags;
     return this;
   }
 
-  public EpisodeQuery withDeletedSince(Date date) {
-    this.deletedDate = date;
+  public EpisodeQuery elementTags(String... tags) {
+    this.tags = list(tags);
     return this;
   }
 
-  public Date getDeletedDate() {
+  public List<String> getElementTags() {
+    return tags;
+  }
+
+  /** Only return items that have been deleted since the given date. Overrides {@link #includeDeleted(boolean)}. */
+  public EpisodeQuery deletedSince(Date date) {
+    this.deletedDate = some(date);
+    return this;
+  }
+
+  public Option<Date> getDeletedDate() {
     return deletedDate;
+  }
+
+  /** Include deleted items in the response. {@link #deletedSince} always takes precedence. */
+  public EpisodeQuery includeDeleted(boolean include) {
+    this.includeDeleted = include;
+    return this;
+  }
+
+  public boolean getIncludeDeleted() {
+    return includeDeleted || deletedDate.isSome();
   }
 }

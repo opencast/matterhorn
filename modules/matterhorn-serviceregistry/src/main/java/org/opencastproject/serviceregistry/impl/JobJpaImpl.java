@@ -17,6 +17,7 @@ package org.opencastproject.serviceregistry.impl;
 
 import org.opencastproject.job.api.JaxbJob;
 import org.opencastproject.job.api.JaxbJobContext;
+import org.opencastproject.job.api.Job;
 import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.User;
 
@@ -31,6 +32,7 @@ import java.util.Map;
 
 import javax.persistence.Access;
 import javax.persistence.AccessType;
+import javax.persistence.CascadeType;
 import javax.persistence.CollectionTable;
 import javax.persistence.Column;
 import javax.persistence.ElementCollection;
@@ -41,8 +43,11 @@ import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.Lob;
 import javax.persistence.ManyToOne;
+import javax.persistence.NamedNativeQueries;
+import javax.persistence.NamedNativeQuery;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
+import javax.persistence.OneToMany;
 import javax.persistence.OrderColumn;
 import javax.persistence.PostLoad;
 import javax.persistence.PreUpdate;
@@ -65,7 +70,7 @@ import javax.xml.bind.annotation.XmlType;
  */
 @Entity(name = "Job")
 @Access(AccessType.PROPERTY)
-@Table(name = "JOB")
+@Table(name = "job")
 @NamedQueries({
         // Job queries
         @NamedQuery(name = "Job", query = "SELECT j FROM Job j "
@@ -77,11 +82,15 @@ import javax.xml.bind.annotation.XmlType;
                 + "where j.status = :status order by j.dateCreated"),
         @NamedQuery(name = "Job.all", query = "SELECT j FROM Job j order by j.dateCreated"),
         @NamedQuery(name = "Job.dispatchable.status", query = "SELECT j FROM Job j where j.dispatchable = true and "
-                + "j.status=:status order by j.dateCreated"),
+                + "j.status in :statuses order by j.dateCreated"),
         @NamedQuery(name = "Job.processinghost.status", query = "SELECT j FROM Job j "
                 + "where j.status = :status and j.processorServiceRegistration is not null and "
                 + "j.processorServiceRegistration.serviceType = :serviceType and "
                 + "j.processorServiceRegistration.hostRegistration.baseUrl = :host order by j.dateCreated"),
+        @NamedQuery(name = "Job.root.children", query = "SELECT j FROM Job j WHERE j.rootJob.id = :id ORDER BY j.dateCreated"),
+        @NamedQuery(name = "Job.children", query = "SELECT j FROM Job j WHERE j.parentJob.id = :id ORDER BY j.dateCreated"),
+        @NamedQuery(name = "Job.avgOperation", query = "SELECT j.operation, AVG(j.runTime), AVG(j.queueTime) FROM Job j GROUP BY j.operation"),
+
         // Job count queries
         @NamedQuery(name = "Job.count", query = "SELECT COUNT(j) FROM Job j "
                 + "where j.status = :status and j.creatorServiceRegistration.serviceType = :serviceType"),
@@ -98,9 +107,14 @@ import javax.xml.bind.annotation.XmlType;
                 + "where j.status = :status and j.operation = :operation "
                 + "and j.processorServiceRegistration is not null and "
                 + "j.processorServiceRegistration.serviceType = :serviceType and "
-                + "j.creatorServiceRegistration.hostRegistration.baseUrl = :host")
-
-})
+                + "j.creatorServiceRegistration.hostRegistration.baseUrl = :host"),
+        @NamedQuery(name = "Job.count.history.failed", query = "SELECT COUNT(j) FROM Job j "
+                + "WHERE j.status = org.opencastproject.job.api.Job$Status.FAILED AND j.processorServiceRegistration IS NOT NULL "
+                + "AND j.processorServiceRegistration.serviceType = :serviceType AND j.processorServiceRegistration.hostRegistration.baseUrl = :host "
+                + "AND j.dateCompleted >= j.processorServiceRegistration.stateChanged") })
+@NamedNativeQueries({ @NamedNativeQuery(name = "Job.countPerHostService", query = "SELECT h.host, s.service_type, j.status, COUNT(*) FROM job j, service_registration s, host_registration h "
+        + "WHERE CASE WHEN j.processor_service IS NOT NULL THEN j.processor_service ELSE j.creator_service END = s.id "
+        + "AND s.host_registration = h.id GROUP BY s.service_type, j.status, h.host") })
 @XmlAccessorType(XmlAccessType.NONE)
 @XmlType(name = "job", namespace = "http://job.opencastproject.org")
 @XmlRootElement(name = "job", namespace = "http://job.opencastproject.org")
@@ -121,27 +135,35 @@ public class JobJpaImpl extends JaxbJob {
   /** The job context, to be created after loading by JPA */
   protected JaxbJobContext context = null;
 
-  @JoinColumn(name = "root_id", referencedColumnName = "id", updatable = false)
   protected JobJpaImpl rootJob = null;
 
-  @JoinColumn(name = "parent_id", referencedColumnName = "id", updatable = false)
   protected JobJpaImpl parentJob = null;
+
+  protected List<JobJpaImpl> childrenJobs = null;
+
+  @OneToMany(mappedBy = "warningStateTrigger")
+  private List<ServiceRegistrationJpaImpl> servicesRegistration;
 
   /** Default constructor needed by jaxb and jpa */
   public JobJpaImpl() {
     super();
   }
 
+  public JobJpaImpl(Job job) {
+    super(job);
+  }
+
   /**
    * Constructor with everything needed for a newly instantiated job.
    */
-  public JobJpaImpl(User user, Organization organization, ServiceRegistrationJpaImpl creatorServiceRegistration, String operation, List<String> arguments,
-          String payload, boolean dispatchable) {
+  public JobJpaImpl(User user, Organization organization, ServiceRegistrationJpaImpl creatorServiceRegistration,
+          String operation, List<String> arguments, String payload, boolean dispatchable) {
     this();
     this.creator = user.getUserName();
     this.organization = organization.getId();
     this.operation = operation;
     this.context = new JaxbJobContext();
+    this.childrenJobs = new ArrayList<JobJpaImpl>();
     if (arguments != null) {
       this.arguments = new ArrayList<String>(arguments);
     }
@@ -154,6 +176,16 @@ public class JobJpaImpl extends JaxbJob {
     this.creatorServiceRegistration = creatorServiceRegistration;
   }
 
+  public JobJpaImpl(User user, Organization organization, ServiceRegistrationJpaImpl creatorServiceRegistration,
+          String operation, List<String> arguments, String payload, boolean dispatchable, JobJpaImpl rootJob,
+          JobJpaImpl parentJob) {
+    this(user, organization, creatorServiceRegistration, operation, arguments, payload, dispatchable);
+    super.setRootJobId(rootJob.getId());
+    super.setParentJobId(parentJob.getId());
+    this.rootJob = rootJob;
+    this.parentJob = parentJob;
+  }
+
   /**
    * {@inheritDoc}
    * 
@@ -161,6 +193,7 @@ public class JobJpaImpl extends JaxbJob {
    */
   @Id
   @GeneratedValue
+  @Column(name = "id")
   @XmlAttribute
   @Override
   public long getId() {
@@ -168,14 +201,16 @@ public class JobJpaImpl extends JaxbJob {
   }
 
   @Override
-  @Column(name = "creator", nullable = false)
+  @Lob
+  @Column(name = "creator", nullable = false, length = 65535)
   @XmlElement(name = "creator")
   public String getCreator() {
     return creator;
   }
 
   @Override
-  @Column(name = "organization", nullable = false)
+  @Lob
+  @Column(name = "organization", nullable = false, length = 128)
   @XmlElement(name = "organization")
   public String getOrganization() {
     return organization;
@@ -186,6 +221,16 @@ public class JobJpaImpl extends JaxbJob {
   @Override
   public URI getUri() {
     return super.getUri();
+  }
+
+  @OneToMany(mappedBy = "parentJob", fetch = FetchType.EAGER, cascade = { CascadeType.PERSIST, CascadeType.REFRESH,
+          CascadeType.MERGE })
+  public List<JobJpaImpl> getChildrenJobs() {
+    return childrenJobs;
+  }
+
+  public void setChildrenJobs(List<JobJpaImpl> jobs) {
+    this.childrenJobs = jobs;
   }
 
   /**
@@ -206,7 +251,7 @@ public class JobJpaImpl extends JaxbJob {
    * 
    * @see org.opencastproject.job.api.Job#getStatus()
    */
-  @Column
+  @Column(name = "status")
   @XmlAttribute
   @Override
   public Status getStatus() {
@@ -230,7 +275,8 @@ public class JobJpaImpl extends JaxbJob {
    * 
    * @see org.opencastproject.job.api.JaxbJob#getOperation()
    */
-  @Column(name = "operation")
+  @Lob
+  @Column(name = "operation", length = 65535)
   @XmlAttribute
   @Override
   public String getOperation() {
@@ -244,10 +290,10 @@ public class JobJpaImpl extends JaxbJob {
    */
   @Lob
   @Column(name = "argument", length = 2147483647)
-  @OrderColumn(name = "listindex")
+  @OrderColumn(name = "list_index")
   @ElementCollection(fetch = FetchType.EAGER)
-  @CollectionTable(name = "JOB_ARG", joinColumns = @JoinColumn(name = "ID", referencedColumnName = "ID"), uniqueConstraints = @UniqueConstraint(columnNames = {
-          "ID", "LISTINDEX" }))
+  @CollectionTable(name = "job_arguments", joinColumns = @JoinColumn(name = "id", referencedColumnName = "id"), uniqueConstraints = @UniqueConstraint(columnNames = {
+          "id", "list_index" }))
   @XmlElement(name = "arg")
   @XmlElementWrapper(name = "args")
   @Override
@@ -284,7 +330,7 @@ public class JobJpaImpl extends JaxbJob {
    * 
    * @see org.opencastproject.job.api.Job#getDateCompleted()
    */
-  @Column
+  @Column(name = "date_completed")
   @Temporal(TemporalType.TIMESTAMP)
   @XmlElement
   @Override
@@ -297,7 +343,7 @@ public class JobJpaImpl extends JaxbJob {
    * 
    * @see org.opencastproject.job.api.Job#getDateCreated()
    */
-  @Column
+  @Column(name = "date_created")
   @Temporal(TemporalType.TIMESTAMP)
   @XmlElement
   @Override
@@ -310,7 +356,7 @@ public class JobJpaImpl extends JaxbJob {
    * 
    * @see org.opencastproject.job.api.Job#getDateStarted()
    */
-  @Column
+  @Column(name = "date_started")
   @Temporal(TemporalType.TIMESTAMP)
   @XmlElement
   @Override
@@ -321,7 +367,7 @@ public class JobJpaImpl extends JaxbJob {
   /**
    * @return the queueTime
    */
-  @Column
+  @Column(name = "queue_time")
   @XmlElement
   @Override
   public Long getQueueTime() {
@@ -331,7 +377,7 @@ public class JobJpaImpl extends JaxbJob {
   /**
    * @return the runTime
    */
-  @Column
+  @Column(name = "run_time")
   @XmlElement
   @Override
   public Long getRunTime() {
@@ -344,7 +390,7 @@ public class JobJpaImpl extends JaxbJob {
    * @see org.opencastproject.job.api.JaxbJob#getPayload()
    */
   @Lob
-  @Column(name = "PAYLOAD", length = 2147483647)
+  @Column(name = "payload", length = 65535)
   @XmlElement
   @Override
   public String getPayload() {
@@ -361,7 +407,7 @@ public class JobJpaImpl extends JaxbJob {
     super.setPayload(payload);
   }
 
-  @Column
+  @Column(name = "is_dispatchable")
   @XmlAttribute
   @Override
   public boolean isDispatchable() {
@@ -377,7 +423,7 @@ public class JobJpaImpl extends JaxbJob {
    * @return the serviceRegistration where this job was created
    */
   @ManyToOne
-  @JoinColumn(name = "creator_svc")
+  @JoinColumn(name = "creator_service")
   public ServiceRegistrationJpaImpl getCreatorServiceRegistration() {
     return creatorServiceRegistration;
   }
@@ -399,7 +445,7 @@ public class JobJpaImpl extends JaxbJob {
    * @return the processorServiceRegistration
    */
   @ManyToOne
-  @JoinColumn(name = "processor_svc")
+  @JoinColumn(name = "processor_service")
   public ServiceRegistrationJpaImpl getProcessorServiceRegistration() {
     return processorServiceRegistration;
   }
@@ -487,6 +533,7 @@ public class JobJpaImpl extends JaxbJob {
   /**
    * @return the parentJob
    */
+  @JoinColumn(name = "parent_id", referencedColumnName = "id", nullable = true)
   public JobJpaImpl getParentJob() {
     return parentJob;
   }
@@ -496,12 +543,17 @@ public class JobJpaImpl extends JaxbJob {
    *          the parentJob to set
    */
   public void setParentJob(JobJpaImpl parentJob) {
+    if (parentJob == null)
+      return;
+
+    super.setParentJobId(parentJob.getId());
     this.parentJob = parentJob;
   }
 
   /**
    * @return the rootJob
    */
+  @JoinColumn(name = "root_id", referencedColumnName = "id", nullable = true)
   public JobJpaImpl getRootJob() {
     return rootJob;
   }
@@ -511,6 +563,26 @@ public class JobJpaImpl extends JaxbJob {
    *          the rootJob to set
    */
   public void setRootJob(JobJpaImpl rootJob) {
+    if (rootJob == null)
+      return;
+
+    super.setRootJobId(rootJob.getId());
     this.rootJob = rootJob;
   }
+
+  /**
+   * @return the servicesRegistration
+   */
+  public List<ServiceRegistrationJpaImpl> getServicesRegistration() {
+    return servicesRegistration;
+  }
+
+  /**
+   * @param servicesRegistration
+   *          the servicesRegistration to set
+   */
+  public void setServicesRegistration(List<ServiceRegistrationJpaImpl> servicesRegistration) {
+    this.servicesRegistration = servicesRegistration;
+  }
+
 }

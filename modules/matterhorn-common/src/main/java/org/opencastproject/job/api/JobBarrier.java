@@ -15,8 +15,10 @@
  */
 package org.opencastproject.job.api;
 
+import org.opencastproject.job.api.Job.Status;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryException;
+import org.opencastproject.util.JobCanceledException;
 import org.opencastproject.util.NotFoundException;
 
 import org.slf4j.Logger;
@@ -41,8 +43,8 @@ public class JobBarrier {
   /** The logging facility */
   private static final Logger logger = LoggerFactory.getLogger(JobBarrier.class);
 
-  /** Default polling interval is 1 second */
-  protected static final long DEFAULT_POLLING_INTERVAL = 1000L;
+  /** Default polling interval is 5 seconds */
+  protected static final long DEFAULT_POLLING_INTERVAL = 5000L;
 
   /** The service registry used to do the polling */
   protected ServiceRegistry serviceRegistry = null;
@@ -98,7 +100,7 @@ public class JobBarrier {
   /**
    * Creates a wrapper for <code>job</code>, using <code>registry</code> to poll for the job outcome.
    * 
-   * @param job
+   * @param jobs
    *          the job to poll
    * @param registry
    *          the registry
@@ -138,7 +140,7 @@ public class JobBarrier {
    */
   public Result waitForJobs(long timeout) throws IllegalStateException {
     if (jobs.size() == 0)
-      throw new IllegalArgumentException("No jobs have been submitted");
+      return new Result(new HashMap<Job, Status>());
     synchronized (this) {
       JobStatusUpdater updater = new JobStatusUpdater(timeout);
       try {
@@ -169,7 +171,7 @@ public class JobBarrier {
   }
 
   /**
-   * Sets the outcome of the variuos jobs that were monitored.
+   * Sets the outcome of the various jobs that were monitored.
    * 
    * @param status
    *          the status
@@ -224,10 +226,21 @@ public class JobBarrier {
         boolean failedOrDeleted = false;
         Map<Job, Job.Status> status = new HashMap<Job, Job.Status>();
 
+        long time = System.currentTimeMillis();
+
+        // Wait a little..
+        try {
+          long timeToSleep = Math.min(pollingInterval, Math.abs(endTime - time));
+          Thread.sleep(timeToSleep);
+        } catch (InterruptedException e) {
+          logger.debug("Job polling thread was interrupted");
+          return;
+        }
+
         // Look at all jobs and make sure all of them have reached the expected status
         for (Job job : jobs) {
 
-          // Don't aks what we already know
+          // Don't ask if we already know
           if (status.containsKey(job))
             continue;
 
@@ -238,6 +251,8 @@ public class JobBarrier {
             Job processedJob = serviceRegistry.getJob(job.getId());
             Job.Status jobStatus = processedJob.getStatus();
             switch (jobStatus) {
+              case CANCELED:
+                throw new JobCanceledException(processedJob);
               case DELETED:
               case FAILED:
                 failedOrDeleted = true;
@@ -248,10 +263,13 @@ public class JobBarrier {
                 break;
               case PAUSED:
               case QUEUED:
+              case RESTART:
               case DISPATCHING:
               case RUNNING:
-                logger.trace("Job {} is still in the works", JobBarrier.this);
+                logger.trace("{} is still in the works", job);
                 allDone = false;
+                if (workTime == 0 || endTime < time)
+                  continue;
                 break;
               default:
                 logger.error("Unhandled job status '{}' found", jobStatus);
@@ -269,8 +287,8 @@ public class JobBarrier {
             pollingException = e;
             break;
           } catch (ServiceRegistryException e) {
-            logger.warn("Error polling service registry {} for job {}: {}", new Object[] { serviceRegistry,
-                    JobBarrier.this, e.getMessage() });
+            logger.warn("Error polling service registry for the status of {}: {}", job, e.getMessage());
+            allDone = false;
           } catch (Throwable t) {
             logger.error("An unexpected error occured while waiting for jobs", t);
             pollingException = t;
@@ -280,20 +298,9 @@ public class JobBarrier {
 
         }
 
-        long time = System.currentTimeMillis();
-
         // Are we done already?
         if (allDone || failedOrDeleted || endTime >= time) {
           updateAndNotify(status);
-          return;
-        }
-
-        // Wait a little..
-        try {
-          long timeToSleep = Math.min(pollingInterval, Math.abs(endTime - time));
-          Thread.sleep(timeToSleep);
-        } catch (InterruptedException e) {
-          logger.debug("Job polling thread was interrupted");
           return;
         }
 
@@ -318,7 +325,7 @@ public class JobBarrier {
   /**
    * Result of a waiting operation on a certain number of jobs.
    */
-  public class Result {
+  public static class Result {
 
     /** The outcome of this barrier */
     private Map<Job, Job.Status> status = null;

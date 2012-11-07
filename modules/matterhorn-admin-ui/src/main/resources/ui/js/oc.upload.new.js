@@ -7,11 +7,22 @@ var ocUpload = (function() {
   this.SERIES_URL = '/series'
   this.INGEST_CREATE_MP_URL = '/ingest/createMediaPackage';
   this.INGEST_ADD_CATALOG_URL = '/ingest/addDCCatalog';
-  this.INGEST_PROGRESS_URL = '/ingest/getProgress';
+  this.INGEST_ADD_TRACK = '/ingest/addTrack';
+  this.INGEST_PROGRESS_URL = '/upload/job';
   this.INGEST_START_URL = '/ingest/ingest';
+  this.CREATE_UPLOAD_JOB = '/upload/newjob';
+  this.UPLOAD_CHUNK_URL = '/upload/job/';
+  this.UPLOAD_GET_PAYLOAD = '/upload/job/';
+  this.UPLOAD_COMPLETE = 'COMPLETE';
+  this.UPLOAD_MEDIAPACKAGE = '/upload/mediapackage/';
   this.UPLOAD_PROGRESS_INTERVAL = 2000;
+  this.CHUNKSIZE = 1024 * 1024 * 100;
+  this.INFO_URL = "/info/me.json";
   this.KILOBYTE = 1024;
   this.MEGABYTE = 1024 * 1024;
+  this.ANOYMOUS_URL = "/info/me.json";
+  this.CREATE_NEW_JOB_URL = "/upload/newjob";
+  this.UPLOAD_URL = "/upload/job/";
 
   /** $(document).ready()
    *
@@ -26,24 +37,36 @@ var ocUpload = (function() {
     $('.flavor-presentation-checkbox').change(ocUpload.UI.selectFlavor);
     $('#workflowSelector').change(ocUpload.UI.selectWorkflowDefinition);
     $('#submitButton').button().click(startUpload);
-    $('#cancelButton').button().click(backToRecordings);
-    
-    var initializerDate;
-    initializerDate = new Date();  
+    $('#cancelButton').click(backToRecordings);
 
-    $('#startTimeHour').val(initializerDate.getHours()); 
-    $('#startTimeMin').val(initializerDate.getMinutes()); 
+    var initializerDate;
+    initializerDate = new Date();
+
+    $('#startTimeHour').val(initializerDate.getHours());
+    $('#startTimeMin').val(initializerDate.getMinutes());
 
     $('#recordDate').datepicker({
       showOn: 'both',
-      buttonImage: 'img/icons/calendar.gif',
+      buttonImage: '/admin/img/icons/calendar.gif',
       buttonImageOnly: true,
       dateFormat: 'yy-mm-dd'
     });
-    $('#recordDate').datepicker('setDate', initializerDate);  
+    $('#recordDate').datepicker('setDate', initializerDate);
 
     ocUpload.UI.loadWorkflowDefinitions();
     initSeriesAutocomplete();
+    
+    $.ajax({
+      url: ocUpload.INFO_URL,
+      dataType: 'json',
+      success: function(data) {
+        if(data.org.properties['adminui.chunksize'] != undefined) {
+          ocUpload.CHUNKSIZE = data.org.properties['adminui.chunksize'] * 1024;
+        }
+        
+      }
+    });
+    
   }
 
   function initSeriesAutocomplete() {
@@ -51,15 +74,17 @@ var ocUpload = (function() {
     $('#series').autocomplete({
       source: function(request, response) {
         $.ajax({
-          url: ocUpload.SERIES_SEARCH_URL + '?q=' + request.term,
+          url: ocUpload.SERIES_SEARCH_URL + '?q=' + request.term + '&edit=true',
           dataType: 'json',
           type: 'GET',
           success: function(data) {
             data = data.catalogs;
             var series_list = [];
             $.each(data, function(){
-              series_list.push({value: this['http://purl.org/dc/terms/']['title'][0].value,
-                                id: this['http://purl.org/dc/terms/']['identifier'][0].value});
+              series_list.push({
+                value: this['http://purl.org/dc/terms/']['title'][0].value,
+                id: this['http://purl.org/dc/terms/']['identifier'][0].value
+              });
             });
             series_list.sort(function stringComparison(a, b)	{
               a = a.value;
@@ -79,7 +104,7 @@ var ocUpload = (function() {
               return(a==b)?0:(a>b)?1:-1;
             });
             response(series_list);
-          }, 
+          },
           error: function() {
             ocUtils.log('could not retrieve series_data');
           }
@@ -87,6 +112,33 @@ var ocUpload = (function() {
       },
       select: function(event, ui){
         $('#ispartof').val(ui.item.id);
+      },
+      change: function(event, ui){
+        if($('#ispartof').val() === '' && $('#series').val() !== ''){
+          ocUtils.log("Searching for series in series endpoint");
+          $.ajax({
+            url : ocUpload.SERIES_SEARCH_URL,
+            type : 'get',
+            dataType : 'json',
+            success : function(data) {
+              var DUBLIN_CORE_NS_URI  = 'http://purl.org/dc/terms/',
+              series_input = $('#series').val(),
+              series_list = data["catalogs"],
+              series_title,
+              series_id;
+              $('#ispartof').val('');
+              for (i in series_list) {
+                var series_title, series_id;
+                series_title = series_list[i][DUBLIN_CORE_NS_URI]["title"] ? series_list[i][DUBLIN_CORE_NS_URI]["title"][0].value : "";
+                series_id = series_list[i][DUBLIN_CORE_NS_URI]["identifier"] ? series_list[i][DUBLIN_CORE_NS_URI]["identifier"][0].value : "";
+                if (series_title === series_input){
+                  $('#ispartof').val(series_id);
+                  break;
+                }
+              }
+            }
+          });
+        }
       },
       search: function(){
         $('#ispartof').val('');
@@ -96,13 +148,13 @@ var ocUpload = (function() {
 
   this.checkRequiredFields = function() {
     ocUtils.log('Checking for missing inputs');
-    var missing = [];                 
+    var missing = [];
 
     if ($.trim($('#titleField').val()) == '') {
       ocUtils.log('Missing input: title');
       missing.push('title');
     }
-    
+
     if ($.trim($('#recordDate').val()) == '') {
       ocUtils.log('Missing input: recordDate');
       missing.push('recordDate');
@@ -126,7 +178,7 @@ var ocUpload = (function() {
   function startUpload() {
     var missingFields = ocUpload.checkRequiredFields();
     ocUpload.UI.collectFormData();
-    
+
     if (missingFields === false) {
       ocUpload.Ingest.begin();
     } else {
@@ -147,7 +199,7 @@ var ocUpload = (function() {
  *
  */
 ocUpload.UI = (function() {
-  
+
   /**
    * collected form data
    */
@@ -184,7 +236,9 @@ ocUpload.UI = (function() {
         for (i in data.workflow_definitions) {
           var $selector = $('#workflowSelector');
           var workflow = data.workflow_definitions[i];
-          if ( workflow.id != 'error' ) {
+          if ( workflow.id != 'error' &&
+                workflow.title != null &&
+                workflow.title != "") {
             defs.push(workflow.id);
             var $newOption = $('<option></option>')
             .attr('value', workflow.id)
@@ -198,7 +252,7 @@ ocUpload.UI = (function() {
         ocUtils.log('Loaded workflow definitions: ' + defs.join(', '));
       }
     });
-    $('.workflowConfigContainer').load(ocUpload.WORKFLOW_PANEL_URL + ocUpload.DEFAULT_WORKFLOW_DEFINITION); 
+    $('.workflowConfigContainer').load(ocUpload.WORKFLOW_PANEL_URL + ocUpload.DEFAULT_WORKFLOW_DEFINITION);
   }
 
   this.toggleUnfoldable = function() {
@@ -229,11 +283,15 @@ ocUpload.UI = (function() {
   this.selectFileSource = function() {
     var location = $(this).val();
     var $container = $(this).parent().next('li').find('iframe');
-    $container.attr('src', '../ingest/filechooser-' + location + '.html');
+    if(location == "local") {
+      $container.attr('src', 'upload.html');
+    } else {
+      $container.attr('src', '../ingest/filechooser-' + location + '.html');
+    }
   }
 
   this.selectFlavor = function() {
-    var $flavorField = $(this).parent().find('.track-flavor');
+    var $flavorField = $(this).parent().prev().find('.track-flavor');
     if ($(this).is(':checked')) {
       $flavorField.val('presentation/source');
     } else {
@@ -274,16 +332,29 @@ ocUpload.UI = (function() {
   this.setProgress = function(message) {
     var $progress = $('#progressStage');
 
-    if (message.filename !== undefined) {         // status message or upload progress?
-      var percentage = ((message.received / message.total) * 100).toFixed(1) + '%';
-      var total = (message.total / ocUpload.MEGABYTE).toFixed(2) + ' MB';
-      var received = (message.received / ocUpload.MEGABYTE).toFixed(2) + ' MB';
-  
-      $progress.find('.progress-label-top').text('Uploading ' + message.filename);
+    if (message.uploadjob !== undefined) {         // status message or upload progress?
+      message = message.uploadjob;
+      var filename = message.payload.filename;
+      var total = message.payload.totalsize;
+      var received = message['current-chunk']['bytes-recieved'] + message['current-chunk'].number * message.chunksize;
+      var percentage = ((received / total) * 100).toFixed(1) + '%';
+      
+      total = (total / ocUpload.MEGABYTE).toFixed(2) + ' MB';
+      received = (received / ocUpload.MEGABYTE).toFixed(2) + ' MB';
+
+      $progress.find('.progress-label-top').text('Uploading ' + filename.replace("C:\\fakepath\\", ""));
       $progress.find('.progressbar-indicator').css('width', percentage);
       $progress.find('.progressbar-label > span').text(percentage);
       $progress.find('.progress-label-left').text(received + ' received');
       $progress.find('.progress-label-right').text(total + ' total');
+      
+      if (message.payload.currentsize == message.payload.totalsize) {
+        if(message.state == ocUpload.UPLOAD_COMPLETE) {
+          ocUpload.Listener.uploadComplete(message.id, message.payload.url);
+        } else {
+          ocUpload.UI.setProgress('Processing upload, this may take some time.');
+        } 
+      }
     } else {
       $progress.find('.upload-label').text(' ');
       $progress.find('.progressbar-indicator').css('width', '0%');
@@ -294,8 +365,8 @@ ocUpload.UI = (function() {
   this.showSuccess = function() {
     ocUpload.UI.hideProgressDialog();
     ocUpload.UI.showSuccesScreen();
-    //ocUpload.backToRecordings();
-    //window.location = '/admin';
+  //ocUpload.backToRecordings();
+  //window.location = '/admin';
   }
 
   this.showFailure = function(message) {
@@ -307,58 +378,57 @@ ocUpload.UI = (function() {
   
   /**
    * collects metadata to show in sucess screen
-   * 
+   *
    * @return array metadata
-   */ 
+   */
   this.collectFormData = function() {
-      ocUtils.log("Collecting metadata");
-      
-      var metadata = new Array;
-      metadata['files'] = new Array();
-      
-      $('.oc-ui-form-field').each( function() { //collect text input
-          metadata[$(this).attr('name')] = $(this).val();
-      });
-      $('.uploadForm-container:visible').each(function() { //collect file names
-          var file = $(this).contents().find('.file-selector').val();
-          if(file != undefined) {
-              metadata['files'].push(file);
-          }
-          
-      });
-      this.metadata = metadata;
+    ocUtils.log("Collecting metadata");
+
+    var metadata = new Array;
+    metadata['files'] = new Array();
+
+    $('.oc-ui-form-field').each( function() { //collect text input
+      metadata[$(this).attr('name')] = $(this).val();
+    });
+    $('.uploadForm-container:visible').each(function() { //collect file names
+      var file = $(this).contents().find('.file-selector').val();
+      if(file != undefined) {
+        metadata['files'].push(file);
+      }
+    });
+    this.metadata = metadata;
   }
-  
+
   /**
    * loads success screen template and fills with data
    */
   this.showSuccesScreen = function() {
-      var data = this.metadata;
-      $('#stage').load('complete.html', function() {
-        for (var key in data) {
-          if (data[key] != "" && key != 'files') { //print text, not file names
-            $('#field-'+key).css('display','block');
-            if (data[key] instanceof Array) {
-              $('#field-'+key).children('.fieldValue').text(data[key].join(', '));
-            } else {
-              $('#field-'+key).children('.fieldValue').text(data[key]);
-            }
+    var data = this.metadata;
+    $('#stage').load('complete.html', function() {
+      for (var key in data) {
+        if (data[key] != "" && key != 'files') { //print text, not file names
+          $('#field-'+key).css('display','block');
+          if (data[key] instanceof Array) {
+            $('#field-'+key).children('.fieldValue').text(data[key].join(', '));
+          } else {
+            $('#field-'+key).children('.fieldValue').text(data[key]);
           }
         }
-        $('.field-filename').each(function() { //print file names
-            var file = data['files'].shift();
-            if(file) {
-                $(this).children('.fieldValue').text(file);
-            } else {
-                $(this).hide();
-            }
-        });
-        //When should it show this heading?
-        //$('#heading-metadata').text('Your recording with the following information has been resubmitted');
+      }
+      $('.field-filename').each(function() { //print file names
+        var file = data['files'].shift();
+        if(file) {
+          $(this).children('.fieldValue').text(file.replace("C:\\fakepath\\", ""));
+        } else {
+          $(this).hide();
+        }
       });
+    //When should it show this heading?
+    //$('#heading-metadata').text('Your recording with the following information has been resubmitted');
+    });
   }
-  
-  
+
+
 
   return this;
 })();
@@ -396,7 +466,7 @@ ocUpload.Ingest = (function() {
   this.begin = function() {
     ocUpload.UI.showProgressDialog();
     ocUpload.UI.setProgress("Constructing Media Package...");
-    
+
     // enqueue Episode Dublin Core
     MediaPackage.elements.push(
       new MediaPackageElement('episodeDC', ELEMENT_TYPE.CATALOG, 'dublincore/episode', createDublinCoreDocument()));
@@ -484,7 +554,7 @@ ocUpload.Ingest = (function() {
 
   this.discardIngest = function() {
     if (MediaPackage.document !== null) {
-      // TODO call discardMediaPackage method
+    // TODO call discardMediaPackage method
     }
   }
 
@@ -550,40 +620,152 @@ ocUpload.Ingest = (function() {
     var $uploader = track.payload;
     var filename = $uploader.contents().find('.file-selector').val();
 
-    ocUtils.log('Uploading ' + filename + ' (' + track.id + ')');
-    ocUpload.UI.setProgress("Uploading " + filename);
+    ocUtils.log('Uploading ' + filename.replace("C:\\fakepath\\", "") + ' (' + track.id + ')');
+    ocUpload.UI.setProgress("Uploading " + filename.replace("C:\\fakepath\\", ""));
+
+    var checkBox = $('input.file-source-select:checked');
+    var checkBoxId = $(checkBox).attr('id');
 
     // set flavor and mediapackage in upload form before submit
     $uploader.contents().find('#flavor').val(track.flavor);
     $uploader.contents().find('#mediapackage').val(MediaPackage.document);
-    $uploader.contents().find('#uploadForm').submit();
-    ocUpload.Listener.startProgressUpdate(track.id);
+    
+    if(checkBoxId == 'fileSourceSingleA') {
+    	track.id = createUploadJob($uploader);
+    	track.flavor = $uploader.parent().find('input.track-flavor').val();
+    	
+    	//upload mediapackage to upload service
+    	
+    	if(ocUtils.isChunkedUploadCompliable()) {
+    		ocUtils.log("Uploading via Chunked upload")
+    		var file = $uploader.contents().find('.file-selector')[0].files[0];
+    		nextPart(file, 0, track.id, 0, ocUpload.CHUNKSIZE);
+    	} else {
+    		ocUtils.log("Uploading via submitting form")
+    		$uploader.contents().find('#uploadForm').submit();
+    	}
+    	
+    	ocUpload.Listener.startProgressUpdate(track.id);
+    }
+    else if(checkBoxId == 'fileSourceSingleB') {
+    	$uploader.contents().find('#uploadForm').submit();
+    }
   }
-
-  this.trackDone = function(jobId) {
+  
+  function createUploadJob($uploader) {
+    var filesize = -1;
+    var chunksize = -1;
+    var filename = $uploader.contents().find('.file-selector').val();
+    filename = filename.replace("C:\\fakepath\\", "");
+    
+    var track_id = "";
+    
+    if (ocUtils.isChunkedUploadCompliable()) {
+      var files = $uploader.contents().find('.file-selector')[0].files;
+      var file = files[0];
+      filesize = file.size;
+      chunksize = CHUNKSIZE;
+    }
+    $.ajax({
+      type: 'POST',
+      url: ocUpload.CREATE_NEW_JOB_URL,
+      async: false,
+      data: {
+        filename : filename,
+        filesize : filesize,
+        chunksize: chunksize,
+        flavor   : $uploader.parent().find('input.track-flavor').val(),
+        mediapackage : MediaPackage.document
+      },
+      success: function(job_id) {
+        track_id = job_id;
+        $uploader.contents().find('.track-id').val(job_id);
+        $uploader.contents().find('#uploadForm').attr('action', UPLOAD_URL + job_id);
+      }
+    });
+    return track_id;
+  }
+  
+  function nextPart(file, chunk, jobId, start, end) {
+    if(start < file.size) {
+      ocUtils.log("uploading chunk #" + chunk);
+      var blob;
+      if ('mozSlice' in file) { //Mozilla
+        blob = file.mozSlice(start, end);
+      } else if('webkitSlice' in file){ //Webkit
+        blob = file.webkitSlice(start, end);
+      } else { //Opera
+        blob = file.slice(start, end);
+      }
+      upload(blob, file, chunk, jobId, start, end);
+    }
+  }
+  
+  function upload(blob, file, chunk, jobId, start, end) {
+    var formData = new FormData();
+    formData.append("chunknumber", chunk);
+    formData.append("jobID", jobId);
+    formData.append("filedata", blob);
+    
+    $.ajax({
+      url: UPLOAD_CHUNK_URL + jobId,
+      data: formData,
+      processData: false,
+      type: 'POST',
+      cache: false,
+      contentType: false,
+      success: function (e, status, jqHBX) {
+        if(jqHBX.status == 404) {
+          ocUpload.UI.showFailure("Could not upload chunk #" + chunk + " to UploadJob because job wasn't found");
+        } else if(jqHBX.status == 400) {
+          ocUpload.UI.showFailure("Could not upload chunk #" + chunk + " to UploadJob because a malformed uploadrequest");
+        } else {
+          nextPart(file, ++chunk, jobId, start + ocUpload.CHUNKSIZE, end + ocUpload.CHUNKSIZE);
+        }
+      }
+    });
+  }
+  
+  this.trackDone = function(jobId, trackUrl) {
     var track = null;
     $(MediaPackage.elements).each(function(index, element) {
       if (element.id == jobId) {
         track = element;
       }
     });
-    $uploader = track.payload;
-    MediaPackage.document = $uploader.contents().find('#mp').val();
+    MediaPackage.document = ocMediapackage.addTrack(MediaPackage.document, trackUrl, track.flavor);
+    
     track.done = true;
     proceed();
   }
 
   function createSeries(name) {
     var id = false;
-    var seriesXml = '<dublincore xmlns="http://www.opencastproject.org/xsd/1.0/dublincore/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:oc="http://www.opencastproject.org/matterhorn"><dcterms:title xmlns="">' + name + '</dcterms:title></dublincore>'
+    var seriesXml = '<dublincore xmlns="http://www.opencastproject.org/xsd/1.0/dublincore/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:oc="http://www.opencastproject.org/matterhorn"><dcterms:title xmlns="">' + name + '</dcterms:title></dublincore>';
+    var anonymous_role = 'anonymous';
+
     ocUpload.UI.setProgress("Creating Series " + name);
+    $.ajax({
+      url: ocUpload.ANOYMOUS_URL,
+      type: 'GET',
+      dataType: 'json',
+      async: false,
+      error: function () {
+        if (ocUtils !== undefined) {
+          ocUtils.log("Could not retrieve anonymous role " + ocUpload.ANOYMOUS_URL);
+        }
+      },
+      success: function(data) {
+        anonymous_role = data.org.anonymousRole;
+      }
+    });
     $.ajax({
       async: false,
       type: 'POST',
       url: ocUpload.SERIES_URL,
       data: {
         series: seriesXml,
-        acl: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ns2:acl xmlns:ns2="org.opencastproject.security"><ace><role>anonymous</role><action>read</action><allow>true</allow></ace></ns2:acl>'
+        acl: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><acl xmlns="http://org.opencastproject.security"><ace><role>' + anonymous_role + '</role><action>read</action><allow>true</allow></ace></acl>'
       },
       dataType : 'xml',
       error: function() {
@@ -592,7 +774,7 @@ ocUpload.Ingest = (function() {
       success: function(data){
         window.debug = data;
         //id = $('identifier', data).text();
-        id = $(data).find('[nodeName="dcterms:identifier"]').text();
+        id = $(ocUtils.xmlToString(data)).children().first().text()
       }
     });
     return id;
@@ -634,7 +816,7 @@ ocUpload.Ingest = (function() {
 })();
 
 /** @namespace Listener for Upload Events
- * 
+ *
  */
 ocUpload.Listener = (function() {
 
@@ -644,11 +826,11 @@ ocUpload.Listener = (function() {
     inProgress : false
   }
 
-  this.uploadComplete = function(jobId) {
+  this.uploadComplete = function(jobId, trackUrl) {
     destroyUpdateInterval();
     ocUtils.log("Upload complete " + jobId);
     ocUpload.UI.setProgress('Upload successful');
-    ocUpload.Ingest.trackDone(jobId);
+    ocUpload.Ingest.trackDone(jobId, trackUrl);
   }
 
   this.uploadFailed = function(jobId) {
@@ -672,7 +854,7 @@ ocUpload.Listener = (function() {
     if (!Update.inProgress && Update.id !== null) {
       Update.inProgress = true;
       $.ajax({
-        url : ocUpload.INGEST_PROGRESS_URL + '/' + Update.jobId,
+        url : ocUpload.INGEST_PROGRESS_URL + '/' + Update.jobId + ".json",
         type : 'get',
         dataType : 'json',
         success : receiveUpdate

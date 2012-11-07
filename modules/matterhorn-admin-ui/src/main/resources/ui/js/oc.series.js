@@ -26,6 +26,8 @@ ocSeries.anonymous_role = "";
 var SERIES_SERVICE_URL = "/series";
 var SERIES_LIST_URL = "/admin/index.html#/series_list";
 var ANOYMOUS_URL = "/info/me.json";
+var DUBLINCORE_NS_URI     = 'http://purl.org/dc/terms/';
+var OC_NS_URI = 'http://www.opencastproject.org/matterhorn/';
 var CREATE_MODE = 1;
 var EDIT_MODE   = 2;
 
@@ -57,18 +59,18 @@ ocSeries.init = function(){
   
   //Add folding action for hidden sections.
   $('.oc-ui-collapsible-widget .form-box-head').click(
-  function() {
-    $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-e');
-    $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-s');
-    $(this).next().toggle();
-    return false;
-  });
+    function() {
+      $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-e');
+      $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-s');
+      $(this).next().toggle();
+      return false;
+    });
     
   $('#additionalContentTabs').tabs();
   
   ocSeries.RegisterComponents();
   //ocSeries.FormManager = new ocAdmin.Manager('series', '', ocSeries.components, ocSeries.additionalComponents);
-  $('#submitButton').click(ocSeries.SubmitForm);
+  $('#submitButton').button().click(ocSeries.SubmitForm);
   $('#cancelButton').click(function() {
     document.location = SERIES_LIST_URL;
   });
@@ -89,7 +91,8 @@ ocSeries.init = function(){
   privilegeRow += '<td><input type="text" class="role_search"/></td>';
   privilegeRow += '<td class="privilege_edit"><input type="checkbox" name="priv_view" class="privilege_edit" /></td>';
   privilegeRow += '<td class="privilege_edit"><input type="checkbox" name="priv_edit" class="privilege_edit" /></td>';
-  privilegeRow += '<td class="privilege_edit"><img src="/img/icons/delete.png" alt="delete" title="Delete Role"></td>';
+  privilegeRow += '<td class="privilege_edit"><input type="checkbox" name="priv_analyze" class="privilege_edit" /></td>';
+  privilegeRow += '<td class="privilege_edit"><img src="/admin/img/icons/delete.png" alt="delete" title="Delete Role"></td>';
   privilegeRow += '</tr>';
   var $row;
   
@@ -118,11 +121,12 @@ ocSeries.init = function(){
     if(ui.item.value == 'No Match') {
       return false;
     }
-    if($(this).attr('id') == "") {
+    if($(this).attr('id') != "") {
       $row = $(privilegeRow);
       $row.find('[name|="priv_view"]').attr('checked', 'checked');
       $row.find('[name|="priv_view"]').attr('disabled', 'disabled');
       $row.find('[name|="priv_edit"]').attr('disabled', 'disabled');
+      $row.find('[name|="priv_analyze"]').attr('disabled', 'disabled');
       $row.find('img').hide();
       $row.find('img').click(removeRole)
       $row.find('.role_search').autocomplete({
@@ -134,6 +138,7 @@ ocSeries.init = function(){
       var $tr = $(this).parent().parent();
       $tr.children().find('[name|="priv_edit"]').removeAttr('disabled');
       $tr.children().find('[name|="priv_view"]').removeAttr('disabled');
+      $tr.children().find('[name|="priv_analyze"]').removeAttr('disabled');
       $tr.children().find('img').show();
     }
     $(this).attr('id', ui.item.value);
@@ -149,6 +154,7 @@ ocSeries.init = function(){
     $row.find('[name|="priv_view"]').attr('checked', 'checked');
     $row.find('[name|="priv_view"]').attr('disabled', 'disabled');
     $row.find('[name|="priv_edit"]').attr('disabled', 'disabled');
+    $row.find('[name|="priv_analyze"]').attr('disabled', 'disabled');
     $row.find('img').hide();
     $row.find('img').click(removeRole);
 
@@ -210,6 +216,9 @@ ocSeries.init = function(){
         if(value.read) {
           $row.find('[name|="priv_view"]').attr('checked', 'checked');
         }
+        if(value.analyze) {
+          $row.find('[name|="priv_analyze"]').attr('checked', 'checked');
+        }
         $('#rolePrivilegeTable > tbody').append($row);
       }
     });
@@ -218,6 +227,7 @@ ocSeries.init = function(){
     $row.find('[name|="priv_view"]').attr('checked', 'checked');
     $row.find('[name|="priv_view"]').attr('disabled', 'disabled');
     $row.find('[name|="priv_edit"]').attr('disabled', 'disabled');
+    $row.find('[name|="priv_analyze"]').attr('disabled', 'disabled');
     $row.find('img').hide();
     $row.find('img').click(removeRole)
 
@@ -242,67 +252,81 @@ ocSeries.Internationalize = function(){
 }
 
 ocSeries.loadSeries = function(data) {
-  data = data['http://purl.org/dc/terms/']
+  data_save = data;
+  data = data[DUBLINCORE_NS_URI]
   $("#id").val(data['identifier'][0].value);
   for(var key in data) {
+    if(key == "title") {
+      ocSeries.seriesTitle = data[key][0].value;
+    }
     $('#' + key).attr('value', data[key][0].value);
+  }
+  data = data_save[OC_NS_URI];
+  for(key in data) {
+    if($('#' + key).attr('type') == "checkbox") {
+      if(data[key][0].value == "true") {
+        $('#' + key).attr('checked', 'checked');
+      }
+    } else {
+      $('#' + key).attr('value', data[key][0].value);
+    }
   }
 }
 
 ocSeries.RegisterComponents = function(){
   //Core Metadata
   ocSeries.additionalComponents.title = new ocAdmin.Component(
-  ['title'],
-  {
-    label:'seriesLabel',
-    required:true
-  }
-);
+    ['title'],
+    {
+      label:'seriesLabel',
+      required:true
+    }
+    );
   
   ocSeries.additionalComponents.contributor = new ocAdmin.Component(
-  ['contributor'],
-  {
-    label:'contributorLabel'
-  }
-);
+    ['contributor'],
+    {
+      label:'contributorLabel'
+    }
+    );
   
   ocSeries.additionalComponents.creator = new ocAdmin.Component(
-  ['creator'],
-  {
-    label: 'creatorLabel'
-  }
-);
+    ['creator'],
+    {
+      label: 'creatorLabel'
+    }
+    );
   
   //Additional Metadata
   ocSeries.additionalComponents.subject = new ocAdmin.Component(
-  ['subject'],
-  {
-    label: 'subjectLabel'
-  }
-)
+    ['subject'],
+    {
+      label: 'subjectLabel'
+    }
+    )
   
   ocSeries.additionalComponents.language = new ocAdmin.Component(
-  ['language'],
-  {
-    label: 'languageLabel'
-  }
-)
+    ['language'],
+    {
+      label: 'languageLabel'
+    }
+    )
   
   ocSeries.additionalComponents.license = new ocAdmin.Component(
-  ['license'],
-  {
-    label: 'licenseLabel'
-  }
-)
+    ['license'],
+    {
+      label: 'licenseLabel'
+    }
+    )
   
   ocSeries.components.description = new ocAdmin.Component(
-  ['description'],
-  {
-    label: 'descriptionLabel'
-  }
-)
+    ['description'],
+    {
+      label: 'descriptionLabel'
+    }
+    )
   
-  /*
+/*
   //Extended Metadata
   ocAdmin.additionalComponents.type
   //ocAdmin.additionalComponents.subtype
@@ -321,7 +345,7 @@ ocSeries.createDublinCoreDocument = function() {
   dcDoc = ocUtils.createDoc('dublincore', 'http://www.opencastproject.org/xsd/1.0/dublincore/');
   $(dcDoc.documentElement).attr('xmlns:dcterms', 'http://purl.org/dc/terms/');
   $(dcDoc.documentElement).attr('xmlns:dc', 'http://purl.org/dc/elements/1.1/');
-  $(dcDoc.documentElement).attr('xmlns:oc', 'http://www.opencastproject.org/matterhorn');
+  $(dcDoc.documentElement).attr('xmlns:oc', 'http://www.opencastproject.org/matterhorn/');
   $('.dc-metadata-field').each(function() {
     $field = $(this);
     var $newElm = $(dcDoc.createElement('dcterms:' + $field.attr('id')));
@@ -333,18 +357,26 @@ ocSeries.createDublinCoreDocument = function() {
     $newElm.text($('#id').val());
     $(dcDoc.documentElement).append($newElm);
   }
+  $('.oc-metadata-field').each(function() {
+    $field = $(this);
+    var $newElm = $(dcDoc.createElement('oc:' + $field.attr('id')));
+    if($field.attr('type') == "checkbox") {
+      $newElm.text($field.attr('checked') == "checked");
+    } else {
+      $newElm.text($field.val());
+    }
+    $(dcDoc.documentElement).append($newElm)
+  });
   var out = ocUtils.xmlToString(dcDoc);
   return out;
 }
 
 ocSeries.createACLDocument = function() {
-  var aclDoc = ocUtils.createDoc('ns2:acl', 'org.opencastproject.security');
-  $(aclDoc.documentElement).attr('xmlns:ns2', 'org.opencastproject.security');
-  var out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ns2:acl xmlns:ns2="org.opencastproject.security">';
+  var out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><acl xmlns="http://org.opencastproject.security">';
   $('.role_search').each(function () {
     var $field = $(this);
     //check whether there is a value and entered value is a valid role
-    if ($field.attr('value') != "" && $.inArray($field.attr('value'), ocSeries.roles) != -1) {
+    if ($field.attr('value') != "") {
       if($field.parent().parent().children().find('[name|="priv_view"]').attr('checked')) {
         out += '<ace>';
         out += '<role>' + $field.attr('value') + '</role>';
@@ -359,6 +391,13 @@ ocSeries.createACLDocument = function() {
         out += '<allow>true</allow>';
         out += '</ace>';
       }
+      if($field.parent().parent().children().find('[name|="priv_analyze"]').attr('checked')) {
+          out += '<ace>';
+          out += '<role>' + $field.attr('value') + '</role>';
+          out += '<action>analyze</action>';
+          out += '<allow>true</allow>';
+          out += '</ace>';
+        }
     }
   });
   if($('#anonymous_view').attr('checked')) {
@@ -368,11 +407,14 @@ ocSeries.createACLDocument = function() {
     out += '<allow>true</allow>';
     out += '</ace>';
   }
-  out += '</ns2:acl>';
+  out += '</acl>';
   return out;
 }
 
 ocSeries.SubmitForm = function(){
+  if(ocSeries.checkFields()) {
+    return;
+  }
   var dcDoc = ocSeries.createDublinCoreDocument();
   var acl = ocSeries.createACLDocument();
   if(dcDoc && ocSeries.additionalComponents.title.validate()){
@@ -388,11 +430,55 @@ ocSeries.SubmitForm = function(){
   }
 }
 
+ocSeries.checkFields = function() {
+  var error = false;
+  if($('#title').val() == "") {
+    error = true;
+    $('#item-title').show();
+  } else {
+    $('#item-title').hide();
+  }
+  
+  if(!error) {
+    $.ajax({
+      url: SERIES_SERVICE_URL + "/series.json",
+      async: false,
+      data: {
+        seriesTitle: $('#title').val()
+      },
+      success: function(data) {
+        if(data.totalCount != 0) {
+          $.each(data.catalogs, function(key, value) {
+            if(value[DUBLINCORE_NS_URI].title[0].value == $('#title').val() 
+              && ocSeries.seriesTitle != $('#title').val()) {
+              error = true;
+              $('#item-title-existing').show();
+            } else {
+              $('#item-title-existing').hide();
+            }
+          });
+        }
+      }
+    });
+  }
+  ocSeries.showMissingFieldsContainer(error);
+  
+  return error;
+}
+
+ocSeries.showMissingFieldsContainer = function(show) {
+  if(show) {
+    $('#missingFieldsContainer').show();
+  } else {
+    $('#missingFieldsContainer').hide();
+  }
+}
+
 ocSeries.SeriesSubmitComplete = function(xhr, status){
   if(xhr.status == 201 || xhr.status == 204){
     document.location = SERIES_LIST_URL;
   }
-  /*for(var k in ocSeries.components){
+/*for(var k in ocSeries.components){
     if(i18n[k]){
       $("#data-" + k).show();
       $("#data-" + k + " > .data-label").text(i18n[k].label + ":");

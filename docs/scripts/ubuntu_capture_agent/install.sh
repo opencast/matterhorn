@@ -17,8 +17,6 @@ export USERNAME=matterhorn
 export OC_DIR=/opt/matterhorn
 # Name for the directory where the matterhorn-related files will be stored
 export CA_DIR=$OC_DIR/capture-agent
-# Directory where the source code will be downloaded to
-export SOURCE=$CA_DIR/matterhorn-source
 # Location of the felix docs in the source code
 export FELIX_DOCS="docs/felix"
 
@@ -32,12 +30,12 @@ export SVN_URL=http://opencast.jira.com/svn/MH
 # Extension for the SVN_URL to reach the trunk
 export TRUNK_URL=$SVN_URL/trunk
 # Extension for the SVN_URL to reach the branches
-export BRANCHES_URL=$SVN_URL/branches
+export BRANCHES_URL=$SVN_URL/branches/1.3.x
 # Extension for the SVN_URL to reach the tags
 export TAGS_URL=$SVN_URL/tags
 
 # Default URL from where scripts and java source will be dowloaded
-export SRC_DEFAULT=$BRANCHES_URL/1.2.x
+export SRC_DEFAULT=$TRUNK_URL
 
 # File containing the rules to be applied by udev to the configured devices -- not a pun!
 export DEV_RULES=/etc/udev/rules.d/matterhorn.rules
@@ -45,8 +43,6 @@ export DEV_RULES=/etc/udev/rules.d/matterhorn.rules
 export CONFIG_SCRIPT=device_config.sh
 # Default value for the core url
 export DEFAULT_CORE_URL=http://localhost:8080
-# Subdirectory where the epiphan driver will be downloaded to
-export VGA2USB_DIR=epiphan_driver
 # Location of the file 'sources.list'
 export SRC_LIST=/etc/apt/sources.list
 # Suffix to be appended to the backup file for sources.list
@@ -67,15 +63,10 @@ export TRACKING_URL=http://www.opencastproject.org/form/tracking
 
 # Third-party dependencies variables
 # Packages that are installed by default (one per line --please note the quotation mark at the end!!!)
-export PKG_LIST="alsa-utils
-v4l-conf
-ivtv-utils
+# These may be changed by the $SETUP_DEPENDENCIES script depending on the version of Ubuntu. 
+export PKG_LIST="acpid
+alsa-utils
 curl
-maven2
-sun-java6-jdk
-subversion
-wget
-openssh-server
 gcc
 gstreamer0.10-alsa
 gstreamer0.10-plugins-base
@@ -83,8 +74,26 @@ gstreamer0.10-plugins-good
 gstreamer0.10-plugins-ugly
 gstreamer0.10-plugins-ugly-multiverse
 gstreamer0.10-ffmpeg
+ivtv-utils
+libglib2.0-dev
+maven2
 ntp
-acpid"
+openssh-server
+subversion
+openjdk-6-jdk
+v4l-conf
+wget"
+
+# Versions of Ubuntu that we have package lists for. The above defaults will be used
+export UBUNTU_10_10="Ubuntu 10.10 \n \l"
+export UBUNTU_10_10_PACKAGES_FILE="Ubuntu-10-10.packages"
+export UBUNTU_11_04="Ubuntu 11.04 \n \l"
+export UBUNTU_11_04_PACKAGES_FILE="Ubuntu-11-04.packages"
+export UBUNTU_11_10="Ubuntu 11.10 \n \l"
+export UBUNTU_11_10_PACKAGES_FILE="Ubuntu-11-10.packages"
+export PACKAGE_LIST_DEFAULT_FILE="default.packages"
+
+PACKAGE_LISTS=("$UBUNTU_10_10_PACKAGES_FILE" "$UBUNTU_11_04_PACKAGES_FILE" "$UBUNTU_11_10_PACKAGES_FILE" "$PACKAGE_LIST_DEFAULT_FILE")
 
 # Packages that require the user approval to be installed (Please note the quotation mark at the end!!!)
 # There should be one package per line, but several packages may be included if they need to be treated 'as a block'
@@ -97,7 +106,7 @@ export BAD_PKG_REASON="Provide support for h264 and mpeg2 codecs, which are pate
 # The name should start with a '.' so that it is a hidden file and it is not erased with the rest of the files when a new execution starts
 export PKG_BACKUP=$WORKING_DIR/.installed_pkgs
 # Default output file extension for a video capture device
-export DEFAULT_VIDEO_EXTENSION="mpg"
+export DEFAULT_VIDEO_EXTENSION="mp4"
 # Default output file extension for an audio device
 export DEFAULT_AUDIO_EXTENSION="mp2"
 # 1-based index default option for the device flavor
@@ -107,19 +116,15 @@ export FLAVORS="presenter/source presentation/source"
 # Default size for a capture device queue (in megabytes)
 export DEFAULT_QUEUE_SIZE=512
 
-# URL to download the epiphan driver
-export EPIPHAN_URL=http://www.epiphan.com/downloads/linux
-
-# Name of the file containing the felix files
-export FELIX_FILENAME=org.apache.felix.main.distribution-2.0.4.tar.gz
-# URL where the previous file can be fetched
-export FELIX_URL=http://archive.apache.org/dist/felix/$FELIX_FILENAME
 # Subdir under the user home where FELIX_HOME is
 export FELIX_HOME=$OC_DIR/felix
+
+# The location of the configuration files. 
+export CONF_DIR=$FELIX_HOME/etc
 # Path under FELIX_HOME where the general matterhorn configuration
-export GEN_PROPS=$FELIX_HOME/conf/config.properties
+export GEN_PROPS=$CONF_DIR/config.properties
 # Path under FELIX_HOME where the capture agent properties are
-export CAPTURE_PROPS=$FELIX_HOME/conf/services/org.opencastproject.capture.impl.ConfigurationManager.properties
+export CAPTURE_PROPS=$CONF_DIR/services/org.opencastproject.capture.impl.ConfigurationManager.properties
 # Directory UNDER FELIX HOME where the felix filex will be deployed
 export DEPLOY_DIR=matterhorn
 
@@ -127,8 +132,8 @@ export DEPLOY_DIR=matterhorn
 export JAVA_PREFIX=/usr/lib/jvm
 # A regexp to filter the right jvm directory from among all the installed ones
 # The chosen JAVA_HOME will be $JAVA_PREFIX/`ls $JAVA_PREFIX | grep $JAVA_PATTERN`
-export JAVA_PATTERN=java-6-sun                                           
-                                                                         
+export JAVA_PATTERNS="java-6-sun java-7-oracle java-6-openjdk"
+                           
 # Path to the maven2 repository, under the user home
 export M2_SUFFIX=.m2/repository
 
@@ -149,11 +154,6 @@ export JV4LINFO_PATH=/usr/lib
 export JV4LINFO_DIR=$CA_DIR/jv4linfo
                                                                          
 ## Help messages
-# Help for the driver list choice
-export VGA2USB_HELP_MSG="You might want to check $EPIPHAN_URL to see a complete list of the available drivers.
-If you cannot find a driver that works with your kernel configuration please email Epiphan Systems inc. (info@epiphan.com)
-and include the output from the command \"uname -a\". In this machine this output is:
-$(uname -a))"
 # Help for the device friendly name prompt
 export FRIENDLY_NAMES_HELP="The friendly name (e.g. \"screen\", or \"professor\") will identify the device in the system and will be displayed in the user interfaces for controlling this device.
 It can't contain spaces or punctuation."
@@ -203,14 +203,12 @@ export QUEUE_SUFFIX="buffer.bytes"
 # Suffix for the comma-separated list of all the devices attached to a capture agent in the capture properties file
 export LIST_SUFFIX="names"
 
-# One of the possible values for the ".type" suffix, indicating an Epiphan device, in the capture properties file
-export EPIPHAN_TYPE="EPIPHAN_VGA2USB"
-
 # Required scripts for installation
 SETUP_USER=./setup_user.sh
-INSTALL_VGA2USB=./install_vga2usb_drivers.sh
 SETUP_DEVICES=./setup_devices.sh
+SETUP_DEPENDENCIES=./setup_dependencies.sh
 INSTALL_DEPENDENCIES=./install_dependencies.sh
+SETUP_DIRECTORY=./setup_directory.sh
 SETUP_SOURCE=./setup_source.sh
 SETUP_ENVIRONMENT=./setup_environment.sh
 SETUP_BOOT=./setup_boot.sh
@@ -219,9 +217,11 @@ export FUNCTIONS=./functions.sh
 # This one is exported because it has to be modified by another script
 export CLEANUP=./cleanup.sh
 
-SCRIPTS=( "$SETUP_USER" "$INSTALL_VGA2USB" "$SETUP_DEVICES" "$INSTALL_DEPENDENCIES" "$SETUP_ENVIRONMENT"\
-          "$SETUP_SOURCE" "$SETUP_BOOT" "$CLEANUP" "$FUNCTIONS" )
-SCRIPTS_EXT=docs/scripts/ubuntu_capture_agent
+SCRIPTS=( "$SETUP_USER" "$SETUP_DEVICES" "$SETUP_DEPENDENCIES" "$INSTALL_DEPENDENCIES"\
+          "$SETUP_ENVIRONMENT" "$SETUP_DIRECTORY" "$SETUP_SOURCE" "$SETUP_BOOT" "$CLEANUP" "$FUNCTIONS")
+
+# List of required files that need to be present in the run directory when this script is executed
+REQUIRED=("${SCRIPTS[@]}" "${PACKAGE_LISTS[@]}")
 
 # The subsidiary scripts will check for this variable to check they are being run from here
 export INSTALL_RUN=true
@@ -255,35 +255,29 @@ physical="$(cat /proc/cpuinfo | grep -m 1 'cores' | cut -d ':' -f 2)"
 virtual="$(cat /proc/cpuinfo | grep -m 1 'siblings' | cut -d ':' -f 2)"
 echo "$model_name ($physical physical core(s), $virtual virtual cores)" >> $LOG_FILE
 
-# If wget isn't installed, get it from the ubuntu software repo
-wget foo &> /dev/null
-if [ $? -eq 127 ]; then
-    apt-get -y --force-yes install wget &>/dev/null
-    if [ $? -ne 0 ]; then
-	echo "Couldn't install the necessary command 'wget'. Please try to install it manually and re-run this script"
-	exit 1
-    fi
-fi
 
 # Check for the necessary scripts and download them from the svn location
-# Using C-like syntax in case file names have whitespaces
-for (( i = 0; i < ${#SCRIPTS[@]}; i++ )); do
-    f=${SCRIPTS[$i]}
-	# Check if the script is in the directory where the install.sh script was launched
-	if [[ -e $START_PATH/$f ]]; then
-	    # ... and copies it to the working directory
-	    cp $START_PATH/$f $WORKING_DIR
-	else
-	    # The script is not in the initial directory, so try to download it from the opencast source page
-	    wget $SRC_DEFAULT/$SCRIPTS_EXT/$f &> /dev/null	    
-	    # Check the file is downloaded
-	    if [[ $? -ne 0 ]]; then
-		echo "Couldn't retrieve the script $f from the repository. Try to download it manually and re-run this script."
-		exit 2
-	    fi
-	fi  
-    chmod +x $f
+unset missing
+for f in "${REQUIRED[@]}"; do
+    # Check if the script is in the directory where the install.sh script was launched
+    if [[ -e $START_PATH/$f ]]; then
+	# ... and copies it to the working directory
+	cp $START_PATH/$f $WORKING_DIR
+	chmod +x $f
+    else
+	missing=("${missing[@]}" "$f")
+    fi  
 done
+
+if [[ "${missing[@]}" ]]; then
+    echo "Error. Some required files scripts are missing:"
+    for f in "${missing[@]}"; do
+	echo -e "\t$f"
+    done
+    echo -e "\nPlease make sure you got all the contents from the folder 'docs/scripts/ubuntu_capture_agent'"
+    exit 2
+fi
+
 
 # Include the functions
 . ${FUNCTIONS}
@@ -291,20 +285,19 @@ done
 # Choose/create the matterhorn user (WARNING: The initial perdiod (.) MUST be there so that the script can export several variables)
 . ${SETUP_USER}
 
+# Choose the directory to install the capture agent. 
+. ${SETUP_DIRECTORY}
+
 # Create the directory where all the capture-agent-related files will be stored
 mkdir -p $CA_DIR
+
+# Setup dependencies for individual versions of Ubuntu. 
+. ${SETUP_DEPENDENCIES}
 
 # Install the 3rd party dependencies (WARNING: The initial perdiod (.) MUST be there so that the script can export several variables)
 . ${INSTALL_DEPENDENCIES}
 if [[ "$?" -ne 0 ]]; then
     echo "Error installing the 3rd party dependencies."
-    exit 1
-fi
-
-# Install the vga2usb driver
-${INSTALL_VGA2USB}
-if [[ "$?" -ne 0 ]]; then
-    echo "Error installing the vga2usb driver."
     exit 1
 fi
 
@@ -338,8 +331,8 @@ while [[ ! "$source_ok" ]] ; do
     
     unset build_ok
     while [[ ! "$build_ok" ]]; do
-	cd $SOURCE
-	su $USERNAME -c "mvn clean install -Pcapture,serviceregistry-stub -DdeployTo=${HOME}/${OC_DIR##*/}/${FELIX_HOME##*/}/${DEPLOY_DIR}"
+	cd $FELIX_HOME
+	su $USERNAME -c "mvn clean install -Pcapture,serviceregistry-stub -DdeployTo=${FELIX_HOME}"
 	if [[ "$?" -ne 0 ]]; then
 	    echo
 	    choose -t "Error building the matterhorn code. What do you wish to do?" "Download another source" "Retry build" "Exit" src_opt

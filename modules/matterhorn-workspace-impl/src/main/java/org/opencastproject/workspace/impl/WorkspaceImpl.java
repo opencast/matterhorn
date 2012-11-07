@@ -19,9 +19,11 @@ import org.opencastproject.security.api.TrustedHttpClient;
 import org.opencastproject.util.FileSupport;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.PathSupport;
+import org.opencastproject.util.jmx.JmxUtil;
 import org.opencastproject.workingfilerepository.api.PathMappable;
 import org.opencastproject.workingfilerepository.api.WorkingFileRepository;
 import org.opencastproject.workspace.api.Workspace;
+import org.opencastproject.workspace.impl.jmx.WorkspaceBean;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
@@ -30,6 +32,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.TeeInputStream;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.params.BasicHttpParams;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +46,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.util.Timer;
 
+import javax.management.ObjectInstance;
 import javax.servlet.http.HttpServletResponse;
 
 /**
@@ -61,6 +65,15 @@ public class WorkspaceImpl implements Workspace {
 
   /** Configuration key for the workspace root directory */
   public static final String WORKSPACE_ROOTDIR_KEY = "org.opencastproject.workspace.rootdir";
+
+  /** Workspace JMX type */
+  private static final String JMX_WORKSPACE_TYPE = "Workspace";
+
+  /** The JMX workspace bean */
+  private WorkspaceBean workspaceBean = new WorkspaceBean(this);
+
+  /** The JMX bean object instance */
+  private ObjectInstance registeredMXBean;
 
   protected String wsRoot = null;
   protected long maxAgeInSeconds = -1;
@@ -166,12 +179,15 @@ public class WorkspaceImpl implements Workspace {
         }
       }
     }
+
+    registeredMXBean = JmxUtil.registerMXBean(workspaceBean, JMX_WORKSPACE_TYPE);
   }
 
   /**
    * Callback from OSGi on service deactivation.
    */
   public void deactivate() {
+    JmxUtil.unregisterMXBean(registeredMXBean);
   }
 
   /**
@@ -184,7 +200,8 @@ public class WorkspaceImpl implements Workspace {
     File f = getWorkspaceFile(uri, false);
 
     // Does the file exist and is it up to date?
-    Long workspaceFileLastModified = new Long(0); //make sure this is not null, otherwise the requested file can not be copied
+    Long workspaceFileLastModified = new Long(0); // make sure this is not null, otherwise the requested file can not be
+                                                  // copied
     if (f.isFile()) {
       workspaceFileLastModified = new Long(f.lastModified());
     }
@@ -231,6 +248,25 @@ public class WorkspaceImpl implements Workspace {
       } else if (HttpServletResponse.SC_NOT_MODIFIED == response.getStatusLine().getStatusCode()) {
         logger.debug("{} has not been modified.", urlString);
         return f;
+      } else if (HttpServletResponse.SC_ACCEPTED == response.getStatusLine().getStatusCode()) {
+        logger.debug("{} is not ready, try again in one minute.", urlString);
+        String token = response.getHeaders("token")[0].getValue();
+        get.setParams(new BasicHttpParams().setParameter("token", token));
+        Thread.sleep(60000);
+        while (true) {
+          response = trustedHttpClient.execute(get);
+          if (HttpServletResponse.SC_NOT_FOUND == response.getStatusLine().getStatusCode()) {
+            throw new NotFoundException(uri + " does not exist");
+          } else if (HttpServletResponse.SC_NOT_MODIFIED == response.getStatusLine().getStatusCode()) {
+            logger.debug("{} has not been modified.", urlString);
+            return f;
+          } else if (response.getStatusLine().getStatusCode() == HttpServletResponse.SC_ACCEPTED) {
+            logger.debug("{} is not ready, try again in one minute.", urlString);
+            Thread.sleep(60000);
+          } else {
+            break;
+          }
+        }
       }
 
       // if the lock file exists, another thread is currently downloading the file. wait for it.
@@ -267,14 +303,19 @@ public class WorkspaceImpl implements Workspace {
    * @param file
    *          the source file
    * @return the md5 hash
+   * @throws IOException
+   *           if the file cannot be accessed
+   * @throws IllegalArgumentException
+   *           if <code>file</code> is <code>null</code>
+   * @throws IllegalStateException
+   *           if <code>file</code> does not exist or is not a regular file
    */
-  protected String md5(File file) throws IOException {
-    if (file == null) {
+  protected String md5(File file) throws IOException, IllegalArgumentException, IllegalStateException {
+    if (file == null)
       throw new IllegalArgumentException("File must not be null");
-    }
-    if (!file.exists() || !file.isFile()) {
+    if (!file.isFile())
       throw new IllegalArgumentException("File " + file.getAbsolutePath() + " can not be read");
-    }
+
     InputStream in = null;
     try {
       in = new FileInputStream(file);
@@ -350,13 +391,9 @@ public class WorkspaceImpl implements Workspace {
     // Determine the target location in the workspace
     File workspaceFile = null;
     FileOutputStream out = null;
-    try {
-      synchronized (wsRoot) {
-        workspaceFile = getWorkspaceFile(uri, true);
-        FileUtils.touch(workspaceFile);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    synchronized (wsRoot) {
+      workspaceFile = getWorkspaceFile(uri, true);
+      FileUtils.touch(workspaceFile);
     }
 
     // Try hard linking first and fall back to tee-ing to both the working file repository and the workspace
@@ -398,14 +435,10 @@ public class WorkspaceImpl implements Workspace {
     InputStream tee = null;
     File tempFile = null;
     FileOutputStream out = null;
-    try {
-      synchronized (wsRoot) {
-        tempFile = getWorkspaceFile(uri, true);
-        FileUtils.touch(tempFile);
-        out = new FileOutputStream(tempFile);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    synchronized (wsRoot) {
+      tempFile = getWorkspaceFile(uri, true);
+      FileUtils.touch(tempFile);
+      out = new FileOutputStream(tempFile);
     }
 
     // Try hard linking first and fall back to tee-ing to both the working file repository and the workspace
@@ -457,7 +490,7 @@ public class WorkspaceImpl implements Workspace {
 
   /**
    * {@inheritDoc}
-   *
+   * 
    * @see org.opencastproject.workspace.api.Workspace#getURI(java.lang.String, java.lang.String, java.lang.String)
    */
   public URI getURI(String mediaPackageID, String mediaPackageElementID, String filename) {
@@ -531,7 +564,7 @@ public class WorkspaceImpl implements Workspace {
    * @see org.opencastproject.workspace.api.Workspace#getCollectionContents(java.lang.String)
    */
   @Override
-  public URI[] getCollectionContents(String collectionId) throws IOException {
+  public URI[] getCollectionContents(String collectionId) throws NotFoundException {
     return wfr.getCollectionContents(collectionId);
   }
 
@@ -603,6 +636,26 @@ public class WorkspaceImpl implements Workspace {
     collection = collection.substring(collection.lastIndexOf("/"));
     collection = collection.substring(collection.lastIndexOf("/") + 1, collection.length());
     return collection;
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workspace.api.Workspace#getTotalSpace()
+   */
+  @Override
+  public long getTotalSpace() {
+    return new File(wsRoot).getTotalSpace();
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workspace.api.Workspace#getUsableSpace()
+   */
+  @Override
+  public long getUsableSpace() {
+    return new File(wsRoot).getUsableSpace();
   }
 
   /**

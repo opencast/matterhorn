@@ -16,9 +16,49 @@
 
 package org.opencastproject.util.data;
 
+import org.opencastproject.util.data.functions.Functions;
+
+import static org.opencastproject.util.data.functions.Misc.chuck;
+
 /**
  * Function of arity 2.
+ *
+ * @see X
  */
-public interface Function2<A, B, C> {
-  C apply(A a, B b);
+public abstract class Function2<A, B, C> {
+  /** Apply function to <code>a</code> and <code>b</code>. */
+  public abstract C apply(A a, B b);
+
+  /** Currying. */
+  public Function<B, C> curry(final A a) {
+    return Functions.curry(this, a);
+  }
+
+  /** Currying. */
+  public Function<A, Function<B, C>> curry() {
+    return Functions.curry(this);
+  }
+
+  /** Turn this function into an effect by discarding its result. */
+  public Effect2<A, B> toEffect() {
+    return Functions.toEffect(this);
+  }
+
+  /** Version of {@link Function2} that allows for throwing a checked exception. */
+  public abstract static class X<A, B, C> extends Function2<A, B, C> {
+    @Override
+    public final C apply(A a, B b) {
+      try {
+        return xapply(a, b);
+      } catch (Exception e) {
+        return chuck(e);
+      }
+    }
+
+    /**
+     * Apply function to <code>a</code>. Any thrown exception gets "chucked" so that you may
+     * catch them as is. See {@link Functions#chuck(Throwable)} for details.
+     */
+    public abstract C xapply(A a, B b) throws Exception;
+  }
 }

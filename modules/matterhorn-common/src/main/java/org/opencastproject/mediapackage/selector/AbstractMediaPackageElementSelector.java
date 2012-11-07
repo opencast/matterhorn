@@ -38,23 +38,38 @@ public abstract class AbstractMediaPackageElementSelector<T extends MediaPackage
   /** The tags */
   protected Set<String> tags = new HashSet<String>();
 
+  /** The tags to exclude */
+  protected Set<String> excludeTags = new HashSet<String>();
+
   /** The flavors */
   protected List<MediaPackageElementFlavor> flavors = new ArrayList<MediaPackageElementFlavor>();
 
   /**
+   * The prefix indicating that a tag should be excluded from a search for elements using
+   * {@link MediaPackage#getElementsByTags(Collection)}
+   */
+  public static final String NEGATE_TAG_PREFIX = "-";
+
+  /**
    * This base implementation will return those media package elements that match the type specified as the type
-   * parameter to the class and that flavor (if specified) and at least one of the tags (if specified) match.
+   * parameter to the class and that flavor (if specified) AND at least one of the tags (if specified) match.
    * 
-   * @see org.opencastproject.mediapackage.MediaPackageElementSelector#select(org.opencastproject.mediapackage.MediaPackage)
+   * @see org.opencastproject.mediapackage.MediaPackageElementSelector#select(org.opencastproject.mediapackage.MediaPackage,
+   *      boolean)
    */
   @SuppressWarnings("unchecked")
-  public Collection<T> select(MediaPackage mediaPackage) {
+  public Collection<T> select(MediaPackage mediaPackage, boolean withTagsAndFlavors) {
     Set<T> result = new HashSet<T>();
     Class type = getParametrizedType(result);
-    for (MediaPackageElement e : mediaPackage.getElements()) {
+    elementLoop: for (MediaPackageElement e : mediaPackage.getElements()) {
 
       // Does the type match?
       if (type.isAssignableFrom(e.getClass())) {
+
+        for (String tag : e.getTags()) {
+          if (excludeTags.contains(tag))
+            continue elementLoop;
+        }
 
         // Any of the flavors?
         boolean matchesFlavor = false;
@@ -64,15 +79,26 @@ public abstract class AbstractMediaPackageElementSelector<T extends MediaPackage
             break;
           }
         }
-        if (!matchesFlavor)
-          continue;
 
-        // What about tags?
-        if (!e.containsTag(tags))
-          continue;
+        // boolean add = false;
+        // for (String elementTag : element.getTags()) {
+        // if (lose.contains(elementTag)) {
+        // add = false;
+        // break;
+        // } else if (keep.contains(elementTag)) {
+        // add = true;
+        // }
+        // }
+        // if (add) {
+        // result.add(element);
+        // }
 
-        // Match!
-        result.add((T) e);
+        // If the elements selection is done by tags AND flavors
+        if (withTagsAndFlavors && matchesFlavor && e.containsTag(tags))
+          result.add((T) e);
+        // Otherwise if only one of these parameters is necessary to select an element
+        if (!withTagsAndFlavors && (matchesFlavor || (!tags.isEmpty() && e.containsTag(tags))))
+          result.add((T) e);
       }
     }
 
@@ -248,7 +274,11 @@ public abstract class AbstractMediaPackageElementSelector<T extends MediaPackage
    *          the tag to include
    */
   public void addTag(String tag) {
-    tags.add(tag);
+    if (tag.startsWith(NEGATE_TAG_PREFIX)) {
+      excludeTags.add(tag.substring(NEGATE_TAG_PREFIX.length()));
+    } else {
+      tags.add(tag);
+    }
   }
 
   /**

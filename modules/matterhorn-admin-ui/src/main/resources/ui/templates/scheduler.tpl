@@ -1,4 +1,4 @@
-<div>
+<div id="content">
   <div class="form-box layout-centered layout-page-header ui-helper-hidden" id="missingFieldsContainer">
     <div class="ui-state-error ui-corner-all scheduler-info-container">
       <h3 style="position: relative; padding-left: 20px;">
@@ -27,7 +27,7 @@
           <span class="ui-icon ui-icon-carat-1-e"></span>You must choose at least one <a href="javascript:document.getElementById('inputList').focus();">input</a>.
         </li>
         <li id="errorRecurStartEnd" class="ui-state-error-text multiple-error">
-          <span class="ui-icon ui-icon-carat-1-e"></span>Please choose an end date that occurs after the start date.
+          <span class="ui-icon ui-icon-carat-1-e"></span>Please choose an <a href="javascript:$('#recurEnd')[0].focus()">end date</a> that occurs after the start date.
         </li>
         <li id="errorRecurrence" class="ui-state-error-text multiple-error">
           <span class="ui-icon ui-icon-carat-1-e"></span>You must select at least one day of the week.
@@ -117,25 +117,25 @@
       </div>
     </div>
 
-  <!-- WARNINGS -->
-  <div class="form-box layout-centered layout-page-header ui-helper-hidden" id="noticeContainer">
-    <div class="layout-centered ui-state-highlight ui-corner-all scheduler-info-container">
-      <h3 style="position: relative; padding-left: 20px;">
-        <span class="ui-icon ui-icon-info"></span> <b>Notice</b>
-      </h3>
-      <ul>
-        <li id="noticeOffline" class="missing-fields-item">
-          <span class="ui-icon ui-icon-carat-1-e" title=""></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
-        </li>
-        <li id="noticeTzDiff" class="missing-fields-item">
-          <span class="ui-icon ui-icon-carat-1-e" title=""></span>The timezone for this <a href="javascript:document.getElementById('agent').focus();">capture agent</a> is <span id="tzdiff"></span>. Capture will occur according to the time local to the agent, though when you look at your list of Recordings it will be shown in your local time.
-        </li>
-        <li id="noticeOffline" class="ui-state-error-text">
-          <span class="ui-icon ui-icon-carat-1-e"></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
-        </li>
-      </ul>
+    <!-- WARNINGS -->
+    <div class="form-box layout-centered layout-page-header ui-helper-hidden" id="noticeContainer">
+      <div class="layout-centered ui-state-highlight ui-corner-all scheduler-info-container">
+        <h3 style="position: relative; padding-left: 20px;">
+          <span class="ui-icon ui-icon-info"></span> <b>Notice</b>
+        </h3>
+        <ul>
+          <li id="noticeOffline" class="missing-fields-item ui-helper-hidden">
+			<span class="ui-icon ui-icon-carat-1-e"></span>The <a href="javascript:document.getElementById('agent').focus();">capture agent</a> you previously selected is currently offline. You may want to select a different capture agent.
+          </li>
+          <li id="noticeTzDiff" class="missing-fields-item ui-helper-hidden">
+            <span class="ui-icon ui-icon-carat-1-e" title=""></span>The timezone for this <a href="javascript:document.getElementById('agent').focus();">capture agent</a> is <span id="tzdiff"></span>. Capture will occur according to the time local to the agent, though when you look at your list of Recordings it will be shown in your local time.
+          </li>
+          <li id="noticeStartDateMoved" class="missing-fields-item ui-helper-hidden">
+            <span class="ui-icon ui-icon-carat-1-e" title=""></span>The start date of the Series has been changed to be in the future.
+          </li>
+        </ul>
+      </div>
     </div>
-  </div>
 
     <!-- Scheduling Specifics (Single Recording) -->
     <div id="singleRecordingPanel" class="form-box layout-centered ui-widget">
@@ -319,8 +319,8 @@
               <ul class="oc-ui-form-list">
                 <li>
                   <label for="scheduleRepeat" class="scheduler-label form-box-label"><span id="i18n_sched_repeats">Repeats</span>:</label>
-                  <select id="scheduleRepeat" disabled="disabled">
-                    <option value="norepeat" selected="selected" id="i18n_sched_no_repeat">Don't Repeat</option>
+                  <select id="scheduleRepeat" disabled="true">
+                    <option value="norepeat" id="i18n_sched_no_repeat">Don't Repeat</option>
                     <option value="weekly" selected="selected" id="i18n_sched_weekly">Weekly</option>
                   </select>
                 </li>
@@ -527,7 +527,7 @@
             <li>
               <label class="scheduler-label">&nbsp;</label>
               <input type="button" value="Schedule" id="submitButton" class="mouseover-pointer control-button" />
-              <input type="button" value="Cancel" id="cancelButton" class="mouseover-pointer control-button" />
+              <a id="cancelButton" title="Cancel" class="secondaryButton">Cancel</a>
               <input type="hidden" id="eventId" />
               <input type="hidden" id="recurrenceId" />
               <input type="hidden" id="recurrencePosition" />

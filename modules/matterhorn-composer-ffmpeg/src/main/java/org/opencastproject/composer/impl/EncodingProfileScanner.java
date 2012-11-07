@@ -19,8 +19,11 @@ import org.opencastproject.composer.api.EncodingProfile;
 import org.opencastproject.composer.api.EncodingProfile.MediaType;
 import org.opencastproject.composer.api.EncodingProfileImpl;
 import org.opencastproject.util.ConfigurationException;
+import org.opencastproject.util.MimeType;
+import org.opencastproject.util.MimeTypes;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.felix.fileinstall.ArtifactInstaller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,10 +146,11 @@ public class EncodingProfileScanner implements ArtifactInstaller {
    * @param profile
    * @param properties
    * @param artifact
-   * @return
+   * @return the loaded profile or null if profile
    * @throws RuntimeException
    */
-  private EncodingProfile loadProfile(String profile, Properties properties, File artifact) throws ConfigurationException {
+  private EncodingProfile loadProfile(String profile, Properties properties, File artifact)
+          throws ConfigurationException {
     String identifier = profile;
     List<String> defaultProperties = new ArrayList<String>(10);
 
@@ -159,31 +163,38 @@ public class EncodingProfileScanner implements ArtifactInstaller {
 
     // Output Type
     Object type = getDefaultProperty(profile, PROP_OUTPUT, properties, defaultProperties);
-    if (type == null || "".equals(type.toString().trim()))
+    if (StringUtils.isBlank(type.toString()))
       throw new ConfigurationException("Type of profile '" + profile + "' is missing");
     try {
-      df.setOutputType(MediaType.parseString(type.toString().trim()));
+      df.setOutputType(MediaType.parseString(StringUtils.trimToEmpty(type.toString())));
     } catch (IllegalArgumentException e) {
       throw new ConfigurationException("Type '" + type + "' of profile '" + profile + "' is unknwon");
     }
 
     // Suffix
     Object suffixObj = getDefaultProperty(profile, PROP_SUFFIX, properties, defaultProperties);
-    if (suffixObj == null || "".equals(suffixObj.toString().trim()))
+    if (StringUtils.isBlank(suffixObj.toString()))
       throw new ConfigurationException("Suffix of profile '" + profile + "' is missing");
-    df.setSuffix(suffixObj.toString());
+    df.setSuffix(StringUtils.trim(suffixObj.toString()));
 
     // Mimetype
     Object mimeTypeObj = getDefaultProperty(profile, PROP_MIMETYPE, properties, defaultProperties);
-    if (mimeTypeObj == null || "".equals(mimeTypeObj.toString().trim()))
-      throw new ConfigurationException("Mime type of profile '" + profile + "' is missing");
-    df.setMimeType(mimeTypeObj.toString());
+    if (mimeTypeObj != null && StringUtils.isNotBlank(mimeTypeObj.toString())) {
+      MimeType mimeType;
+      try {
+        mimeType = MimeTypes.parseMimeType(mimeTypeObj.toString());
+      } catch (Exception e) {
+        throw new ConfigurationException("Mime type " + mimeTypeObj.toString()
+                + " could not be parsed as a mime type! Expressions are not allowed!");
+      }
+      df.setMimeType(mimeType.asString());
+    }
 
     // Applicable to the following track categories
     Object applicableObj = getDefaultProperty(profile, PROP_APPLICABLE, properties, defaultProperties);
-    if (applicableObj == null || "".equals(applicableObj.toString().trim()))
+    if (StringUtils.isBlank(applicableObj.toString()))
       throw new ConfigurationException("Input type of profile '" + profile + "' is missing");
-    df.setApplicableType(MediaType.parseString(applicableObj.toString().trim()));
+    df.setApplicableType(MediaType.parseString(StringUtils.trimToEmpty(applicableObj.toString())));
 
     // Look for extensions
     String extensionKey = PROP_PREFIX + profile + ".";
@@ -191,7 +202,7 @@ public class EncodingProfileScanner implements ArtifactInstaller {
       String key = entry.getKey().toString();
       if (key.startsWith(extensionKey) && !defaultProperties.contains(key)) {
         String k = key.substring(extensionKey.length());
-        String v = entry.getValue().toString();
+        String v = StringUtils.trimToEmpty(entry.getValue().toString());
         df.addExtension(k, v);
       }
     }
@@ -218,7 +229,8 @@ public class EncodingProfileScanner implements ArtifactInstaller {
     buf.append(keySuffix);
     String key = buf.toString();
     list.add(key);
-    return properties.getProperty(key);
+    final String prop = properties.getProperty(key);
+    return prop != null ? prop.trim() : prop;
   }
 
   /**

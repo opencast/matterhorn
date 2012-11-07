@@ -15,8 +15,7 @@
  */
 package org.opencastproject.annotation.impl;
 
-import static javax.servlet.http.HttpServletResponse.SC_CREATED;
-import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static javax.servlet.http.HttpServletResponse.*;
 
 import org.opencastproject.annotation.api.Annotation;
 import org.opencastproject.annotation.api.AnnotationService;
@@ -39,6 +38,7 @@ import java.net.URISyntaxException;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.FormParam;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -55,7 +55,15 @@ import javax.ws.rs.core.Response.Status;
  * The REST endpoint for the annotation service.
  */
 @Path("/")
-@RestService(name = "annotation", title = "Annotation Service", notes = { "" }, abstractText = "This service is used for managing user generated annotations.")
+@RestService(name = "annotation", title = "Annotation Service",
+  abstractText = "This service is used for managing user generated annotations.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class AnnotationRestService {
 
   /** The logger */
@@ -113,8 +121,8 @@ public class AnnotationRestService {
           @RestParameter(name = "episode", description = "The episode identifier", isRequired = false, type = Type.STRING),
           @RestParameter(name = "type", description = "The type of annotation", isRequired = false, type = Type.STRING),
           @RestParameter(name = "day", description = "The day of creation (format: YYYYMMDD)", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "limit", description = "The maximum number of items to return per page", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "offset", description = "The page number", isRequired = false, type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the user annotations") })
+          @RestParameter(name = "limit", description = "The maximum number of items to return per page", isRequired = false, type = Type.INTEGER),
+          @RestParameter(name = "offset", description = "The page number", isRequired = false, type = Type.INTEGER) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the user annotations") })
   public Response getAnnotationsAsXml(@QueryParam("episode") String id, @QueryParam("type") String type,
           @QueryParam("day") String day, @QueryParam("limit") int limit, @QueryParam("offset") int offset) {
 
@@ -150,8 +158,8 @@ public class AnnotationRestService {
           @RestParameter(name = "episode", description = "The episode identifier", isRequired = false, type = Type.STRING),
           @RestParameter(name = "type", description = "The type of annotation", isRequired = false, type = Type.STRING),
           @RestParameter(name = "day", description = "The day of creation (format: YYYYMMDD)", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "limit", description = "The maximum number of items to return per page", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "offset", description = "The page number", isRequired = false, type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "A JSON representation of the user annotations") })
+          @RestParameter(name = "limit", description = "The maximum number of items to return per page", isRequired = false, type = Type.INTEGER),
+          @RestParameter(name = "offset", description = "The page number", isRequired = false, type = Type.INTEGER) }, reponses = { @RestResponse(responseCode = SC_OK, description = "A JSON representation of the user annotations") })
   public Response getAnnotationsAsJson(@QueryParam("episode") String id, @QueryParam("type") String type,
           @QueryParam("day") String day, @QueryParam("limit") int limit, @QueryParam("offset") int offset) {
     return getAnnotationsAsXml(id, type, day, limit, offset); // same logic, different @Produces annotation
@@ -204,10 +212,31 @@ public class AnnotationRestService {
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  @Path("{id}.xml")
+  @Path("{id}.json")
   @RestQuery(name = "annotationasjson", description = "Gets an annotation by its identifier", returnDescription = "A JSON representation of the user annotation.", pathParameters = { @RestParameter(name = "id", description = "The episode identifier", isRequired = false, type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "A JSON representation of the user annotation") })
   public AnnotationImpl getAnnotationAsJson(@PathParam("id") String idAsString) throws NotFoundException {
     return getAnnotationAsXml(idAsString);
+  }
+
+  @DELETE
+  @Path("{id}")
+  @RestQuery(name = "remove", description = "Remove an annotation", returnDescription = "Return status code", pathParameters = { @RestParameter(name = "id", description = "The annotation identifier", isRequired = false, type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "Annotation deleted."), @RestResponse(responseCode = SC_NO_CONTENT, description = "Annotation not found.") })
+  public Response removeAnnotation(@PathParam("id") String idAsString) throws NotFoundException {
+    Long id = null;
+    Annotation a; 
+    try {
+      id = Long.parseLong(idAsString);
+    } catch (NumberFormatException e) {
+        return Response.status(Status.INTERNAL_SERVER_ERROR).build();
+    }
+    a = (AnnotationImpl) annotationService.getAnnotation(id);
+    boolean removed = annotationService.removeAnnotation(a);
+    if (removed) {    
+        return Response.status(Status.OK).build();
+    }
+    else {
+        return Response.status(Status.NO_CONTENT).build();
+    }
   }
 
 }

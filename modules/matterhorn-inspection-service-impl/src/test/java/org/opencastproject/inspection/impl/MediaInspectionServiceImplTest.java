@@ -17,6 +17,7 @@ package org.opencastproject.inspection.impl;
 
 import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ANONYMOUS;
 import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ID;
+import static org.opencastproject.util.MimeType.mimeType;
 
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobBarrier;
@@ -39,6 +40,7 @@ import org.opencastproject.workspace.api.Workspace;
 
 import junit.framework.Assert;
 
+import org.apache.tika.parser.AutoDetectParser;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
@@ -72,13 +74,15 @@ public class MediaInspectionServiceImplTest {
       // Mediainfo requires a track in order to return a status code of 0, indicating that it is workinng as expected
       URI uriTrack = MediaInspectionServiceImpl.class.getResource("/av.mov").toURI();
       File f = new File(uriTrack);
-      p = new ProcessBuilder(MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT, f.getAbsolutePath()).start();
+      p = new ProcessBuilder(MediaInfoAnalyzer.MEDIAINFO_BINARY_DEFAULT, f.getAbsolutePath())
+              .start();
       stdout = new StreamHelper(p.getInputStream());
       stderr = new StreamHelper(p.getErrorStream());
-      if (p.waitFor() != 0)
-        throw new IllegalStateException();
+      int exitCode = p.waitFor();
+      if (exitCode != 0 && exitCode != 141)
+        throw new IllegalStateException("process returned " + exitCode);
     } catch (Throwable t) {
-      logger.warn("Skipping media inspection tests due to unsatisifed mediainfo installation");
+      logger.warn("Skipping media inspection tests due to unsatisifed mediainfo installation: " + t.getMessage());
       mediainfoInstalled = false;
     } finally {
       IoSupport.closeQuietly(stdout);
@@ -93,12 +97,14 @@ public class MediaInspectionServiceImplTest {
     File f = new File(uriTrack);
     // set up services and mock objects
     service = new MediaInspectionServiceImpl();
-    
+
     User anonymous = new User("anonymous", DEFAULT_ORGANIZATION_ID, new String[] { DEFAULT_ORGANIZATION_ANONYMOUS });
     UserDirectoryService userDirectoryService = EasyMock.createMock(UserDirectoryService.class);
     EasyMock.expect(userDirectoryService.loadUser((String) EasyMock.anyObject())).andReturn(anonymous).anyTimes();
     EasyMock.replay(userDirectoryService);
     service.setUserDirectoryService(userDirectoryService);
+
+    service.setTikaParser(new AutoDetectParser());
 
     Organization organization = new DefaultOrganization();
     OrganizationDirectoryService organizationDirectoryService = EasyMock.createMock(OrganizationDirectoryService.class);
@@ -113,7 +119,8 @@ public class MediaInspectionServiceImplTest {
     EasyMock.replay(securityService);
     service.setSecurityService(securityService);
 
-    serviceRegistry = new ServiceRegistryInMemoryImpl(service, securityService, userDirectoryService, organizationDirectoryService);
+    serviceRegistry = new ServiceRegistryInMemoryImpl(service, securityService, userDirectoryService,
+            organizationDirectoryService);
     service.setServiceRegistry(serviceRegistry);
 
     workspace = EasyMock.createNiceMock(Workspace.class);
@@ -139,13 +146,16 @@ public class MediaInspectionServiceImplTest {
       JobBarrier barrier = new JobBarrier(serviceRegistry, 1000, job);
       barrier.waitForJobs();
 
+      Assert.assertEquals(Job.Status.FINISHED, job.getStatus());
+      Assert.assertNotNull(job.getPayload());
       Track track = (Track) MediaPackageElementParser.getFromXml(job.getPayload());
       // test the returned values
       Checksum cs = Checksum.create(ChecksumType.fromString("md5"), "9d3523e464f18ad51f59564acde4b95a");
       Assert.assertEquals(track.getChecksum(), cs);
       Assert.assertEquals(track.getMimeType().getType(), "video");
       Assert.assertEquals(track.getMimeType().getSubtype(), "quicktime");
-      Assert.assertEquals(track.getDuration(), 14546);
+      Assert.assertNotNull(track.getDuration());
+      Assert.assertTrue(track.getDuration() > 0);
     } catch (IllegalStateException e) {
       System.err.println("Skipped MediaInspectionServiceImplTest#testInspection");
     }
@@ -162,11 +172,13 @@ public class MediaInspectionServiceImplTest {
       JobBarrier barrier = new JobBarrier(serviceRegistry, 1000, job);
       barrier.waitForJobs();
 
+      Assert.assertEquals(Job.Status.FINISHED, job.getStatus());
+      Assert.assertNotNull(job.getPayload());
       Track track = (Track) MediaPackageElementParser.getFromXml(job.getPayload());
       // make changes to metadata
       Checksum cs = track.getChecksum();
       track.setChecksum(null);
-      MimeType mt = new MimeType("video", "flash");
+      MimeType mt = mimeType("video", "flash");
       track.setMimeType(mt);
       // test the enrich scenario
       Job newJob = service.enrich(track, false);
@@ -176,7 +188,8 @@ public class MediaInspectionServiceImplTest {
       Track newTrack = (Track) MediaPackageElementParser.getFromXml(newJob.getPayload());
       Assert.assertEquals(newTrack.getChecksum(), cs);
       Assert.assertEquals(newTrack.getMimeType(), mt);
-      Assert.assertEquals(newTrack.getDuration(), 14546);
+      Assert.assertNotNull(newTrack.getDuration());
+      Assert.assertTrue(newTrack.getDuration() > 0);
       // test the override scenario
       newJob = service.enrich(track, true);
       barrier = new JobBarrier(serviceRegistry, newJob);
@@ -185,7 +198,7 @@ public class MediaInspectionServiceImplTest {
       newTrack = (Track) MediaPackageElementParser.getFromXml(newJob.getPayload());
       Assert.assertEquals(newTrack.getChecksum(), cs);
       Assert.assertNotSame(newTrack.getMimeType(), mt);
-      Assert.assertEquals(newTrack.getDuration(), 14546);
+      Assert.assertTrue(newTrack.getDuration() > 0);
     } catch (IllegalStateException e) {
       System.err.println("Skipped MediaInspectionServiceImplTest#testInspection");
     }

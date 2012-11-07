@@ -21,6 +21,7 @@ import org.opencastproject.oaipmh.util.PersistenceEnv;
 import org.opencastproject.util.data.Function;
 import org.opencastproject.util.data.Option;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.EntityManager;
 import javax.persistence.Id;
@@ -41,20 +42,22 @@ import static org.opencastproject.util.data.Option.some;
  * Persists the last harvested time of a url.
  */
 @Entity
-@Table(name = "LAST_HARVESTED")
+@Table(name = "oaipmh_harvesting")
 @NamedQueries({
     @NamedQuery(name = "findLastHarvested",
-        query = "SELECT a.timestamp FROM LastHarvested a WHERE a.url = :url"),
+        query = "SELECT a.lastHarvested FROM LastHarvested a WHERE a.url = :url"),
     @NamedQuery(name = "findAll",
         query = "SELECT a FROM LastHarvested a")
 })
 public class LastHarvested {
 
   @Id
+  @Column(name = "url")
   private String url;
 
+  @Column(name = "last_harvested")
   @Temporal(TemporalType.TIMESTAMP)
-  private Date timestamp;
+  private Date lastHarvested;
 
   /**
    * JPA constructor.
@@ -64,7 +67,7 @@ public class LastHarvested {
 
   public LastHarvested(String url, Date timestamp) {
     this.url = url;
-    this.timestamp = timestamp;
+    this.lastHarvested = timestamp;
   }
 
   public String getUrl() {
@@ -72,7 +75,7 @@ public class LastHarvested {
   }
 
   public Date getTimestamp() {
-    return timestamp;
+    return lastHarvested;
   }
 
   public static Option<Date> getLastHarvestDate(PersistenceEnv penv, final String url) {

@@ -30,6 +30,30 @@ import static org.opencastproject.util.doc.rest.RestParameter.Type.BOOLEAN;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.TEXT;
 
+import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
+import org.opencastproject.metadata.dublincore.DublinCoreCatalogList;
+import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
+import org.opencastproject.rest.RestConstants;
+import org.opencastproject.security.api.AccessControlList;
+import org.opencastproject.security.api.AccessControlParser;
+import org.opencastproject.security.api.UnauthorizedException;
+import org.opencastproject.series.api.SeriesException;
+import org.opencastproject.series.api.SeriesQuery;
+import org.opencastproject.series.api.SeriesService;
+import org.opencastproject.util.NotFoundException;
+import org.opencastproject.util.SolrUtils;
+import org.opencastproject.util.UrlSupport;
+import org.opencastproject.util.doc.rest.RestParameter;
+import org.opencastproject.util.doc.rest.RestQuery;
+import org.opencastproject.util.doc.rest.RestResponse;
+import org.opencastproject.util.doc.rest.RestService;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.osgi.service.component.ComponentContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,35 +73,20 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
-import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
-import org.opencastproject.metadata.dublincore.DublinCoreCatalogList;
-import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
-import org.opencastproject.rest.RestConstants;
-import org.opencastproject.security.api.AccessControlList;
-import org.opencastproject.security.api.AccessControlParser;
-import org.opencastproject.security.api.UnauthorizedException;
-import org.opencastproject.series.api.SeriesException;
-import org.opencastproject.series.api.SeriesQuery;
-import org.opencastproject.series.api.SeriesService;
-import org.opencastproject.util.NotFoundException;
-import org.opencastproject.util.PathSupport;
-import org.opencastproject.util.SolrUtils;
-import org.opencastproject.util.doc.rest.RestParameter;
-import org.opencastproject.util.doc.rest.RestQuery;
-import org.opencastproject.util.doc.rest.RestResponse;
-import org.opencastproject.util.doc.rest.RestService;
-import org.osgi.service.component.ComponentContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * REST endpoint for Series Service.
  * 
  */
 @Path("/")
-@RestService(name = "seriesservice", title = "Series Service", abstractText = "This service creates, edits and retrieves and helps managing series.", notes = { "$Rev$" })
+@RestService(name = "seriesservice", title = "Series Service",
+  abstractText = "This service creates, edits and retrieves and helps managing series.", 
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class SeriesRestService {
 
   /** Logging utility */
@@ -141,6 +150,14 @@ public class SeriesRestService {
       }
     }
     serviceUrl = (String) cc.getProperties().get(RestConstants.SERVICE_PATH_PROPERTY);
+  }
+
+  public String getSeriesXmlUrl(String seriesId) {
+    return UrlSupport.concat(serverUrl, serviceUrl, seriesId + ".xml");
+  }
+
+  public String getSeriesJsonUrl(String seriesId) {
+    return UrlSupport.concat(serverUrl, serviceUrl, seriesId + ".json");
   }
 
   @GET
@@ -282,9 +299,7 @@ public class SeriesRestService {
       String id = newSeries.getFirst(PROPERTY_IDENTIFIER);
       String serializedSeries = serializeDublinCore(newSeries);
       logger.debug("Created series {} ", id);
-      return Response.status(CREATED)
-              .header("Location", PathSupport.concat(new String[] { this.serverUrl, this.serviceUrl, id + ".xml" }))
-              .header("Location", PathSupport.concat(new String[] { this.serverUrl, this.serviceUrl, id + ".json" }))
+      return Response.status(CREATED).header("Location", getSeriesXmlUrl(id)).header("Location", getSeriesJsonUrl(id))
               .entity(serializedSeries).build();
     } catch (Exception e) {
       logger.warn("Could not add/update series: {}", e.getMessage());
@@ -342,6 +357,20 @@ public class SeriesRestService {
       logger.warn("Could not delete series {}: {}", seriesID, se.getMessage());
     }
     throw new WebApplicationException(Response.Status.INTERNAL_SERVER_ERROR);
+  }
+
+  @GET
+  @Produces(MediaType.TEXT_PLAIN)
+  @Path("/count")
+  @RestQuery(name = "count", description = "Returns the number of series", returnDescription = "Returns the number of series", reponses = { @RestResponse(responseCode = SC_OK, description = "The number of series") })
+  public Response getCount() throws UnauthorizedException {
+    try {
+      int count = seriesService.getSeriesCount();
+      return Response.ok(count).build();
+    } catch (SeriesException se) {
+      logger.warn("Could not count series: {}", se.getMessage());
+      throw new WebApplicationException(se);
+    }
   }
 
   @GET
@@ -553,7 +582,7 @@ public class SeriesRestService {
    * @return sample ACL
    */
   public String getSampleAccessControlList() {
-    return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ns2:acl xmlns:ns2=\"org.opencastproject.security\"><ace><role>admin</role><action>delete</action><allow>true</allow></ace></ns2:acl>";
+    return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><acl xmlns=\"org.opencastproject.security\"><ace><role>admin</role><action>delete</action><allow>true</allow></ace></acl>";
   }
 
 }

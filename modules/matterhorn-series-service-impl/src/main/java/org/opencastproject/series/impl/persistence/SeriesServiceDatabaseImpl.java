@@ -19,21 +19,6 @@ import static org.opencastproject.series.api.SeriesService.CONTRIBUTE_CONTENT_PE
 import static org.opencastproject.series.api.SeriesService.EDIT_SERIES_PERMISSION;
 import static org.opencastproject.series.api.SeriesService.READ_CONTENT_PERMISSION;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.EntityTransaction;
-import javax.persistence.NoResultException;
-import javax.persistence.Query;
-import javax.persistence.spi.PersistenceProvider;
-
-import org.apache.commons.io.IOUtils;
 import org.opencastproject.metadata.dublincore.DublinCore;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
@@ -47,9 +32,27 @@ import org.opencastproject.security.api.User;
 import org.opencastproject.series.impl.SeriesServiceDatabase;
 import org.opencastproject.series.impl.SeriesServiceDatabaseException;
 import org.opencastproject.util.NotFoundException;
+import org.opencastproject.util.data.Tuple;
+
+import org.apache.commons.io.IOUtils;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.EntityTransaction;
+import javax.persistence.NoResultException;
+import javax.persistence.Query;
+import javax.persistence.spi.PersistenceProvider;
 
 /**
  * Implements {@link SeriesServiceDatabase}. Defines permanent storage for series.
@@ -213,9 +216,9 @@ public class SeriesServiceDatabaseImpl implements SeriesServiceDatabase {
    */
   @SuppressWarnings("unchecked")
   @Override
-  public DublinCoreCatalog[] getAllSeries() throws SeriesServiceDatabaseException {
+  public Iterator<Tuple<DublinCoreCatalog, String>> getAllSeries() throws SeriesServiceDatabaseException {
     EntityManager em = emf.createEntityManager();
-    Query query = em.createQuery("SELECT e FROM SeriesEntity e");
+    Query query = em.createNamedQuery("Series.findAll");
     List<SeriesEntity> seriesEntities = null;
     try {
       seriesEntities = (List<SeriesEntity>) query.getResultList();
@@ -225,17 +228,17 @@ public class SeriesServiceDatabaseImpl implements SeriesServiceDatabase {
     } finally {
       em.close();
     }
-    List<DublinCoreCatalog> seriesList = new LinkedList<DublinCoreCatalog>();
+    List<Tuple<DublinCoreCatalog, String>> seriesList = new LinkedList<Tuple<DublinCoreCatalog, String>>();
     try {
       for (SeriesEntity entity : seriesEntities) {
         DublinCoreCatalog dc = parseDublinCore(entity.getDublinCoreXML());
-        seriesList.add(dc);
+        seriesList.add(Tuple.tuple(dc, entity.getOrganization()));
       }
     } catch (Exception e) {
       logger.error("Could not parse series entity: {}", e.getMessage());
       throw new SeriesServiceDatabaseException(e);
     }
-    return seriesList.toArray(new DublinCoreCatalog[seriesList.size()]);
+    return seriesList.iterator();
   }
 
   /*
@@ -431,10 +434,10 @@ public class SeriesServiceDatabaseImpl implements SeriesServiceDatabase {
       em.close();
     }
   }
-  
+
   public int countSeries() throws SeriesServiceDatabaseException {
     EntityManager em = emf.createEntityManager();
-    Query query = em.createQuery("SELECT COUNT(e) FROM SeriesEntity e");
+    Query query = em.createNamedQuery("Series.getCount");
     try {
       Long total = (Long) query.getSingleResult();
       return total.intValue();
@@ -445,6 +448,7 @@ public class SeriesServiceDatabaseImpl implements SeriesServiceDatabase {
       em.close();
     }
   }
+
   /**
    * Gets a series by its ID, using the current organizational context.
    * 

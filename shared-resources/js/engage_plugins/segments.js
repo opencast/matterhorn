@@ -23,15 +23,17 @@ Opencast.segments = (function ()
 {
     var totalPanels, segmentTimes, mediaPackageId, duration;
     var numberOfSegments = 0,
-        beforeSlide = 0,
-        currentSlide = 0,
-        nextSlide = 0,
-        slideLength = 0,
-        SEGMENTS = "Segments",
-        SEGMENTS_HIDE = "Hide Segments",
-        imgURLs,
-        newSegments,
-        cashe = false;
+    beforeSlide = 0,
+    currentSlide = 0,
+    nextSlide = 0,
+    slideLength = 0,
+    SEGMENTS = "Segments",
+    SEGMENTS_HIDE = "Hide Segments",
+    isOpening = false,
+    isOpen = false,
+    cashe = false;
+    var imgURLs,
+    newSegments;
         
     /**
      * @memberOf Opencast.segments
@@ -146,6 +148,9 @@ Opencast.segments = (function ()
      */
     function initialize()
     {
+	var reg = Opencast.Plugin_Controller.registerPlugin(Opencast.segments);
+	$.log("Opencast.segments registered: " + reg);
+
         totalPanels = $(".scrollContainer").children().size();
         var $panels = $('#slider .scrollContainer > div');
         var $container = $('#slider .scrollContainer');
@@ -160,10 +165,10 @@ Opencast.segments = (function ()
             if ($panels[0] !== undefined)
             {
                 $container.css('width', ($panels[0].offsetWidth * $panels.length)).css('left', "0px");
-                // Disable and grey out "Annotation" Tab
+                // Disable and grey out "Comment" Tab
                 $("#oc_ui_tabs").tabs(
                 {
-                    disabled: [4]
+                    disabled: [3]
                 });
             }
             var scroll = $('#slider .scroll').css('overflow', 'hidden');
@@ -202,7 +207,7 @@ Opencast.segments = (function ()
         // Hide Slide Tab, if there are no slides
         if (numberOfSegments == 0)
         {
-            hideSegments();
+            hide();
             $(".oc_btn-skip-backward").hide();
             $(".oc_btn-skip-forward").hide();
             // Disable and grey out "Segments" and "Segments Text" Tab
@@ -368,142 +373,157 @@ Opencast.segments = (function ()
      * @memberOf Opencast.segments
      * @description Displays the Segments Tab
      */
-    function showSegments()
+    function show()
     {
-        Opencast.Player.addEvent(Opencast.logging.SHOW_SEGMENTS);
-        // Hide other Tabs
-        Opencast.Description.hideDescription();
-        Opencast.segments_text.hideSegmentsText();
-        Opencast.search.hideSearch();
-        Opencast.User.hideUserTab();
-        // Change Tab Caption
-        $('#oc_btn-slides').attr(
-        {
-            title: SEGMENTS_HIDE
-        });
-        $('#oc_btn-slides').html(SEGMENTS_HIDE);
-        $("#oc_btn-slides").attr('aria-pressed', 'true');
-        // Will be overwritten if the Template is ready
-        $('#scrollcontainer').html('<img src="img/squares.gif" />');
-        // Show a loading Image
+	if(!isOpen && !isOpening)
+	{
+	    isOpening = true;
+            Opencast.Player.addEvent(Opencast.logging.SHOW_SEGMENTS);
+            // Hide other Tabs
+	    Opencast.Plugin_Controller.hideAll(Opencast.segments);
+            // Change Tab Caption
+            $('#oc_btn-slides').attr(
+		{
+		    title: SEGMENTS_HIDE
+		});
+            $('#oc_btn-slides').html(SEGMENTS_HIDE);
+            $("#oc_btn-slides").attr('aria-pressed', 'true');
+            // Will be overwritten if the Template is ready
+            $('#scrollcontainer').html('<img src="/engage/ui/img/misc/squares.gif" />');
+            // Show a loading Image
+            $('#oc_slides').show();
+            $('#oc_slides').css('display', 'block');
+            $('#segments-loading').show();
+            $('#slider').hide();
+            // If cashed data are available
+            if (cashe && Opencast.segments_Plugin.createSegmentsFromCashe())
+            {
+		$.log("Cashing segments plugin: yes");
+		loadAndDisplaySegments();
+		isOpening = false;
+		isOpen = true;
+            }
+            else
+            {
+		$.log("Cashing segments plugin: no");
+		// Request JSONP data
+		$.ajax(
+		    {
+			url: Opencast.Watch.getSegmentsURL(),
+			data: 'id=' + mediaPackageId,
+			dataType: 'jsonp',
+			jsonp: 'jsonp',
+			success: function (data)
+			{
+			    $.log("Segments AJAX call: Requesting data succeeded");
+			    if ((data === undefined) || (data['search-results'] === undefined) || (data['search-results'].result === undefined) || (data['search-results'].result.segments === undefined))
+			    {
+				$.log("Segments AJAX call: Data not available");
+				displayNoSlidesAvailable();
+			    } else
+			    {
+				$.log("Segments AJAX call: Data available");
+				cashe = true;
+				imgURLs = Opencast.segments_ui.getImgURLArray();
+				newSegments = Opencast.segments_ui.getSegments();
+				
+				// create trimpath template
+				Opencast.segments_Plugin.addAsPlugin($('#scrollcontainer'), newSegments);
+				// display slides
+				loadAndDisplaySegments();
+			    }
+			},
+			// If no data comes back
+			error: function (xhr, ajaxOptions, thrownError)
+			{
+			    displayNoSlidesAvailable();
+			}
+		    });
+            }
+	}
+    }
+
+    /**
+     * @memberOf Opencast.segments
+     * @description loads and displays segment previews in the segments tab
+     */
+    function loadAndDisplaySegments()
+    {
+        $.ajax(
+            {
+                url: Opencast.Watch.getSegmentsURL(),
+                data: 'id=' + mediaPackageId,
+                dataType: 'jsonp',
+                jsonp: 'jsonp',
+                success: function (data)
+                {
+		    displaySlides();
+                },
+                // if no data comes back
+                error: function (xhr, ajaxOptions, thrownError)
+                {
+		    displayNoSlidesAvailable();
+                }
+            });
+    }
+
+    function displaySlides()
+    {
+        // hide the loading image
+        $('#segments-loading').hide();
         $('#oc_slides').show();
         $('#oc_slides').css('display', 'block');
-        $('#segments-loading').show();
-        $('#slider').hide();
-        // If cashed data are available
-        if (cashe && Opencast.segments_Plugin.createSegmentsFromCashe())
-        {
-            $.log("Cashing segments plugin: yes");
-            // Request JSONP data -- senseless but otherwise weirdly no correct css parsing?!
-            $.ajax(
-            {
-                url: Opencast.Watch.getSegmentsURL(),
-                data: 'id=' + mediaPackageId,
-                dataType: 'jsonp',
-                jsonp: 'jsonp',
-                success: function (data)
-                {
-                    $.log("Segments AJAX call: Requesting data succeeded");
-                    // Hide the loading Image
-                    $('#segments-loading').hide();
-                    $('#oc_slides').show();
-                    $('#oc_slides').css('display', 'block');
-                    $('#slider').show();
-                    // Sets slider container width after panels are displayed
-                    sizeSliderContainer();
-                },
-                // If no data comes back
-                error: function (xhr, ajaxOptions, thrownError)
-                {
-                    $.log("Segments Ajax call: Requesting data failed");
-                    Opencast.Player.addEvent(Opencast.logging.SEGMENTS_AJAX_FAILED);
-                    $('#scrollcontainer').html('No Slides available');
-                    $('#scrollcontainer').hide();
-                }
-            });
-        }
-        else
-        {
-            cashe = true;
-            $.log("Cashing segments plugin: no");
-            // Request JSONP data // TODO: Remove Ajax, we're getting the data from segments_ui -- senseless but otherwise weirdly no correct css parsing?!
-            $.ajax(
-            {
-                url: Opencast.Watch.getSegmentsURL(),
-                data: 'id=' + mediaPackageId,
-                dataType: 'jsonp',
-                jsonp: 'jsonp',
-                success: function (data)
-                {
-                    $.log("Segments AJAX call: Requesting data succeeded");
-                    // get rid of every '@' in the JSON data
-                    // data = $.parseJSON(JSON.stringify(data).replace(/@/g, ''));
-                    if ((data === undefined) || (data['search-results'] === undefined) || (data['search-results'].result === undefined) || (data['search-results'].result.segments === undefined))
-                    {
-                        $.log("Segments AJAX call: Data not available");
-                        $('#scrollcontainer').html('No Slides available');
-                        $('#scrollcontainer').hide();
-                    }
-                    else
-                    {
-                        $.log("Segments AJAX call: Data available");
-                        imgURLs = Opencast.segments_ui.getImgURLArray();
-                        newSegments = Opencast.segments_ui.getSegments();
-                        
-                        // Create Trimpath Template
-                        Opencast.segments_Plugin.addAsPlugin($('#scrollcontainer'), newSegments);
-                        // Hide the loading Image
-                        $('#segments-loading').hide();
-                        $('#oc_slides').show();
-                        $('#oc_slides').css('display', 'block');
-                        $('#slider').show();
-                        // Sets slider container width after panels are displayed
-                        sizeSliderContainer();
-                    }
-                },
-                // If no data comes back
-                error: function (xhr, ajaxOptions, thrownError)
-                {
-                    $.log("Segments Ajax call: Requesting data failed");
-                    $('#scrollcontainer').html('No Slides available');
-                    $('#scrollcontainer').hide();
-                }
-            });
-        }
+        $('#slider').show();
+        // sets slider container width after panels are displayed
+        sizeSliderContainer();
+	isOpening = false;
+	isOpen = true;
+    }
+
+    function displayNoSlidesAvailable()
+    {
+        $.log("Segments Ajax call: Requesting data failed");
+        Opencast.Player.addEvent(Opencast.logging.SEGMENTS_AJAX_FAILED);
+        $('#scrollcontainer').html('No Slides available');
+        $('#scrollcontainer').hide();
+	isOpening = false;
+	isOpen = false;
     }
     
     /**
      * @memberOf Opencast.segments
      * @description Hides the Segments Tab
      */
-    function hideSegments()
+    function hide()
     {
-        // Change Tab Caption
-        $('#oc_btn-slides').attr(
-        {
-            title: SEGMENTS
-        });
-        $('#oc_btn-slides').html(SEGMENTS);
-        $("#oc_btn-slides").attr('aria-pressed', 'false');
-        $('#oc_slides').hide();
+	if(isOpen)
+	{
+            // Change Tab Caption
+            $('#oc_btn-slides').attr(
+		{
+		    title: SEGMENTS
+		});
+            $('#oc_btn-slides').html(SEGMENTS);
+            $("#oc_btn-slides").attr('aria-pressed', 'false');
+            $('#oc_slides').hide();
+	    isOpen = false;
+	}
     }
     
     /**
      * @memberOf Opencast.segments
      * @description Toggles the Segments Tab
      */
-    function doToggleSlides()
+    function doToggle()
     {
-        if ($('#oc_btn-slides').attr("title") === SEGMENTS)
+        if (!isOpen)
         {
-            Opencast.Description.hideDescription();
-            Opencast.segments_text.hideSegmentsText();
-            Opencast.search.hideSearch();
-            showSegments();
+	    Opencast.Plugin_Controller.hideAll(Opencast.segments);
+            show();
         }
         else
         {
-            hideSegments();
+            hide();
         }
     }
     
@@ -528,9 +548,9 @@ Opencast.segments = (function ()
         clearCashe: clearCashe,
         initialize: initialize,
         sizeSliderContainer: sizeSliderContainer,
-        showSegments: showSegments,
-        hideSegments: hideSegments,
+        show: show,
+        hide: hide,
         setMediaPackageId: setMediaPackageId,
-        doToggleSlides: doToggleSlides
+        doToggle: doToggle
     };
 }());

@@ -47,14 +47,13 @@ Opencast.WorkflowInspect = (function() {
 
   function requestWorkflow(id) {
     $.ajax({
-      url : this.WORKFLOW_INSTANCE_URL + id + ".json?jsonp=?",
-      dataType: 'jsonp',
-      jsonp: 'jsonp',
+      url : this.WORKFLOW_INSTANCE_URL + id + ".json",
+      dataType: 'json',
       success: Opencast.WorkflowInspect.rx
     });
   }
 
-  /** JSONP recieve function
+  /** Ajax recieve function
    *
    */
   this.rx = function(data) {
@@ -77,6 +76,19 @@ Opencast.WorkflowInspect = (function() {
     // Operations
     var ops = Opencast.RenderUtils.ensureArray(workflow.operations.operation);
     $.each(ops, function(index, op) {
+      // compute the duration (in ms) while we still have the timestamps
+      if(op.started && op.completed) {
+        op.duration = op.completed - op.started;
+      } else {
+        op.duration = 0;  
+      }
+      
+      // replace time in milli to date strings
+      $.each(op, function(ind, opItem) { 
+    	  if ( typeof(opItem) == "number" && opItem > 1000000000000) {
+    		  op[ind] = ocUtils.makeLocaleDateString(opItem);  } 
+        });
+    	
       if (op.configurations !== undefined && op.configurations.configuration !== undefined) {
         op.configurations = buildConfigObject(op.configurations.configuration);
       } else {
@@ -105,6 +117,9 @@ Opencast.WorkflowInspect = (function() {
       }
       if (mp.start) {
         out.info.start = mp.start;
+      }
+      if (mp.duration) {
+        mp.duration = ocUtils.formatSeconds(mp.duration/ 1000)
       }
 
       // Attachments
@@ -281,37 +296,68 @@ Opencast.WorkflowInspect = (function() {
   /** render workflow performance chart
    */
   function renderWorkflowPerformance(data) {
-    // Make a graph object with canvas id and width
-    var g = new Bluff.SideStackedBar('graph', '600x300');
-
-    // Set theme and options
-    //g.theme_greyscale();
-    g.title = 'Processing times for ' + data.workflow.mediapackage.title;
-    g.x_axis_label = 'Seconds';
-
-    // Add data and labels
+	var chart;
     var queue = [];
     var run = [];
     var labels = {};
     jQuery.each(data.workflow.operations, function(index, operationInstance) {
       var op = data.workflow.operations[index];
       if(op.state == 'SUCCEEDED') {
-        var runtime = (op.completed - op.started) / 1000;
+        var runtime = op.duration / 1000;
         if(runtime < 1) {
           return;
         }
-        run.push(runtime);
-        queue.push(op['time-in-queue'] / 1000);
+        run.push({y:runtime,description:op.description});
+        queue.push({y:op['time-in-queue'] / 1000,description:op.description});
         labels['' + run.length-1] = op.id;
       }
     });
-
-    g.data('Queue', queue);
-    g.data('Run', run);
-    g.labels = labels;
-
-    // Render the graph
-    g.draw();
+    
+    chart = new Highcharts.Chart({
+      chart: {
+        renderTo: 'graph',
+    	type: 'bar'
+      },
+  	  title: {
+        text: 'Processing times (>1s) for ' + data.workflow.mediapackage.title
+      },
+      xAxis: {
+        categories: labels
+      },
+      yAxis: {
+        min: 0,
+        title: {
+          text: 'Seconds'
+        }
+      },
+      legend: {
+        backgroundColor: '#FFFFFF',
+        reversed: true
+      },
+      tooltip: {
+        formatter: function() {
+          return '<span style="color:'+this.series.color+'">' + this.series.name + '</span><br/>'
+          + this.x + ' ('+this.point.description+'): <b>' + this.y +'</b>';
+        }  
+      },
+      plotOptions: {
+        series: {
+          stacking: 'normal'
+        }
+      },
+      credits: {
+        enabled: false
+      },
+      series: [{
+        name: 'run',
+        data: run,
+        color: '#89A54E'
+      },{
+        name: 'queue',
+        data: queue,
+        color: '#AA4643'
+      }]
+    });
   }
 
   /** Build an object that can be rendered easily from the Configuration objects
@@ -327,7 +373,17 @@ Opencast.WorkflowInspect = (function() {
       } else if (out[member.key] !== undefined) {
         out[member.key] = [out[member.key], member.value];
       } else {
-        out[member.key] = member['$'];
+    	val = member['$'];
+        
+        if(val == undefined) {
+          val = "";
+        }
+    	
+    	if ( (val.length == 13 && parseInt(val) != NaN) || (typeof(val) == "number" && val > 1000000000000)) {
+    		  out[member.key] = ocUtils.makeLocaleDateString(val);  } 
+    	else {
+    		out[member.key] = val;
+    	}
       }
     });
     return out;

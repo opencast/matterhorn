@@ -52,11 +52,15 @@ import javax.ws.rs.core.Response.ResponseBuilder;
  * The REST endpoint
  */
 @Path("/")
-@RestService(name = "search", title = "Search Service", notes = {
-        "All paths are relative to the REST endpoint base (something like http://your.server/files)",
-        "If you notice that this service is not working as expected, there might be a bug! "
-                + "You should file an error report with your server logs from the time when the error occurred: "
-                + "<a href=\"http://opencast.jira.com\">Opencast Issue Tracker</a>" }, abstractText = "This service indexes and queries available (distributed) episodes.")
+@RestService(name = "search", title = "Search Service",
+  abstractText = "This service indexes and queries available (distributed) episodes.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class SearchRestService {
 
   private static final Logger logger = LoggerFactory.getLogger(SearchRestService.class);
@@ -79,7 +83,7 @@ public class SearchRestService {
   }
 
   public String getSampleMediaPackage() {
-    return "<ns2:mediapackage xmlns:ns2=\"http://mediapackage.opencastproject.org\" start=\"2007-12-05T13:40:00\" duration=\"1004400000\"><title>t1</title>\n"
+    return "<mediapackage xmlns=\"http://mediapackage.opencastproject.org\" start=\"2007-12-05T13:40:00\" duration=\"1004400000\"><title>t1</title>\n"
             + "  <metadata>\n"
             + "    <catalog id=\"catalog-1\" type=\"dublincore/episode\">\n"
             + "      <mimetype>text/xml</mimetype>\n"
@@ -91,7 +95,7 @@ public class SearchRestService {
             + "      <url>https://opencast.jira.com/svn/MH/trunk/modules/matterhorn-kernel/src/test/resources/mpeg7.xml</url>\n"
             + "      <checksum type=\"md5\">2b8a52878c536e64e20e309b5d7c1070</checksum>\n"
             + "    </catalog>\n"
-            + "  </metadata>\n" + "</ns2:mediapackage>";
+            + "  </metadata>\n" + "</mediapackage>";
   }
 
   @POST
@@ -171,20 +175,26 @@ public class SearchRestService {
       return Response.ok(searchService.getByQuery(query)).type(MediaType.APPLICATION_XML).build();
   }
 
+  // CHECKSTYLE:OFF
   @GET
   @Path("episode.{format:xml|json}")
   @Produces({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON })
   @RestQuery(name = "episodes", description = "Search for episodes matching the query parameters.", pathParameters = { @RestParameter(description = "The output format (json or xml) of the response body.", isRequired = true, name = "format", type = RestParameter.Type.STRING) }, restParameters = {
           @RestParameter(description = "The ID of the single episode to be returned, if it exists.", isRequired = false, name = "id", type = RestParameter.Type.STRING),
           @RestParameter(description = "Any episode that matches this free-text query.", isRequired = false, name = "q", type = RestParameter.Type.STRING),
-          @RestParameter(defaultValue = "false", description = "Whether to include this series episodes. This can be used in combination with \"id\" or \"q\".", isRequired = false, name = "episodes", type = RestParameter.Type.STRING),
+          @RestParameter(description = "Any episode that belongs to specified series id.", isRequired = false, name = "sid", type = RestParameter.Type.STRING),
+          // @RestParameter(defaultValue = "false", description =
+          // "Whether to include this series episodes. This can be used in combination with \"id\" or \"q\".",
+          // isRequired = false, name = "episodes", type = RestParameter.Type.STRING),
           @RestParameter(defaultValue = "0", description = "The maximum number of items to return per page.", isRequired = false, name = "limit", type = RestParameter.Type.STRING),
-          @RestParameter(defaultValue = "0", description = "The page number.", isRequired = false, name = "offset", type = RestParameter.Type.STRING),
-          @RestParameter(defaultValue = "false", description = "Whether this is an administrative query", isRequired = false, name = "admin", type = RestParameter.Type.STRING) }, reponses = { @RestResponse(description = "The request was processed succesfully.", responseCode = HttpServletResponse.SC_OK) }, returnDescription = "The search results, expressed as xml or json.")
+          @RestParameter(defaultValue = "0", description = "The page number.", isRequired = false, name = "offset", type = RestParameter.Type.STRING)
+  // @RestParameter(defaultValue = "false", description = "Whether this is an administrative query", isRequired = false,
+  // name = "admin", type = RestParameter.Type.STRING)
+  }, reponses = { @RestResponse(description = "The request was processed succesfully.", responseCode = HttpServletResponse.SC_OK) }, returnDescription = "The search results, expressed as xml or json.")
   public Response getEpisode(@QueryParam("id") String id, @QueryParam("q") String text,
-          @QueryParam("tag") String[] tags, @QueryParam("flavor") String[] flavors, @QueryParam("limit") int limit,
-          @QueryParam("offset") int offset, @PathParam("format") String format) {
-
+          @QueryParam("sid") String seriesId, @QueryParam("tag") String[] tags, @QueryParam("flavor") String[] flavors,
+          @QueryParam("limit") int limit, @QueryParam("offset") int offset, @PathParam("format") String format) {
+    // CHECKSTYLE:ON
     // Prepare the flavors
     List<MediaPackageElementFlavor> flavorSet = new ArrayList<MediaPackageElementFlavor>();
     if (flavors != null) {
@@ -198,12 +208,14 @@ public class SearchRestService {
     }
 
     SearchQuery search = new SearchQuery();
-    search.withId(id).withElementFlavors(flavorSet.toArray(new MediaPackageElementFlavor[flavorSet.size()]))
+    search.withId(id).withSeriesId(seriesId)
+            .withElementFlavors(flavorSet.toArray(new MediaPackageElementFlavor[flavorSet.size()]))
             .withElementTags(tags).withLimit(limit).withOffset(offset);
-    if (!StringUtils.isBlank(text))
+    if (!StringUtils.isBlank(text)) {
       search.withText(text);
-    else
+    } else {
       search.withPublicationDateSort(true);
+    }
 
     // Return the results using the requested format
     if ("json".equals(format))

@@ -2,7 +2,7 @@
   <div id="stage" class="ui-widget">
     <div id="progressIndicator" class="layout-float-left ui-helper-hidden">
       <label for="editProgress" style="margin-left: 50px;">Editing in progress</label><br />
-      <img src="img/loading.gif" alt="editing in progress" title="Editing in progress" />
+      <img src="/admin/img/misc/loading.gif" alt="editing in progress" title="Editing in progress" />
     </div>
   </div>
   <div id="uploadContainer">
@@ -28,6 +28,24 @@
     <div class="clear"></div>
     <div id="search-result"><span id="filterRecordingCount"></span></div>
 
+	<div id="dateFilterControls">
+	  <select id="dateFilter">
+	  	<option value="all">All Dates</option>
+	  	<option value="today">Today</option>
+	  	<option value="tomorrow">Tomorrow</option>
+	  	<option value="yesterday">Yesterday</option>
+	  	<option value="this_week">This Week</option>
+	  	<option value="past_week">Past Week</option>
+	  	<option value="next_week">Next Week</option>
+	  	<option value="range">Custom Range</option>
+	  </select>
+	  <span>
+	    <label for="fromdate" style="margin-left: 20px;">From: </label><input type="text" size="10" name="fromdate" id="fromdate" style="margin-right: 5px;">
+        <label for="todate" style="margin-left: 20px;">To: </label><input type="text" size="10" name="todate" id="todate" style="margin-right: 5px;">
+        <button id="setRange" type="button" style="margin:0 10px;">Set Range</button>
+      </span>
+	</div>
+	
     <div class="layout-page-header recordings-bulk-action ui-corner-all layout-centered" id="bulkActionPanel">
       <div class="ui-widget layout-centered">
         <select id="bulkActionSelect">
@@ -74,19 +92,19 @@
             <form action="">
               <ul class="oc-ui-form-list">
                 <li>
-                  <label for="contributor" id="contributorLabel"><span id="i18n_dept_label">Contributor</span>:</label>
+                  <label for="contributor" id="contributorLabel" class="scheduler-label"><span id="i18n_dept_label">Contributor</span>:</label>
                   <input type="text" class="oc-ui-form-field" name="contributor" id="contributor" maxlength="255" />
                 </li>
                 <li>
-                  <label for="subject" id="subjectLabel"><span id="i18n_sub_label">Subject</span>:</label>
+                  <label for="subject" id="subjectLabel" class="scheduler-label"><span id="i18n_sub_label">Subject</span>:</label>
                   <input type="text" class="oc-ui-form-field" name="subject" id="subject" maxlength="255" />
                 </li>
                 <li>
-                  <label for="language" id="languageLabel"><span id="i18n_lang_label">Language</span>:</label>
+                  <label for="language" id="languageLabel" class="scheduler-label"><span id="i18n_lang_label">Language</span>:</label>
                   <input type="text" class="oc-ui-form-field" name="language" id="language" maxlength="255" />
                 </li>
                 <li>
-                  <label for="description" id="descriptionLabel"><span id="i18n_desc_label">Description</span>:</label>
+                  <label for="description" id="descriptionLabel" class="scheduler-label"><span id="i18n_desc_label">Description</span>:</label>
                   <textarea name="description" id="description" class="oc-ui-form-field" rows="5" cols="10"></textarea>
                 </li>
               </ul>

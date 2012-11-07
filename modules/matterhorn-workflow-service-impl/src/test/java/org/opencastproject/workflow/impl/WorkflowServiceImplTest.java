@@ -26,11 +26,15 @@ import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.metadata.api.MediaPackageMetadataService;
 import org.opencastproject.security.api.AccessControlList;
 import org.opencastproject.security.api.AuthorizationService;
+import org.opencastproject.security.api.DefaultOrganization;
+import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
+import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.UserDirectoryService;
 import org.opencastproject.serviceregistry.api.ServiceRegistryInMemoryImpl;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
+import org.opencastproject.workflow.api.RetryStrategy;
 import org.opencastproject.workflow.api.WorkflowDefinition;
 import org.opencastproject.workflow.api.WorkflowDefinitionImpl;
 import org.opencastproject.workflow.api.WorkflowInstance;
@@ -38,6 +42,7 @@ import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
 import org.opencastproject.workflow.api.WorkflowOperationDefinitionImpl;
 import org.opencastproject.workflow.api.WorkflowOperationException;
 import org.opencastproject.workflow.api.WorkflowOperationHandler;
+import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationInstance.OperationState;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workflow.api.WorkflowOperationResult.Action;
@@ -45,6 +50,7 @@ import org.opencastproject.workflow.api.WorkflowParser;
 import org.opencastproject.workflow.api.WorkflowQuery;
 import org.opencastproject.workflow.api.WorkflowSet;
 import org.opencastproject.workflow.api.WorkflowStateListener;
+import org.opencastproject.workflow.handler.ErrorResolutionWorkflowOperationHandler;
 import org.opencastproject.workflow.impl.WorkflowServiceImpl.HandlerRegistration;
 import org.opencastproject.workspace.api.Workspace;
 
@@ -55,6 +61,7 @@ import org.apache.commons.io.IOUtils;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -62,6 +69,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,6 +78,8 @@ import java.util.TreeMap;
 
 public class WorkflowServiceImplTest {
 
+  private static final String REMOTE_SERVICE = "workflowService";
+  private static final String REMOTE_HOST = "http://entwinemedia:8080";
   private WorkflowServiceImpl service = null;
   private WorkflowDefinition workingDefinition = null;
   private WorkflowDefinition failingDefinitionWithoutErrorHandler = null;
@@ -83,7 +93,7 @@ public class WorkflowServiceImplTest {
   protected Set<HandlerRegistration> handlerRegistrations = null;
   private Workspace workspace = null;
   private ServiceRegistryInMemoryImpl serviceRegistry = null;
-  private SecurityServiceStub securityService = null;
+  private SecurityService securityService = null;
 
   private File sRoot = null;
 
@@ -110,7 +120,10 @@ public class WorkflowServiceImplTest {
     handlerRegistrations.add(new HandlerRegistration("op1", succeedingOperationHandler));
     handlerRegistrations.add(new HandlerRegistration("op2", succeedingOperationHandler));
     handlerRegistrations.add(new HandlerRegistration("op3", failingOperationHandler));
+    handlerRegistrations.add(new HandlerRegistration(WorkflowServiceImpl.ERROR_RESOLUTION_HANDLER_ID,
+            new ErrorResolutionWorkflowOperationHandler()));
     handlerRegistrations.add(new HandlerRegistration("opPause", new ResumableTestWorkflowOperationHandler()));
+    handlerRegistrations.add(new HandlerRegistration("failOnHost", new FailOnHostWorkflowOperationHandler()));
     handlerRegistrations.add(new HandlerRegistration("failOneTime", new FailOnceWorkflowOperationHandler()));
 
     // instantiate a service implementation and its DAO, overriding the methods that depend on the osgi runtime
@@ -120,11 +133,18 @@ public class WorkflowServiceImplTest {
       }
     };
 
-    securityService = new SecurityServiceStub();
+    // security service
+    DefaultOrganization organization = new DefaultOrganization();
+    securityService = EasyMock.createNiceMock(SecurityService.class);
+    EasyMock.expect(securityService.getUser()).andReturn(SecurityServiceStub.DEFAULT_ORG_ADMIN).anyTimes();
+    EasyMock.expect(securityService.getOrganization()).andReturn(organization).anyTimes();
+    EasyMock.replay(securityService);
+
     service.setSecurityService(securityService);
 
     UserDirectoryService userDirectoryService = EasyMock.createMock(UserDirectoryService.class);
-    EasyMock.expect(userDirectoryService.loadUser((String) EasyMock.anyObject())).andReturn(DEFAULT_ORG_ADMIN).anyTimes();
+    EasyMock.expect(userDirectoryService.loadUser((String) EasyMock.anyObject())).andReturn(DEFAULT_ORG_ADMIN)
+            .anyTimes();
     EasyMock.replay(userDirectoryService);
     service.setUserDirectoryService(userDirectoryService);
 
@@ -133,9 +153,11 @@ public class WorkflowServiceImplTest {
     EasyMock.replay(authzService);
     service.setAuthorizationService(authzService);
 
+    List<Organization> organizationList = Arrays.asList(new Organization[] { organization });
     OrganizationDirectoryService organizationDirectoryService = EasyMock.createMock(OrganizationDirectoryService.class);
     EasyMock.expect(organizationDirectoryService.getOrganization((String) EasyMock.anyObject()))
             .andReturn(securityService.getOrganization()).anyTimes();
+    EasyMock.expect(organizationDirectoryService.getOrganizations()).andReturn(organizationList).anyTimes();
     EasyMock.replay(organizationDirectoryService);
     service.setOrganizationDirectoryService(organizationDirectoryService);
 
@@ -150,11 +172,12 @@ public class WorkflowServiceImplTest {
     serviceRegistry = new ServiceRegistryInMemoryImpl(service, securityService, userDirectoryService,
             organizationDirectoryService);
 
+    serviceRegistry.registerService(REMOTE_SERVICE, REMOTE_HOST, "/path", true);
+
     dao = new WorkflowServiceSolrIndex();
     dao.setServiceRegistry(serviceRegistry);
+    dao.setSecurityService(securityService);
     dao.setAuthorizationService(authzService);
-    dao.setSecurityService(new SecurityServiceStub()); // Use a different security service, so the user won't be
-                                                       // replaced
     dao.solrRoot = sRoot + File.separator + "solr." + System.currentTimeMillis();
     dao.activate();
     service.setDao(dao);
@@ -204,7 +227,9 @@ public class WorkflowServiceImplTest {
   @After
   public void tearDown() throws Exception {
     serviceRegistry.deactivate();
+    serviceRegistry.unRegisterService(REMOTE_SERVICE, REMOTE_HOST);
     dao.deactivate();
+    service.deactivate();
   }
 
   @SuppressWarnings("unused")
@@ -334,6 +359,9 @@ public class WorkflowServiceImplTest {
     WorkflowSet workflowsInDb = service.getWorkflowInstances(new WorkflowQuery().withText("Climate").withCount(100)
             .withStartPage(0));
     Assert.assertEquals(1, workflowsInDb.getItems().length);
+    Assert.assertEquals(1, service.getWorkflowInstances(new WorkflowQuery().withText("limate")).size());
+    Assert.assertEquals(1, service.getWorkflowInstances(new WorkflowQuery().withText("mate")).size());
+    Assert.assertEquals(1, service.getWorkflowInstances(new WorkflowQuery().withText("lima")).size());
   }
 
   @Test
@@ -524,7 +552,7 @@ public class WorkflowServiceImplTest {
   }
 
   @Test
-  public void testRetry() throws Exception {
+  public void testRetryStrategyNone() throws Exception {
     WorkflowDefinitionImpl def = new WorkflowDefinitionImpl();
     def.setId("workflow-definition-1");
     def.setTitle("workflow-definition-1");
@@ -533,13 +561,90 @@ public class WorkflowServiceImplTest {
     service.registerWorkflowDefinition(def);
 
     WorkflowOperationDefinitionImpl opDef = new WorkflowOperationDefinitionImpl("failOneTime", "fails once", null, true);
-    opDef.setMaxAttempts(2);
+    def.add(opDef);
+
+    MediaPackage mp = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
+
+    WorkflowInstance workflow = startAndWait(def, mp, WorkflowState.FAILED);
+
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getState() == OperationState.FAILED);
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getMaxAttempts() == 1);
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getFailedAttempts() == 1);
+  }
+
+  @Test
+  public void testRetryStrategyRetry() throws Exception {
+    WorkflowDefinitionImpl def = new WorkflowDefinitionImpl();
+    def.setId("workflow-definition-1");
+    def.setTitle("workflow-definition-1");
+    def.setDescription("workflow-definition-1");
+    def.setPublished(true);
+    service.registerWorkflowDefinition(def);
+
+    WorkflowOperationDefinitionImpl opDef = new WorkflowOperationDefinitionImpl("failOneTime", "fails once", null, true);
+    opDef.setRetryStrategy(RetryStrategy.RETRY);
     def.add(opDef);
 
     MediaPackage mp = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
 
     WorkflowInstance workflow = startAndWait(def, mp, WorkflowState.SUCCEEDED);
 
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getState() == OperationState.SUCCEEDED);
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getMaxAttempts() == 2);
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getFailedAttempts() == 1);
+  }
+
+  @Test
+  public void testRetryStrategyHold() throws Exception {
+    WorkflowDefinitionImpl def = new WorkflowDefinitionImpl();
+    def.setId("workflow-definition-1");
+    def.setTitle("workflow-definition-1");
+    def.setDescription("workflow-definition-1");
+    def.setPublished(true);
+    service.registerWorkflowDefinition(def);
+
+    WorkflowOperationDefinitionImpl opDef = new WorkflowOperationDefinitionImpl("failOneTime", "fails once", null, true);
+    opDef.setRetryStrategy(RetryStrategy.HOLD);
+    def.add(opDef);
+
+    MediaPackage mp = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
+
+    WorkflowInstance workflow = startAndWait(def, mp, WorkflowState.PAUSED);
+
+    WorkflowOperationInstance errorResolutionOperation = service.getWorkflowById(workflow.getId()).getOperations()
+            .get(0);
+    WorkflowOperationInstance failOneTimeOperation = service.getWorkflowById(workflow.getId()).getOperations().get(1);
+
+    Assert.assertTrue(errorResolutionOperation.getTemplate().equals(WorkflowServiceImpl.ERROR_RESOLUTION_HANDLER_ID));
+    Assert.assertTrue(errorResolutionOperation.getState() == OperationState.PAUSED);
+    Assert.assertTrue(errorResolutionOperation.getFailedAttempts() == 0);
+
+    Assert.assertTrue(failOneTimeOperation.getState() == OperationState.RETRY);
+    Assert.assertTrue(failOneTimeOperation.getMaxAttempts() == -1);
+    Assert.assertTrue(failOneTimeOperation.getFailedAttempts() == 1);
+  }
+
+  @Test
+  @Ignore
+  public void testRetryStrategyFailover() throws Exception {
+    WorkflowDefinitionImpl def = new WorkflowDefinitionImpl();
+    def.setId("workflow-definition-1");
+    def.setTitle("workflow-definition-1");
+    def.setDescription("workflow-definition-1");
+    def.setPublished(true);
+    service.registerWorkflowDefinition(def);
+
+    WorkflowOperationDefinitionImpl opDef = new WorkflowOperationDefinitionImpl("failOnHost", "fails on host", null,
+            true);
+    opDef.setRetryStrategy(RetryStrategy.RETRY);
+    def.add(opDef);
+
+    MediaPackage mp = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
+
+    WorkflowInstance workflow = startAndWait(def, mp, WorkflowState.SUCCEEDED);
+
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getState() == OperationState.SUCCEEDED);
+    Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getMaxAttempts() == 2);
     Assert.assertTrue(service.getWorkflowById(workflow.getId()).getOperations().get(0).getFailedAttempts() == 1);
   }
 
@@ -638,5 +743,31 @@ public class WorkflowServiceImplTest {
       }
       return createResult(CONTINUE);
     }
+  }
+
+  class FailOnHostWorkflowOperationHandler extends AbstractWorkflowOperationHandler {
+
+    private String oldExecutionHost = null;
+
+    /**
+     * {@inheritDoc}
+     * 
+     * @see org.opencastproject.workflow.api.AbstractWorkflowOperationHandler#start(org.opencastproject.workflow.api.WorkflowInstance,
+     *      org.opencastproject.job.api.JobContext)
+     */
+    @Override
+    public WorkflowOperationResult start(WorkflowInstance workflowInstance, JobContext jobContext)
+            throws WorkflowOperationException {
+      if (oldExecutionHost == null) {
+        oldExecutionHost = workflowInstance.getCurrentOperation().getExecutionHost();
+        throw new WorkflowOperationException("This operation handler fails on the first run on host: "
+                + oldExecutionHost);
+      }
+      if (workflowInstance.getCurrentOperation().getExecutionHost().equals(oldExecutionHost))
+        throw new WorkflowOperationException("This operation handler fails on the second run at the same host: "
+                + oldExecutionHost);
+      return createResult(CONTINUE);
+    }
+
   }
 }

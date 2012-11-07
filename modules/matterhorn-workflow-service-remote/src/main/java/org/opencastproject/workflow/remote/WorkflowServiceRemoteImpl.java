@@ -21,6 +21,7 @@ import static org.apache.http.HttpStatus.SC_OK;
 
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageParser;
+import org.opencastproject.security.api.UnauthorizedException;
 import org.opencastproject.serviceregistry.api.RemoteBase;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.SolrUtils;
@@ -30,6 +31,7 @@ import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
 import org.opencastproject.workflow.api.WorkflowListener;
 import org.opencastproject.workflow.api.WorkflowParser;
+import org.opencastproject.workflow.api.WorkflowParsingException;
 import org.opencastproject.workflow.api.WorkflowQuery;
 import org.opencastproject.workflow.api.WorkflowQuery.QueryTerm;
 import org.opencastproject.workflow.api.WorkflowService;
@@ -214,6 +216,17 @@ public class WorkflowServiceRemoteImpl extends RemoteBase implements WorkflowSer
       }
     }
 
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workflow.api.WorkflowService#getWorkflowInstancesForAdministrativeRead(org.opencastproject.workflow.api.WorkflowQuery)
+   */
+  @Override
+  public WorkflowSet getWorkflowInstancesForAdministrativeRead(WorkflowQuery q) throws WorkflowDatabaseException,
+          UnauthorizedException {
+    return getWorkflowInstances(q);
   }
 
   /**
@@ -516,6 +529,18 @@ public class WorkflowServiceRemoteImpl extends RemoteBase implements WorkflowSer
       throw new WorkflowDatabaseException("Unexpected HTTP response code");
     } // otherwise, our work is done
     closeConnection(response);
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.workflow.api.WorkflowService#remove(long)
+   */
+  @Override
+  public void remove(long workflowInstanceId) throws WorkflowDatabaseException, WorkflowParsingException,
+          NotFoundException, UnauthorizedException {
+    HttpDelete delete = new HttpDelete("/remove?id=" + Long.toString(workflowInstanceId));
+    getResponse(delete);
   }
 
   /**

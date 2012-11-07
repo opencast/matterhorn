@@ -35,6 +35,7 @@ import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TEMPOR
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TITLE;
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TYPE;
 
+import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.metadata.dublincore.DCMIPeriod;
@@ -163,13 +164,16 @@ public class SchedulerServiceImplTest {
     SeriesService seriesService = EasyMock.createMock(SeriesService.class);
     EasyMock.expect(seriesService.getSeries(EasyMock.eq(seriesIdentifier))).andReturn(seriesCatalog).anyTimes();
 
-    EasyMock.replay(workflowService, seriesService);
+    IngestService ingestService = EasyMock.createNiceMock(IngestService.class);
+
+    EasyMock.replay(workflowService, seriesService, ingestService);
 
     schedulerService = new SchedulerServiceImpl();
     schedulerService.setWorkflowService(workflowService);
     schedulerService.setSeriesService(seriesService);
     schedulerService.setIndex(index);
     schedulerService.setPersistence(schedulerDatabase);
+    schedulerService.setIngestService(ingestService);
 
     schedulerService.activate(null);
   }
@@ -368,8 +372,27 @@ public class SchedulerServiceImplTest {
     Assert.assertEquals(1, events.size());
 
     events = schedulerService.findConflictingEvents("Device A", "FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH,FR,SA", start,
-            new Date(start.getTime() + (48 * 60 * 60 * 1000)), new Long(36000)).getCatalogList();
+            new Date(start.getTime() + (48 * 60 * 60 * 1000)), new Long(36000), "America/Chicago").getCatalogList();
     Assert.assertEquals(2, events.size());
+  }
+  
+  @Test
+  public void testCalendarCutoff() throws Exception {
+    long currentTime = System.currentTimeMillis();
+    DublinCoreCatalog eventA = generateEvent("Device A", new Date(currentTime + 10 * 1000), new Date(
+            currentTime + (60 * 60 * 1000)));
+    DublinCoreCatalog eventB = generateEvent("Device A", new Date(currentTime + (20 * 24 * 60 * 60 * 1000)), new Date(
+            currentTime + (20 * 25 * 60 * 60 * 1000)));
+    
+    schedulerService.addEvent(eventA);
+    schedulerService.addEvent(eventB);
+    
+    Date start = new Date(currentTime);
+    Date end = new Date(currentTime + 60 * 60 * 1000);
+
+    SchedulerQuery filter = new SchedulerQuery().setSpatial("Device A").setEndsFrom(start).setStartsTo(end);
+    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(1, events.size());
   }
 
   @Test
@@ -388,7 +411,7 @@ public class SchedulerServiceImplTest {
     schedulerService.addEvent(event);
 
     // Request the calendar without specifying an etag. We should get a 200 with the icalendar in the response body
-    Response response = restService.getCalendar(device, null, request);
+    Response response = restService.getCalendar(device, null, null, request);
     Assert.assertNotNull(response.getEntity());
     Assert.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
     final String etag = (String) response.getMetadata().getFirst(HttpHeaders.ETAG);
@@ -403,7 +426,7 @@ public class SchedulerServiceImplTest {
     EasyMock.replay(request);
 
     // Request using the etag from the first response. We should get a 304 (not modified)
-    response = restService.getCalendar(device, null, request);
+    response = restService.getCalendar(device, null, null, request);
     Assert.assertEquals(HttpServletResponse.SC_NOT_MODIFIED, response.getStatus());
     Assert.assertNull(response.getEntity());
 
@@ -411,7 +434,7 @@ public class SchedulerServiceImplTest {
     schedulerService.updateEvent(event);
 
     // Try using the same old etag. We should get a 200, since the event has changed
-    response = restService.getCalendar(device, null, request);
+    response = restService.getCalendar(device, null, null, request);
     Assert.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
     Assert.assertNotNull(response.getEntity());
     String secondEtag = (String) response.getMetadata().getFirst(HttpHeaders.ETAG);

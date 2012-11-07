@@ -76,10 +76,15 @@ import javax.ws.rs.core.Response.Status;
  * REST Endpoint for Scheduler Service
  */
 @Path("/")
-@RestService(name = "schedulerservice", title = "Scheduler Service", abstractText = "This service creates, edits and retrieves and helps managing scheduled capture events.", notes = {
+@RestService(name = "schedulerservice", title = "Scheduler Service",
+  abstractText = "This service creates, edits and retrieves and helps managing scheduled capture events.",
+  notes = {
         "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
-        "If the service is down or not working it will return a status 503, this means the the underlying service is not working and is either restarting or has failed",
-        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In other words, there is a bug! You should file an error report with your server logs from the time when the error occurred: <a href=\"https://issues.opencastproject.org\">Opencast Issue Tracker</a>" })
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class SchedulerRestService {
   private static final Logger logger = LoggerFactory.getLogger(SchedulerRestService.class);
   private SchedulerService service;
@@ -288,7 +293,7 @@ public class SchedulerRestService {
         return Response
                 .status(Status.CREATED)
                 .header("Location",
-                        PathSupport.concat(new String[] { this.serverUrl, this.serviceUrl, "recordings", id + ".xml" }))
+                        PathSupport.concat(new String[] { this.serverUrl, this.serviceUrl, id + ".xml" }))
                 .build();
       }
     } catch (Exception e) {
@@ -365,7 +370,7 @@ public class SchedulerRestService {
   public Response deleteEvent(@PathParam("id") long eventId) {
     try {
       service.removeEvent(eventId);
-      return Response.status(Response.Status.NO_CONTENT).build();
+      return Response.status(Response.Status.OK).build();
     } catch (NotFoundException e) {
       logger.warn("Event with id '{}' does not exist.", eventId);
       return Response.status(Status.NOT_FOUND).build();
@@ -764,51 +769,16 @@ public class SchedulerRestService {
           @RestParameter(name = "start", description = "Start time of conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
           @RestParameter(name = "end", description = "End time of conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
           @RestParameter(name = "duration", description = "If recurrence rule is specified duration of each conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "rrule", description = "Rule for recurrent conflicting, specified as: \"FREQ=WEEKLY;BYDAY=day(s);BYHOUR=hour;BYMINUTE=minute\". FREQ is required. BYDAY may include one or more (separated by commas) of the following: SU,MO,TU,WE,TH,FR,SA.", isRequired = false, type = Type.STRING) }, reponses = {
+          @RestParameter(name = "rrule", description = "Rule for recurrent conflicting, specified as: \"FREQ=WEEKLY;BYDAY=day(s);BYHOUR=hour;BYMINUTE=minute\". FREQ is required. BYDAY may include one or more (separated by commas) of the following: SU,MO,TU,WE,TH,FR,SA.", isRequired = false, type = Type.STRING),
+          @RestParameter(name = "rrule", description = "The timezone of the capture device", isRequired = false, type = Type.STRING) },
+          reponses = {
           @RestResponse(responseCode = HttpServletResponse.SC_NO_CONTENT, description = "No conflicting events found"),
           @RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Found conflicting events, returned in body of response"),
           @RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Missing or invalid parameters") })
   public Response getConflictingEventsXml(@QueryParam("device") String device, @QueryParam("start") String startDate,
-          @QueryParam("end") String endDate, @QueryParam("duration") String duration, @QueryParam("rrule") String rrule) {
-    if (StringUtils.isEmpty(device) || startDate == null || endDate == null) {
-      logger.warn("Either device, start date, end date or duration were not specified");
-      return Response.status(Status.BAD_REQUEST).build();
-    }
-    if (StringUtils.isNotEmpty(rrule) && duration == null) {
-      logger.warn("If checking recurrence, must include duration.");
-      return Response.status(Status.BAD_REQUEST).build();
-    }
-    Long startDateAsLong;
-    Long endDateAsLong;
-    Long durationAsLong;
-    try {
-      startDateAsLong = Long.parseLong(startDate);
-      endDateAsLong = Long.parseLong(endDate);
-      durationAsLong = Long.parseLong(duration);
-    } catch (NumberFormatException e) {
-      logger.warn("Invalid number parameter: {}", e.getMessage());
-      return Response.status(Status.BAD_REQUEST).build();
-    }
-
-    try {
-      DublinCoreCatalogList events = null;
-      if (StringUtils.isNotEmpty(rrule)) {
-        events = service.findConflictingEvents(device, rrule, new Date(startDateAsLong), new Date(endDateAsLong),
-                durationAsLong);
-      } else {
-        events = service.findConflictingEvents(device, new Date(startDateAsLong), new Date(endDateAsLong));
-      }
-      if (!events.getCatalogList().isEmpty()) {
-        return Response.ok(events.getResultsAsXML()).build();
-      } else {
-        return Response.noContent().type("").build();
-      }
-    } catch (Exception e) {
-      logger.error(
-              "Unable to find conflicting events for " + device + ", " + startDate.toString() + ", "
-                      + endDate.toString() + ", " + String.valueOf(duration) + ":", e.getMessage());
-      throw new WebApplicationException(Response.Status.INTERNAL_SERVER_ERROR);
-    }
+          @QueryParam("end") String endDate, @QueryParam("duration") String duration, @QueryParam("rrule") String rrule,
+          @QueryParam("timezone") String timezone) {
+    return getConflictingEvents(device, startDate, endDate, duration, rrule, timezone, false);
   }
 
   /**
@@ -825,7 +795,9 @@ public class SchedulerRestService {
    *          start and end date)
    * @param rrule
    *          recurrence rule for conflict
-   * @return An XML with the list of conflicting events
+   * @param timezone
+   *          The timezone of the capture device
+   * @return A JSON object with the list of conflicting events
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
@@ -835,12 +807,19 @@ public class SchedulerRestService {
           @RestParameter(name = "start", description = "Start time of conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
           @RestParameter(name = "end", description = "End time of conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
           @RestParameter(name = "duration", description = "If recurrence rule is specified duration of each conflicting period, in milliseconds", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "rrule", description = "Rule for recurrent conflicting, specified as: \"FREQ=WEEKLY;BYDAY=day(s);BYHOUR=hour;BYMINUTE=minute\". FREQ is required. BYDAY may include one or more (separated by commas) of the following: SU,MO,TU,WE,TH,FR,SA.", isRequired = false, type = Type.STRING) }, reponses = {
+          @RestParameter(name = "rrule", description = "Rule for recurrent conflicting, specified as: \"FREQ=WEEKLY;BYDAY=day(s);BYHOUR=hour;BYMINUTE=minute\". FREQ is required. BYDAY may include one or more (separated by commas) of the following: SU,MO,TU,WE,TH,FR,SA.", isRequired = false, type = Type.STRING),
+          @RestParameter(name = "rrule", description = "The timezone of the capture device", isRequired = false, type = Type.STRING) },
+          reponses = {
           @RestResponse(responseCode = HttpServletResponse.SC_NO_CONTENT, description = "No conflicting events found"),
           @RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Found conflicting events, returned in body of response"),
           @RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Missing or invalid parameters") })
   public Response getConflictingEventsJSON(@QueryParam("device") String device, @QueryParam("start") String startDate,
-          @QueryParam("end") String endDate, @QueryParam("duration") String duration, @QueryParam("rrule") String rrule) {
+          @QueryParam("end") String endDate, @QueryParam("duration") String duration, @QueryParam("rrule") String rrule,
+          @QueryParam("timezone") String timezone) {
+    return getConflictingEvents(device, startDate, endDate, duration, rrule, timezone, true);
+  }
+  
+  private Response getConflictingEvents(String device, String startDate, String endDate, String duration, String rrule, String timezone, boolean asJson) {
     if (StringUtils.isEmpty(device) || startDate == null || endDate == null) {
       logger.warn("Either device, start date, end date or duration were not specified");
       return Response.status(Status.BAD_REQUEST).build();
@@ -867,12 +846,16 @@ public class SchedulerRestService {
       DublinCoreCatalogList events = null;
       if (StringUtils.isNotEmpty(rrule)) {
         events = service.findConflictingEvents(device, rrule, new Date(startDateAsLong), new Date(endDateAsLong),
-                durationAsLong);
+                durationAsLong, timezone);
       } else {
         events = service.findConflictingEvents(device, new Date(startDateAsLong), new Date(endDateAsLong));
       }
       if (!events.getCatalogList().isEmpty()) {
-        return Response.ok(events.getResultsAsJson()).build();
+        if (asJson) {
+          return Response.ok(events.getResultsAsJson()).build();
+        } else {
+          return Response.ok(events.getResultsAsXML()).build();
+        }
       } else {
         return Response.noContent().type("").build();
       }
@@ -899,12 +882,24 @@ public class SchedulerRestService {
   @Path("calendars")
   @RestQuery(name = "getcalendar", description = "Returns iCalendar for specified set of events", returnDescription = "ICalendar for events", restParameters = {
           @RestParameter(name = "agentid", description = "Filter events by capture agent", isRequired = false, type = Type.STRING),
-          @RestParameter(name = "seriesid", description = "Filter events by series", isRequired = false, type = Type.STRING) }, reponses = {
+          @RestParameter(name = "seriesid", description = "Filter events by series", isRequired = false, type = Type.STRING),
+          @RestParameter(name = "cutoff", description = "A cutoff date at which the number of events returned in the calendar are limited.", isRequired = false, type = Type.STRING) },
+          reponses = {
           @RestResponse(responseCode = HttpServletResponse.SC_NOT_MODIFIED, description = "Events were not modified since last request"),
           @RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Events were modified, new calendar is in the body") })
-  public Response getCalendar(@QueryParam("agentid") String captureAgentId, @QueryParam("seriesid") String seriesId,
+  public Response getCalendar(@QueryParam("agentid") String captureAgentId, @QueryParam("seriesid") String seriesId, @QueryParam("cutoff") String cutoff,
           @Context HttpServletRequest request) {
     SchedulerQuery filter = new SchedulerQuery().setSpatial(captureAgentId).setSeriesId(seriesId);
+    
+    if (StringUtils.isNotEmpty(cutoff)) {
+      try {
+        Date endDate = new Date(Long.valueOf(cutoff));
+        filter = new SchedulerQuery().setSpatial(captureAgentId).setSeriesId(seriesId).setEndsFrom(new Date(System.currentTimeMillis())).setStartsTo(endDate);
+      } catch (NumberFormatException e) {
+        return Response.status(Status.BAD_REQUEST).build();
+      }
+    }
+    
     try { // If the etag matches the if-not-modified header,return a 304
       Date lastModified = service.getScheduleLastModified(filter);
       if (lastModified == null) {

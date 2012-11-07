@@ -18,6 +18,7 @@ package org.opencastproject.serviceregistry.impl.endpoint;
 import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static javax.servlet.http.HttpServletResponse.SC_CREATED;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
+import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 import static org.apache.commons.lang.StringUtils.isBlank;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
@@ -27,6 +28,8 @@ import org.opencastproject.job.api.JaxbJobList;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobParser;
 import org.opencastproject.rest.RestConstants;
+import org.opencastproject.serviceregistry.api.HostRegistration;
+import org.opencastproject.serviceregistry.api.JaxbHostRegistrationList;
 import org.opencastproject.serviceregistry.api.JaxbServiceRegistration;
 import org.opencastproject.serviceregistry.api.JaxbServiceRegistrationList;
 import org.opencastproject.serviceregistry.api.JaxbServiceStatisticsList;
@@ -116,6 +119,19 @@ public class ServiceRegistryEndpoint {
   }
 
   @POST
+  @Path("sanitize")
+  @RestQuery(name = "sanitize", description = "Sets the given service to NORMAL state", returnDescription = "No content", restParameters = {
+          @RestParameter(name = "serviceType", isRequired = true, description = "The service type identifier", type = Type.STRING, defaultValue = ""),
+          @RestParameter(name = "host", isRequired = true, description = "The host providing the service, including the http(s) protocol", type = Type.STRING, defaultValue = "") }, reponses = {
+          @RestResponse(responseCode = SC_NO_CONTENT, description = "The service was successfully sanitized"),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "No service of that type on that host is registered.") })
+  public Response sanitize(@FormParam("serviceType") String serviceType, @FormParam("host") String host)
+          throws NotFoundException {
+    serviceRegistry.sanitize(serviceType, host);
+    return Response.status(Status.NO_CONTENT).build();
+  }
+
+  @POST
   @Path("register")
   @Produces(MediaType.TEXT_XML)
   @RestQuery(name = "register", description = "Add a new service registration to the cluster.", returnDescription = "The service registration.", restParameters = {
@@ -136,7 +152,7 @@ public class ServiceRegistryEndpoint {
   @Path("unregister")
   @RestQuery(name = "unregister", description = "Removes a service registration.", returnDescription = "No content", restParameters = {
           @RestParameter(name = "serviceType", isRequired = true, description = "The service type identifier", type = Type.STRING),
-          @RestParameter(name = "host", isRequired = true, description = "The host providing the service, including the http(s) protocol", type = Type.STRING) }, reponses = { @RestResponse(responseCode = 204, description = "The service was unregistered successfully") })
+          @RestParameter(name = "host", isRequired = true, description = "The host providing the service, including the http(s) protocol", type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "The service was unregistered successfully") })
   public Response unregister(@FormParam("serviceType") String serviceType, @FormParam("host") String host) {
     try {
       serviceRegistry.unRegisterService(serviceType, host);
@@ -150,7 +166,7 @@ public class ServiceRegistryEndpoint {
   @Path("registerhost")
   @RestQuery(name = "registerhost", description = "Add a new server to the cluster.", returnDescription = "No content.", restParameters = {
           @RestParameter(name = "host", isRequired = true, description = "The host name, including the http(s) protocol", type = Type.STRING),
-          @RestParameter(name = "maxJobs", isRequired = true, description = "The maximum number of concurrent jobs this host can run", type = Type.STRING) }, reponses = { @RestResponse(responseCode = 204, description = "The host was registered successfully") })
+          @RestParameter(name = "maxJobs", isRequired = true, description = "The maximum number of concurrent jobs this host can run", type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "The host was registered successfully") })
   public void register(@FormParam("host") String host, @FormParam("maxJobs") int maxJobs) {
     try {
       serviceRegistry.registerHost(host, maxJobs);
@@ -161,7 +177,7 @@ public class ServiceRegistryEndpoint {
 
   @POST
   @Path("unregisterhost")
-  @RestQuery(name = "unregisterhost", description = "Removes a server from the cluster.", returnDescription = "No content.", restParameters = { @RestParameter(name = "host", isRequired = true, description = "The host name, including the http(s) protocol", type = Type.STRING) }, reponses = { @RestResponse(responseCode = 204, description = "The host was removed successfully") })
+  @RestQuery(name = "unregisterhost", description = "Removes a server from the cluster.", returnDescription = "No content.", restParameters = { @RestParameter(name = "host", isRequired = true, description = "The host name, including the http(s) protocol", type = Type.STRING) }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "The host was removed successfully") })
   public Response unregister(@FormParam("host") String host) {
     try {
       serviceRegistry.unregisterHost(host);
@@ -175,12 +191,13 @@ public class ServiceRegistryEndpoint {
   @Path("maintenance")
   @RestQuery(name = "maintenance", description = "Sets the maintenance status for a server in the cluster.", returnDescription = "No content.", restParameters = {
           @RestParameter(name = "host", isRequired = true, type = Type.STRING, description = "The host name, including the http(s) protocol"),
-          @RestParameter(name = "maintenance", isRequired = true, type = Type.BOOLEAN, description = "Whether this host should be put into maintenance mode (true) or not") }, reponses = { @RestResponse(responseCode = 204, description = "The host was registered successfully") })
-  public Response setMaintenanceMode(@FormParam("host") String host, @FormParam("maintenance") boolean maintenance) {
+          @RestParameter(name = "maintenance", isRequired = true, type = Type.BOOLEAN, description = "Whether this host should be put into maintenance mode (true) or not") }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "The host was registered successfully") })
+  public Response setMaintenanceMode(@FormParam("host") String host, @FormParam("maintenance") boolean maintenance)
+          throws NotFoundException {
     try {
       serviceRegistry.setMaintenanceStatus(host, maintenance);
       return Response.status(Status.NO_CONTENT).build();
-    } catch (Exception e) {
+    } catch (ServiceRegistryException e) {
       throw new WebApplicationException(e);
     }
   }
@@ -271,6 +288,29 @@ public class ServiceRegistryEndpoint {
     return getRegistrationsAsXml(serviceType, host);
   }
 
+  @GET
+  @Path("hosts.xml")
+  @Produces(MediaType.TEXT_XML)
+  @RestQuery(name = "hostsasxml", description = "Returns a host registraton or list of available host registrations as XML.", returnDescription = "The host list as XML", reponses = { @RestResponse(responseCode = SC_OK, description = "Returned the available hosts.") })
+  public JaxbHostRegistrationList getHostsAsXml() throws NotFoundException {
+    JaxbHostRegistrationList registrations = new JaxbHostRegistrationList();
+    try {
+      for (HostRegistration reg : serviceRegistry.getHostRegistrations())
+        registrations.add(reg);
+      return registrations;
+    } catch (ServiceRegistryException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
+  @GET
+  @Path("hosts.json")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RestQuery(name = "hostsasjson", description = "Returns a host registraton or list of available host registrations as JSON.", returnDescription = "The host list as JSON", reponses = { @RestResponse(responseCode = SC_OK, description = "Returned the available hosts.") })
+  public JaxbHostRegistrationList getHostsAsJson() throws NotFoundException {
+    return getHostsAsXml();
+  }
+
   @POST
   @Path("job")
   @Produces(MediaType.TEXT_XML)
@@ -301,7 +341,7 @@ public class ServiceRegistryEndpoint {
             || Boolean.TRUE.toString().equalsIgnoreCase(request.getParameter("start"));
     try {
       Job job = ((ServiceRegistryJpaImpl) serviceRegistry).createJob(host, jobType, operation, arguments, payload,
-              start);
+              start, serviceRegistry.getCurrentJob());
       return Response.created(job.getUri()).entity(new JaxbJob(job)).build();
     } catch (IllegalArgumentException e) {
       throw new WebApplicationException(Status.BAD_REQUEST);
@@ -313,7 +353,7 @@ public class ServiceRegistryEndpoint {
   @PUT
   @Path("job/{id}.xml")
   @Produces(MediaType.TEXT_XML)
-  @RestQuery(name = "updatejob", description = "Updates an existing job", returnDescription = "No content", pathParameters = { @RestParameter(name = "id", isRequired = true, type = Type.STRING, description = "The job identifier") }, restParameters = { @RestParameter(name = "job", isRequired = true, type = Type.TEXT, description = "The updated job as XML") }, reponses = { @RestResponse(responseCode = 204, description = "Job updated.") })
+  @RestQuery(name = "updatejob", description = "Updates an existing job", returnDescription = "No content", pathParameters = { @RestParameter(name = "id", isRequired = true, type = Type.STRING, description = "The job identifier") }, restParameters = { @RestParameter(name = "job", isRequired = true, type = Type.TEXT, description = "The updated job as XML") }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "Job updated.") })
   public Response updateJob(@PathParam("id") String id, @FormParam("job") String jobXml) throws NotFoundException {
     try {
       Job job = JobParser.parseJob(jobXml);
@@ -349,12 +389,35 @@ public class ServiceRegistryEndpoint {
   }
 
   @GET
+  @Path("job/{id}/children.xml")
+  @Produces(MediaType.TEXT_XML)
+  @RestQuery(name = "childrenjobsasxml", description = "Returns all children from a job as XML.", returnDescription = "A list of children jobs as XML", pathParameters = { @RestParameter(name = "id", isRequired = true, type = Type.STRING, description = "The parent job identifier") }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "Jobs found."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "No children jobs found.") })
+  public JaxbJobList getChildrenJobsAsXml(@PathParam("id") long id) throws NotFoundException {
+    return getChildrenJobsAsJson(id);
+  }
+
+  @GET
+  @Path("job/{id}/children.json")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RestQuery(name = "childrenjobsasjson", description = "Returns all children from a job as JSON.", returnDescription = "A list of children jobs as JSON", pathParameters = { @RestParameter(name = "id", isRequired = true, type = Type.STRING, description = "The parent job identifier") }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "Jobs found."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "No children jobs found.") })
+  public JaxbJobList getChildrenJobsAsJson(@PathParam("id") long id) throws NotFoundException {
+    try {
+      return new JaxbJobList(serviceRegistry.getChildJobs(id));
+    } catch (ServiceRegistryException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
+  @GET
   @Path("jobs.xml")
   @Produces(MediaType.TEXT_XML)
   public JaxbJobList getJobsAsXml(@QueryParam("serviceType") String serviceType, @QueryParam("status") Job.Status status) {
     try {
-      List<Job> jobs = serviceRegistry.getJobs(serviceType, status);
-      return new JaxbJobList(jobs);
+      return new JaxbJobList(serviceRegistry.getJobs(serviceType, status));
     } catch (ServiceRegistryException e) {
       throw new WebApplicationException(e);
     }

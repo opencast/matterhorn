@@ -45,10 +45,15 @@ import javax.ws.rs.core.Response;
  * The REST endpoint for the {@link VideoSegmenterService} service
  */
 @Path("")
-@RestService(name = "videosegmentation", title = "Video Segmentation Service", notes = {
-        "If you notice that this service is not working as expected, there might be a bug! "
-        + "You should file an error report with your server logs from the time when the error occurred: "
-        + "<a href=\"http://opencast.jira.com\">Opencast Issue Tracker</a>" }, abstractText = "This service performs segmentation of media files.")
+@RestService(name = "videosegmentation", title = "Video Segmentation Service",
+  abstractText = "This service performs segmentation of media files.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class VideoSegmenterRestEndpoint extends AbstractJobProducerEndpoint {
 
   /** The rest docs */
@@ -67,8 +72,8 @@ public class VideoSegmenterRestEndpoint extends AbstractJobProducerEndpoint {
    *          OSGi component context
    */
   public void activate(ComponentContext cc) {
-    //String serviceUrl = (String) cc.getProperties().get(RestConstants.SERVICE_PATH_PROPERTY);
-    //docs = generateDocs(serviceUrl);
+    // String serviceUrl = (String) cc.getProperties().get(RestConstants.SERVICE_PATH_PROPERTY);
+    // docs = generateDocs(serviceUrl);
   }
 
   /**
@@ -94,20 +99,18 @@ public class VideoSegmenterRestEndpoint extends AbstractJobProducerEndpoint {
   /**
    * Segments a track.
    * 
-   * @param trackAsXml the track xml to segment
+   * @param trackAsXml
+   *          the track xml to segment
    * @return the job in the body of a JAX-RS response
    * @throws Exception
    */
   @POST
   @Path("")
   @Produces(MediaType.TEXT_XML)
-  @RestQuery(name = "segment", description = "Submit a track for segmentation.", restParameters = {
-          @RestParameter(description = "The track to segment.", isRequired = true, name = "track", type = RestParameter.Type.FILE) },
-          reponses = { 
+  @RestQuery(name = "segment", description = "Submit a track for segmentation.", restParameters = { @RestParameter(description = "The track to segment.", isRequired = true, name = "track", type = RestParameter.Type.FILE) }, reponses = {
           @RestResponse(description = "The job ID to use when polling for the resulting mpeg7 catalog.", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "The \"segment\" is NULL or not a valid track type.", responseCode = HttpServletResponse.SC_BAD_REQUEST),
-          @RestResponse(description = "The underlying service could not segment the video.", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
-          }, returnDescription = "The job ID to use when polling for the resulting mpeg7 catalog.")
+          @RestResponse(description = "The underlying service could not segment the video.", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR) }, returnDescription = "The job ID to use when polling for the resulting mpeg7 catalog.")
   public Response segment(@FormParam("track") String trackAsXml) throws Exception {
     // Ensure that the POST parameters are present
     if (StringUtils.isBlank(trackAsXml)) {
@@ -126,14 +129,13 @@ public class VideoSegmenterRestEndpoint extends AbstractJobProducerEndpoint {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Segmentation failed").build();
     return Response.ok().entity(new JaxbJob(job)).build();
   }
-  
+
   @GET
   @Produces(MediaType.TEXT_HTML)
   @Path("docs")
   public String getDocs() {
     return docs;
   }
-
 
   /**
    * {@inheritDoc}
@@ -146,6 +148,16 @@ public class VideoSegmenterRestEndpoint extends AbstractJobProducerEndpoint {
       return (JobProducer) service;
     else
       return null;
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.rest.AbstractJobProducerEndpoint#getServiceRegistry()
+   */
+  @Override
+  public ServiceRegistry getServiceRegistry() {
+    return serviceRegistry;
   }
 
 }

@@ -8,7 +8,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-SNAPSHOT</version>
+    <version>1.5-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -23,13 +23,18 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>org.opencastproject</groupId>
+      <artifactId>matterhorn-metadata-api</artifactId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <groupId>javax.ws.rs</groupId>
       <artifactId>jsr311-api</artifactId>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>javax.servlet</groupId>
@@ -100,7 +105,7 @@
               <outputDirectory>${basedir}/target/classes/ui/jquery</outputDirectory>
               <resources>
                 <resource>
-                  <directory>../../shared-resources/jquery/</directory>
+                  <directory>../../shared-resources/js/jquery/</directory>
                   <includes>
                     <include> **/** </include>
                   </includes>
@@ -242,6 +247,25 @@
               </resources>
             </configuration>
           </execution>
+          <execution>
+            <id>copy-json</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/classes/ui/json</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>../../shared-resources/json/</directory>
+                  <includes>
+                    <include> **/** </include>
+                  </includes>
+                  <filtering>false</filtering>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -251,8 +275,13 @@
         <extensions>true</extensions>
         <configuration>
           <instructions>
-            <Bundle-SymbolicName> ${project.artifactId} </Bundle-SymbolicName>
-            <Import-Package>org.opencastproject.rest;version=${project.version}</Import-Package>
+            <Bundle-Activator>org.opencastproject.adminui.Activator</Bundle-Activator>
+            <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
+            <Import-Package>
+              org.opencastproject.rest;version=${project.version},
+              org.osgi.framework.*,
+              org.slf4j.*
+            </Import-Package>
             <Private-Package>ui.*, uitests.*</Private-Package>
             <Http-Alias>/admin</Http-Alias>
             <Http-Classpath>/ui</Http-Classpath>

@@ -48,6 +48,8 @@ import org.opencastproject.util.FileSupport;
 import org.opencastproject.util.UnknownFileTypeException;
 import org.opencastproject.workspace.api.Workspace;
 
+import junit.framework.Assert;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.easymock.EasyMock;
@@ -56,6 +58,7 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +91,12 @@ public class DublinCoreTest {
    * The catalog name
    */
   private static final String catalogName = "/dublincore.xml";
+
+  /** The XML catalog list name */
+  private static final String xmlCatalogListName = "/dublincore-list.xml";
+
+  /** The JSON catalog list name */
+  private static final String jsonCatalogListName = "/dublincore-list.json";
 
   /**
    * The test catalog
@@ -142,6 +151,30 @@ public class DublinCoreTest {
     assertNull(dc.getFirst(PROPERTY_TITLE, "fr"));
     // Test custom metadata element
     assertEquals("true", dc.getFirst(PROPERTY_PROMOTED));
+  }
+
+  /**
+   * Test method for {@link DublinCoreCatalogImpl#parse(String)} with an XML String
+   */
+  @Test
+  public void testParseDublinCoreListXML() throws Exception {
+    String dublinCoreListString = IOUtils.toString(getClass().getResourceAsStream(xmlCatalogListName), "UTF-8");
+    DublinCoreCatalogList catalogList = DublinCoreCatalogList.parse(dublinCoreListString);
+    Assert.assertEquals(2, catalogList.getTotalCount());
+    Assert.assertEquals("Land 1", catalogList.getCatalogList().get(0).getFirst(PROPERTY_TITLE, LANGUAGE_UNDEFINED));
+    Assert.assertEquals("Land 2", catalogList.getCatalogList().get(1).getFirst(PROPERTY_TITLE, LANGUAGE_UNDEFINED));
+  }
+
+  /**
+   * Test method for {@link DublinCoreCatalogImpl#parse(String)} with a JSON String
+   */
+  @Test
+  public void testParseDublinCoreListJSON() throws Exception {
+    String dublinCoreListString = IOUtils.toString(getClass().getResourceAsStream(jsonCatalogListName), "UTF-8");
+    DublinCoreCatalogList catalogList = DublinCoreCatalogList.parse(dublinCoreListString);
+    Assert.assertEquals(2, catalogList.getTotalCount());
+    Assert.assertEquals("Land 1", catalogList.getCatalogList().get(0).getFirst(PROPERTY_TITLE, LANGUAGE_UNDEFINED));
+    Assert.assertEquals("Land 2", catalogList.getCatalogList().get(1).getFirst(PROPERTY_TITLE, LANGUAGE_UNDEFINED));
   }
 
   /**
@@ -445,6 +478,18 @@ public class DublinCoreTest {
 
     assertEquals("Mediapackage metadata title not extracted from DC properly",
             catalog.getFirst(DublinCore.PROPERTY_TITLE), metadata.getTitle());
+  }
+
+  // todo fix http://opencast.jira.com/browse/MH-8759 then remove @Ignore
+  @Ignore
+  @Test
+  public void testPreserveEncodingScheme() {
+    DublinCoreCatalog dc = DublinCoreCatalogImpl.newInstance();
+    DublinCoreValue val = new DublinCoreValue("http://www.opencastproject.org/license", "en", ENC_SCHEME_URI);
+    dc.add(PROPERTY_LICENSE, val);
+    assertEquals(1, dc.get(PROPERTY_LICENSE).size());
+    assertEquals(val, dc.get(PROPERTY_LICENSE).get(0));
+    assertEquals(ENC_SCHEME_URI, dc.get(PROPERTY_LICENSE).get(0).getEncodingScheme());
   }
 
 }

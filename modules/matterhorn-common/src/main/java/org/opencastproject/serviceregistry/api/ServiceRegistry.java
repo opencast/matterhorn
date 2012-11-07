@@ -111,12 +111,19 @@ public interface ServiceRegistry {
    *          the new maintenance status for this service
    * @throws ServiceRegistryException
    *           if communication with the service registry fails
+   * @throws NotFoundException
+   *           if the host does not exist
    */
-  void setMaintenanceStatus(String host, boolean maintenance) throws ServiceRegistryException;
+  void setMaintenanceStatus(String host, boolean maintenance) throws ServiceRegistryException, NotFoundException;
 
   /**
    * Create and store a new job that will be dispatched as soon as possible. This is equivalent to calling
    * {@link #createJob(String, String, List, String, boolean)} with an empty argument list.
+   * <p>
+   * Note that this job will be linked to the current job as its parent. Use
+   * {@link #createJob(String, String, List, String, boolean, Job)} and pass <code>null</code> as the job if you don't
+   * need the link.
+   * </p>
    * 
    * @param type
    *          the type of service responsible for this job
@@ -131,6 +138,11 @@ public interface ServiceRegistry {
   /**
    * Create and store a new job that will be dispatched as soon as possible. This is equivalent to calling
    * {@link #createJob(String, String, List, String, boolean)}.
+   * <p>
+   * Note that this job will be linked to the current job as its parent. Use
+   * {@link #createJob(String, String, List, String, boolean, Job)} and pass <code>null</code> as the job if you don't
+   * need the link.
+   * </p>
    * 
    * @param type
    *          the type of service responsible for this job
@@ -147,6 +159,11 @@ public interface ServiceRegistry {
   /**
    * Create and store a new job that will be dispatched as soon as possible. This is equivalent to calling
    * {@link #createJob(String, String, List, String, boolean)}. The job will carry the given payload from the beginning.
+   * <p>
+   * Note that this job will be linked to the current job as its parent. Use
+   * {@link #createJob(String, String, List, String, boolean, Job)} and pass <code>null</code> as the job if you don't
+   * need the link.
+   * </p>
    * 
    * @param type
    *          the type of service responsible for this job
@@ -166,6 +183,11 @@ public interface ServiceRegistry {
    * Create and store a new job. If <code>enqueueImmediately</code> is true, the job will be in the
    * {@link Status#QUEUED} state and will be dispatched as soon as possible. Otherwise, it will be
    * {@link Status#INSTANTIATED}.
+   * <p>
+   * Note that this job will be linked to the current job as its parent. Use
+   * {@link #createJob(String, String, List, String, boolean, Job)} and pass <code>null</code> as the job if you don't
+   * need the link.
+   * </p>
    * 
    * @param type
    *          the type of service responsible for this job
@@ -183,6 +205,31 @@ public interface ServiceRegistry {
    *           if there is a problem creating the job
    */
   Job createJob(String type, String operation, List<String> arguments, String payload, boolean queueable)
+          throws ServiceRegistryException;
+
+  /**
+   * Create and store a new job. If <code>enqueueImmediately</code> is true, the job will be in the
+   * {@link Status#QUEUED} state and will be dispatched as soon as possible. Otherwise, it will be
+   * {@link Status#INSTANTIATED}.
+   * 
+   * @param type
+   *          the type of service responsible for this job
+   * @param operation
+   *          the operation for this service to run
+   * @param arguments
+   *          the arguments to the operation
+   * @param payload
+   *          an optional initial payload
+   * @param queueable
+   *          whether the job can be enqueued for dispatch. If false, the job's initial state will be
+   *          {@link Status#INSTANTIATED} and will not be dispatched.
+   * @param parentJob
+   *          the parent job
+   * @return the job
+   * @throws ServiceRegistryException
+   *           if there is a problem creating the job
+   */
+  Job createJob(String type, String operation, List<String> arguments, String payload, boolean queueable, Job parentJob)
           throws ServiceRegistryException;
 
   /**
@@ -207,6 +254,21 @@ public interface ServiceRegistry {
   Job getJob(long id) throws NotFoundException, ServiceRegistryException;
 
   /**
+   * Gets the current running job
+   * 
+   * @return the current job
+   */
+  Job getCurrentJob();
+
+  /**
+   * Sets the current running job
+   * 
+   * @param job
+   *          the current job
+   */
+  void setCurrentJob(Job job);
+
+  /**
    * Gets the list of jobs that match the specified parameters.
    * 
    * @param serviceType
@@ -218,6 +280,17 @@ public interface ServiceRegistry {
    *           if there is a problem accessing the service registry
    */
   List<Job> getJobs(String serviceType, Status status) throws ServiceRegistryException;
+
+  /**
+   * Get all child jobs from a job
+   * 
+   * @param id
+   *          the parent job id
+   * @return a list of the child jobs ordered by execution
+   * @throws ServiceRegistryException
+   *           if there is a problem accessing the service registry
+   */
+  List<Job> getChildJobs(long id) throws NotFoundException, ServiceRegistryException;
 
   /**
    * Finds the service registrations for this kind of job, ordered by load (lightest to heaviest).
@@ -273,6 +346,15 @@ public interface ServiceRegistry {
    *           if there is a problem accessing the service registry
    */
   List<ServiceRegistration> getServiceRegistrations() throws ServiceRegistryException;
+
+  /**
+   * Finds all host registrations, including offline hosts and those in maintenance mode.
+   * 
+   * @return A list of host registrations
+   * @throws ServiceRegistryException
+   *           if there is a problem accessing the service registry
+   */
+  List<HostRegistration> getHostRegistrations() throws ServiceRegistryException;
 
   /**
    * Gets performance and runtime statistics for each known service registration.
@@ -352,5 +434,17 @@ public interface ServiceRegistry {
    *           if there is a problem accessing the service registry
    */
   SystemLoad getLoad() throws ServiceRegistryException;
+
+  /**
+   * Sets the given service to NORMAL state
+   * 
+   * @param serviceType
+   *          the service type
+   * @param host
+   *          the host
+   * @throws NotFoundException
+   *           if the service does not exist
+   */
+  void sanitize(String serviceType, String host) throws NotFoundException;
 
 }

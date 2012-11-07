@@ -49,8 +49,8 @@ ocRecordings = new (function() {
   this.data = null;     // currently displayed recording data
   this.statistics = null;
 
-  var refreshing = false;      // indicates if JSONP requesting recording data is in progress
-  this.refreshingStats = false; // indicates if JSONP requesting statistics data is in progress
+  var refreshing = false;      // indicates if ajax requesting recording data is in progress
+  this.refreshingStats = false; // indicates if ajax requesting statistics data is in progress
   this.refreshInterval = null;
   this.statsInterval = null;
 
@@ -66,7 +66,7 @@ ocRecordings = new (function() {
    */
   this.Configuration = new (function() {
 
-    // default configuartion
+    // default configuration
     this.state = 'all';
     this.pageSize = 10;
     this.page = 0;
@@ -77,10 +77,14 @@ ocRecordings = new (function() {
     this.filterField = null;
     this.filterText = '';
     
-    this.lastState = 'all'
+    this.lastState = 'all';
     this.lastPageSize = 10;
     this.lastPage = 0;
 
+    this.dateFilter = $.cookie('dateFilter') || 'all';
+    this.fromdate = $.cookie('fromDate') || '';
+    this.todate = $.cookie('toDate') || '';
+    
     // parse url parameters
     try {
       var p = document.location.href.split('?', 2)[1] || false;
@@ -101,7 +105,7 @@ ocRecordings = new (function() {
     return this;
   })();
 
-  /** Initiate new JSONP call to workflow instances list endpoint
+  /** Initiate new ajax call to workflow instances list endpoint
    */
   function refresh() {
     if (!refreshing) {
@@ -158,38 +162,101 @@ ocRecordings = new (function() {
       }
       // filtering if specified
       if (ocRecordings.Configuration.filterText != '') {
-        params.push(ocRecordings.Configuration.filterField + '=' + encodeURI(ocRecordings.Configuration.filterText));
+        params.push(ocRecordings.Configuration.filterField + '=' + encodeURI(ocRecordings.Configuration.filterText).replace('#','%23'));
       }
       // paging
       params.push('count=' + ocRecordings.Configuration.pageSize);
       params.push('startPage=' + ocRecordings.Configuration.page);
-      params.push('jsonp=?');
+      
+      if (ocRecordings.Configuration.dateFilter != 'all') {
+        params.push('fromdate=' + ocRecordings.Configuration.fromdate);
+        params.push('todate=' + ocRecordings.Configuration.todate);
+      }
+
       var url = WORKFLOW_LIST_URL + '?' + params.join('&');
       $.ajax(
       {
         url: url,
-        dataType: 'jsonp',
-        jsonp: 'jsonp',
+        dataType: 'json',
         success: function (data)
         {
           ocRecordings.render(data);
           if(ocRecordings.Configuration.state == 'bulkedit' || ocRecordings.Configuration.state == 'bulkdelete')
           {
-              $('.bulkSelect').show();
+            $('.bulkSelect').show();
           }
         }
       });
     }
   }
 
+  function setDateRange() {
+	  var filter = ocRecordings.Configuration.dateFilter;
+	  var today = new Date();
+	  today.setMilliseconds(0);
+	  today.setSeconds(0);
+	  today.setMinutes(0);
+	  today.setHours(0);
+	  var from = new Date(); 
+	  var to =   new Date(); 
+	  from.setTime(today);
+	  to.setTime(today);
+	  
+	  switch (filter) {
+	    case 'today':
+	    	to.setDate(to.getDate() + 1);
+	    	break;
+	    case 'yesterday':
+	    	from.setDate(from.getDate() - 1);
+	    	break;
+	    case 'tomorrow':
+	    	from.setDate(from.getDate() + 1);
+	    	to.setDate(to.getDate() +2);
+	    	break;
+	    case 'this_week':
+	    	day=from.getDay();
+	    	from.setDate(from.getDate() - day);
+	    	to.setDate(to.getDate() - day + 7);
+	    	break;
+	    case 'next_week':
+	    	day=from.getDay();
+	    	from.setDate(from.getDate() - day + 7);
+	    	to.setDate(to.getDate() - day + 14);
+	    	break;
+	    case 'past_week':
+	    	day=from.getDay();
+	    	from.setDate(from.getDate() - day - 7);
+	    	to.setDate(to.getDate() - day);
+	    	break;
+	    case 'all':
+		ocRecordings.Configuration.fromdate = '';
+		ocRecordings.Configuration.todate = '';
+	    case 'range':
+	    	$( "#todate" ).datepicker( "option", "minDate", null );
+	    	$( "#fromdate" ).datepicker( "option", "maxDate", null );
+		if (ocRecordings.Configuration.fromdate != '' && ocRecordings.Configuration.todate != '') {
+		    from = new Date(ocRecordings.Configuration.fromdate)
+		    to   = new Date(ocRecordings.Configuration.todate)
+		    $('#fromdate').val($.datepicker.formatDate('yy-mm-dd', from));
+		    $('#todate').val($.datepicker.formatDate('yy-mm-dd', to));
+		}
+		return;
+	    default:	   
+	  }
+	  ocRecordings.Configuration.fromdate = ocUtils.toISODate(from);
+  	  ocRecordings.Configuration.todate = ocUtils.toISODate(to);
+	  $('#fromdate').val($.datepicker.formatDate('yy-mm-dd', from));
+	  $('#todate').val($.datepicker.formatDate('yy-mm-dd', to));
+	  
+  }
+  
   function refreshStatistics() {
     if (!ocRecordings.refreshingStats) {
       ocRecordings.refreshingStats = true;
       $.ajax(
       {
         url: WORKFLOW_STATISTICS_URL,
-        dataType: 'jsonp',
-        jsonp: 'jsonp',
+        dataType: 'json',
         success: ocRecordings.updateStatistics
       });
     }
@@ -391,7 +458,7 @@ ocRecordings = new (function() {
           var start = elm['$'];
           var now = new Date().getTime() - UPCOMMING_EVENTS_GRACE_PERIOD;
           if (parseInt(start) < now) {
-            self.error = 'It seems the core system did not recieve proper status updates from the Capture Agent that should have conducted this recording.';
+            self.error = 'It seems the core system did not receive proper status updates from the Capture Agent that should have conducted this recording.';
             self.state = 'WARNING : Recording may have failed to start or ingest!';
             recordingActions.push('ignore');
           }
@@ -431,7 +498,7 @@ ocRecordings = new (function() {
     };
   }
 
-  /** JSONP callback for calls to the workflow instances list endpoint.
+  /** Ajax callback for calls to the workflow instances list endpoint.
    */
   this.render = function(data) {
     var template = 'tableTemplate';
@@ -574,9 +641,12 @@ ocRecordings = new (function() {
   /** Make the page reload with the currently set configuration
    */
   this.reload = function() {
-    var url = document.location.href.split('?', 2)[0];
-    url += '?' + ocRecordings.buildURLparams();
-    document.location.href = "/admin/index.html#/recordings?" + ocRecordings.buildURLparams();
+    if($('#holdActionUI').attr('src') == undefined) {
+      document.location.href = "/admin/index.html#/recordings?" + ocRecordings.buildURLparams();
+    } else {
+      document.location.reload();
+    }
+    
   }
   
   /** Returns the workflow with the specified id from the currently loaded
@@ -615,7 +685,6 @@ ocRecordings = new (function() {
 
   this.displayHoldUI = function(wfId) {
     var workflow = ocRecordings.getWorkflow(wfId);
-    location.hash = "#/hold";
     if (workflow) {
       var operation = workflow.operations.operation;  // ocRecordings.findFirstOperation(workflow, 'PAUSED');
       if (operation !== false && operation.holdurl !== undefined) {
@@ -762,7 +831,66 @@ ocRecordings = new (function() {
       options : FILTER_FIELDS,
       selectedOption : ocRecordings.Configuration.filterField
     });
-
+    
+    $('#setRange').click( function() {
+    	ocUtils.log("set range")
+    	fromText=$('#fromdate').val();
+    	toText=$('#todate').val();
+    	ocUtils.log("set range:" + fromText + ":" +toText);
+    	ocRecordings.Configuration.dateFilter="all";
+    	if (fromText != "") {
+    		from = new Date(fromText);
+    		ocRecordings.Configuration.fromdate = ocUtils.toISODate(from);
+    		ocRecordings.Configuration.dateFilter="range";
+    	}
+    	if (toText != "") {
+    		to =   new Date(toText);
+    		to.setDate(to.getDate() + 1);
+    		ocRecordings.Configuration.todate = ocUtils.toISODate(to);
+    		ocRecordings.Configuration.dateFilter="range"
+    	}
+    	$.cookie( 'dateFilter', ocRecordings.Configuration.dateFilter );
+    	$.cookie('fromDate', ocRecordings.Configuration.fromdate);
+    	$.cookie('toDate', ocRecordings.Configuration.todate);
+    	refresh();
+    });
+    
+    $('#dateFilter').change( function() {
+    	filter=$('#dateFilter').val();
+    	ocRecordings.Configuration.dateFilter=filter;
+    	ocUtils.log(ocRecordings.Configuration.dateFilter);
+    	setDateRange();
+    	$.cookie( 'dateFilter', ocRecordings.Configuration.dateFilter );
+    	if (filter !='range') {
+    		refresh();
+    	}
+    });
+    
+    $.datepicker.setDefaults( {
+    	showOn: 'both',
+    	buttonImage: 'img/icons/calendar.gif',
+    	buttonImageOnly: true,
+    	showOtherMonths: true,
+    	selectOtherMonths: true,
+    	dateFormat: 'yy-mm-dd',
+    });
+    
+    $('#fromdate').datepicker({
+    	onSelect: function(dateText, inst) { 
+    		$( "#todate" ).datepicker( "option", "minDate", new Date(dateText+" 00:00:00") );
+    		$('#dateFilter').val("range");
+    		ocUtils.log(dateText);
+    	}
+    });
+    
+    $('#todate').datepicker({
+    	onSelect: function(dateText, inst) { 
+    		$( "#fromdate" ).datepicker( "option", "maxDate", new Date(dateText+" 00:00:00") );
+    		$('#dateFilter').val("range");
+    		ocUtils.log(dateText);
+    	}
+    });
+        
     // set refresh
     ocRecordings.updateRefreshInterval(ocRecordings.Configuration.doRefresh, ocRecordings.Configuration.refresh);
 
@@ -778,6 +906,13 @@ ocRecordings = new (function() {
       $('#refreshControlsContainer span').css('color', 'silver');
     }
     $('#refreshInterval').val(ocRecordings.Configuration.refresh);
+    $('#dateFilter').val(ocRecordings.Configuration.dateFilter);
+    if (ocRecordings.Configuration.dateFilter == 'range') {
+    	$('#fromdate').val(ocRecordings.Configuration.fromdate);
+    	$('#todate').val(ocRecordings.Configuration.todate);
+    }
+    $('#dateFilter').change();
+    
     // attatch event handlers
     $('#refreshEnabled').change(function() {
       if ($(this).is(':checked')) {
@@ -892,26 +1027,14 @@ ocRecordings = new (function() {
   this.removeRecording = function(id, title) {
     if(confirm('Are you sure you wish to delete ' + title + '?')){
       $.ajax({
-        url: '/recordings/'+id,
+        url: '/recordings/' + id,
         type: 'DELETE',
         dataType: 'text',
         error: function(XHR,status,e){
           alert('Could not remove Recording ' + title);
         },
         success: function(){
-          $.ajax({
-            url: WORKFLOW_URL + '/stop',
-            type: 'POST',
-            data: {
-              id: id
-            },
-            error: function(XHR,status,e){
-              alert('Could not stop Processing.');
-            },
-            success: function(){
-              ocRecordings.reload();
-            }
-          });
+          ocRecordings.reload();
         }
       });
     }
@@ -920,7 +1043,7 @@ ocRecordings = new (function() {
   this.stopWorkflow = function(id) {
     var wf = ocRecordings.getWorkflow(id);
     if (wf) {
-      if(confirm('Are you sure you wish to delete " ' + wf.mediapackage.title + ' "?')){
+      if(confirm('Are you sure you wish to ignore (remove the listing from the Admin Tools) " ' + wf.mediapackage.title + ' "?')){
         $.ajax({
           url: WORKFLOW_URL + '/stop',
           type: 'POST',
@@ -978,7 +1101,7 @@ ocRecordings = new (function() {
 
   //TEMPORARY (quick'n'dirty) PAGING
   this.nextPage = function() {
-    numPages = Math.floor(this.totalRecordings / ocRecordings.Configuration.pageSize);
+    numPages = Math.ceil(this.totalRecordings / ocRecordings.Configuration.pageSize);
     if( ocRecordings.Configuration.page < numPages ) {
       ocRecordings.Configuration.page++;
     }
@@ -993,7 +1116,7 @@ ocRecordings = new (function() {
   }
   
   this.lastPage = function() {
-    ocRecordings.Configuration.page = Math.floor(this.totalRecordings / ocRecordings.Configuration.pageSize);
+    ocRecordings.Configuration.page = Math.ceil(this.totalRecordings / ocRecordings.Configuration.pageSize) -1;
     ocRecordings.reload();
   }
   
@@ -1019,7 +1142,7 @@ ocRecordings = new (function() {
     ocRecordings.Configuration.lastPage = ocRecordings.Configuration.page;
     ocRecordings.disableRefresh();
     ocRecordings.stopStatisticsUpdate();
-    $('#bulkActionPanel :input[type=textarea], #bulkActionPanel :text').keyup(ocRecordings.bulkEditFieldHandler);
+    $('#bulkActionPanel textarea, #bulkActionPanel :text').keyup(ocRecordings.bulkEditFieldHandler);
   }
 
   this.bulkEditFieldHandler = function(e) {
@@ -1046,7 +1169,7 @@ ocRecordings = new (function() {
     $('#bulkActionSelect').change();
     $('#bulkActionPanel').hide();
     ocRecordings.bulkEditComponents = [];
-    $('#bulkActionPanel :input[type=textarea], #bulkActionPanel :text').val('');
+    $('#bulkActionPanel textarea, #bulkActionPanel :text').val('');
     ocRecordings.changedBulkEditFields = {};
     ocRecordings.numSelectedRecordings = 0;
   }
@@ -1185,6 +1308,9 @@ ocRecordings = new (function() {
                 if(xhr.status == 500) {
                   failed++;
                   $('#deleteErrorMessage').text('Failed to delete ' + failed + ' recordings.');
+                } else if (xhr.status == 200) {
+                  progress = progress + progressChunk;
+                  $('#deleteProgress').progressbar('value', progress);
                 } else {
                   $.ajax({
                     url: WORKFLOW_URL + '/stop',
@@ -1204,45 +1330,7 @@ ocRecordings = new (function() {
                 }
               }
             });
-            var toid = setInterval(function(){
-              var id = eventIdList.pop();
-              if(typeof id === 'undefined'){
-                clearInterval(toid);
-                ocUtils.log(progress);
-                $('#deleteProgress').progressbar('value', ++progress);
-                if(failed > 0) {
-                  $('#deleteError').show();
-                }
-                return;
-              }
-              $.ajax({
-                url: '/scheduler/'+id,
-                type: 'DELETE',
-                complete: function(xhr, status) {
-                  if(xhr.status == 500) {
-                    failed++;
-                    $('#deleteErrorMessage').text('Failed to delete ' + failed + ' recordings.');
-                  } else {
-                    $.ajax({
-                      url: WORKFLOW_URL + '/stop',
-                      type: 'POST',
-                      data: {
-                        id: id
-                      },
-                      error: function(XHR,status,e){
-                        failed++;
-                        $('#deleteErrorMessage').text('Could not stop Processing ' + failed + ' recordings.');
-                      },
-                      success: function(){
-                        progress = progress + progressChunk;
-                        $('#deleteProgress').progressbar('value', progress);
-                      }
-                    });
-                  }
-                }
-              });
-            }, 250);
-          });
+          }, 250);
         }
       }
     }
@@ -1313,7 +1401,7 @@ ocRecordings = new (function() {
             url: SERIES_URL + '/',
             data: { 
               series: series,
-              acl: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ns2:acl xmlns:ns2="org.opencastproject.security"><ace><role>anonymous</role><action>read</action><allow>true</allow></ace></ns2:acl>'
+              acl: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><acl xmlns="org.opencastproject.security"><ace><role>anonymous</role><action>read</action><allow>true</allow></ace></acl>'
             },
             dataType: 'xml',
             success: function(data){
@@ -1372,7 +1460,7 @@ ocRecordings = new (function() {
             data = $.parseJSON(data);
             ENGAGE_URL = data.engage;
           }
-          links.push('<a href="' + ENGAGE_URL + '/engage/ui/watch.html?id=' + mpId + '" title="Go to Matterhorn Media Module Watch page to view this recording">Play</a>');
+          links.push('<a target="_blank" href="' + ENGAGE_URL + '/engage/ui/watch.html?id=' + mpId + '" title="Go to Matterhorn Media Module Watch page to view this recording">Play</a>');
         }
 
       } else if (action == 'delete') {
@@ -1393,3 +1481,4 @@ ocRecordings = new (function() {
 
   return this;
 })();
+

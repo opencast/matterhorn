@@ -235,17 +235,18 @@
 
                 <input type="radio" class="file-source-select" name="fileSourceSingle" id="fileSourceSingleB" value="inbox">
                 <label for="fileSourceSingleB" class="lbl_radio">Designated inbox on server</label>
+                
               </li>
               <!-- field: Media File -->
               <li class="ui-helper-clearfix">
                 <label class="scheduler-label"><span class="color-red">* </span><span id="i18n_upload_file">Media File</span>:</label>
-                <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="../ingest/filechooser-local.html" class="uploadForm-container"></iframe>
-
+                <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="upload.html?flavor=presenter/source" class="uploadForm-container"></iframe>
+                <input type="hidden" class="track-flavor" value="presenter/source"/>
               </li>
               <li class="ui-helper-clearfix">
                 <label class="scheduler-label"><span id="i18n_upload_flavor">Media Characteristics</span>:</label>
                 <input type="checkbox" class="flavor-presentation-checkbox" id="containsSlides">
-                <input type="hidden" class="track-flavor" value="presenter/source">
+                
                 <label for="containsSlides" style="text-align: left; width: 300px;">
                   Contains discrete images/slides/scenes.
                 </label>
@@ -286,7 +287,7 @@
                 <!-- field: Media File -->
                 <li class="ui-helper-clearfix" id="regularFileChooser">
                   <label class="scheduler-label"><span class="i18n_upload_file">Media File</span>:</label>
-                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="../ingest/filechooser-local.html" class="uploadForm-container"></iframe>
+                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="upload.html?flavor=presentation/source" class="uploadForm-container"></iframe>
 
                   <input type="hidden" class="track-flavor" value="presentation/source">
                 </li>
@@ -312,7 +313,7 @@
                 <!-- field: Media File -->
                 <li class="ui-helper-clearfix" id="regularFileChooserMultiPresenter">
                   <label class="scheduler-label"><span class="i18n_upload_file">Media File</span>:</label>
-                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="../ingest/filechooser-local.html" class="uploadForm-container"></iframe>
+                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="upload.html?flavor=presenter/source" class="uploadForm-container"></iframe>
                   <input type="hidden" class="track-flavor" value="presenter/source">
 
                 </li>
@@ -338,7 +339,7 @@
                 <!-- field: Media File -->
                 <li class="ui-helper-clearfix" id="regularFileChooserAudioOnly">
                   <label class="scheduler-label"><span class="i18n_upload_file">Media File</span>:</label>
-                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="../ingest/filechooser-local.html" class="uploadForm-container"></iframe>
+                  <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="upload.html?flavor=presenter-audio/source" class="uploadForm-container"></iframe>
                   <input type="hidden" class="track-flavor" value="presenter-audio/source">
                 </li>
               </ul>
@@ -393,6 +394,7 @@
           </ul>
         </div>
       </div>
+      
 
       <!-- submit/cancel controls -->
       <div class="form-box layout-centered ui-widget">
@@ -404,7 +406,7 @@
               <li class="ui-helper-clearfix">
                 <label class="scheduler-label">&nbsp;</label>
                 <button id="submitButton" type="button" class="mouseover-pointer control-button">Upload</button>
-                <button id="cancelButton" type="button" class="mouseover-pointer control-button">Cancel</button>
+                <a id="cancelButton" title="Cancel" class="secondaryButton">Cancel</a>
               </li>
 
               <!-- * = required -->

@@ -19,20 +19,43 @@ ocSeriesList.views.seriesView = {} || ocSeriesList.seriesView;
 
 ocSeriesList.Configuration = new (function(){
   //default configuration
-  this.count = 10;
+  this.count = $.cookie('series_count') == null ? 10 : $.cookie('series_count');
   this.total = 10;
   this.startPage = 0;  
   this.lastPage = 0;
-  this.sort = 'TITLE_ASC';  
+  this.sort = 'TITLE';  
   this.edit = 'true';
 });
 
+ocSeriesList.SortColumns = [
+{
+  0: 'TITLE', 
+  1: 'TITLE_DESC'
+},
+{
+  0: 'CREATOR', 
+  1: 'CREATOR_DESC'
+},
+{
+  0: 'CONTRIBUTOR', 
+  1: 'CONTRIBUTOR_DESC'
+}
+];
+
 ocSeriesList.init = function(){
+  ocSeriesList.askForSeries();
   $('#addHeader').jqotesubtpl('templates/series_list-header.tpl', {});
-  
+  if ($.cookie('series_count') != null) {
+    $('#pageSize').children()
+    .each(function() {
+      this.selected = (this.text == $.cookie('series_count'));
+    });
+  }
   $('#pageSize').change(function(event, ui)
   {
-    ocSeriesList.Configuration.count = event.target.value;
+    ocSeriesList.Configuration.startPage = 0;
+    ocSeriesList.Configuration.count = parseInt(event.target.value);
+    $.cookie('series_count', ocSeriesList.Configuration.count);
     ocSeriesList.askForSeries();
   })
   
@@ -53,32 +76,35 @@ ocSeriesList.askForSeries = function()
     success: function(data)
     {
       ocSeriesList.buildSeriesView(data);
-      ocSeriesList.Configuration.total = data.totalCount;
-      if(ocSeriesList.Configuration.startPage == 0) {
+      ocSeriesList.Configuration.total = parseInt(data.totalCount);
+      ocSeriesList.Configuration.lastPage = Math.ceil(ocSeriesList.Configuration.total / ocSeriesList.Configuration.count);
+      if(ocSeriesList.Configuration.total <= ocSeriesList.Configuration.count){
+        $('#prevText').show();
+        $('#prevButtons').hide();
+
+        $('#nextText').show();
+        $('#nextButtons').hide();
+      } else if(ocSeriesList.Configuration.startPage == 0) {
         $('#prevText').show();
         $('#prevButtons').hide();
 
         $('#nextText').hide();
         $('#nextButtons').show();
-      } else if(ocSeriesList.Configuration.startPage == ocSeriesList.Configuration.lastPage) {
+      }else if(ocSeriesList.Configuration.startPage + 1 == ocSeriesList.Configuration.lastPage) {
         $('#nextText').show();
         $('#nextButtons').hide();
 
         $('#prevText').hide();
         $('#prevButtons').show();
-      } else if(ocSeriesList.Configuration.total == ocSeriesList.Configuration.count){
+      } else {
         $('#prevText').hide();
         $('#prevButtons').show();
 
         $('#nextText').hide();
-        $('#nextButtons').show();
-      } else {
-        $('#prevText').show();
-        $('#prevButtons').hide();
-
-        $('#nextText').show();
-        $('#nextButtons').hide();  
+        $('#nextButtons').show();  
       }
+      $('#curPage').text(ocSeriesList.Configuration.startPage + 1);
+      $('#numPage').text(ocSeriesList.Configuration.lastPage);
     }
   });
 }
@@ -135,19 +161,8 @@ ocSeriesList.buildSeriesView = function(data) {
   {
     $.cookie('direction', 0) //standard is ASC
   }
-  sorting = [[$.cookie('column'), $.cookie('direction')]];
+  ocSeriesList.views.totalCount = ocSeriesList.Configuration.total;
   $('#seriesTableContainer').jqotesubtpl("templates/series_list-table.tpl", ocSeriesList.views);
-  $('#seriesTable').tablesorter({
-    cssHeader: 'oc-ui-sortable',
-    cssAsc: 'oc-ui-sortable-Ascending',
-    cssDesc: 'oc-ui-sortable-Descending' ,
-    headers: {
-      3: {
-        sorter: false
-      }
-    },
-    sortList: sorting
-  });
   $('#seriesTable th').click(function(){
     var index = $(this).parent().children().index($(this));
     if(index != 3)
@@ -157,6 +172,8 @@ ocSeriesList.buildSeriesView = function(data) {
         $.cookie('direction', $.cookie('direction') == 0 ? 1 : 0);
       }
       $.cookie('column', index)
+      ocSeriesList.Configuration.sort = ocSeriesList.SortColumns[$.cookie('column')][$.cookie('direction')];
+      ocSeriesList.askForSeries();
     }
   });
 }

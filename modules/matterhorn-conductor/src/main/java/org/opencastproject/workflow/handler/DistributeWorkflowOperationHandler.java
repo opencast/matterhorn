@@ -20,13 +20,16 @@ import org.opencastproject.distribution.api.DistributionService;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.Attachment;
-import org.opencastproject.mediapackage.Catalog;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElement;
+import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.MediaPackageReference;
+import org.opencastproject.mediapackage.selector.AbstractMediaPackageElementSelector;
+import org.opencastproject.mediapackage.selector.SimpleElementSelector;
+import org.opencastproject.mediapackage.selector.SimpleFlavorPrioritySelector;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
@@ -37,6 +40,7 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -75,7 +79,12 @@ public class DistributeWorkflowOperationHandler extends AbstractWorkflowOperatio
             "Distribute any mediapackage elements with one of these (comma separated) tags.  If a source-tag "
                     + "starts with a '-', mediapackage elements with this tag will be excluded from distribution.");
     CONFIG_OPTIONS.put("target-tags",
-            "Apple these (comma separated) tags to any mediapackage elements produced as a result of distribution");
+            "Apply these (comma separated) tags to any mediapackage elements produced as a result of distribution");
+    CONFIG_OPTIONS.put("source-flavors",
+            "Apply these (comma separated) flavors to any mediapackage elements produced as a result of distribution");
+    CONFIG_OPTIONS
+            .put("source-priority-flavors",
+                    "Apply these (comma separated) priority flavors to any mediapackage elements produced as a result of distribution");
   }
 
   /**
@@ -100,30 +109,59 @@ public class DistributeWorkflowOperationHandler extends AbstractWorkflowOperatio
 
     MediaPackage mediaPackage = workflowInstance.getMediaPackage();
 
-    try {
+    // Check which tags have been configured
+    String sourceTags = StringUtils.trimToNull(workflowInstance.getCurrentOperation().getConfiguration("source-tags"));
+    String targetTags = StringUtils.trimToNull(workflowInstance.getCurrentOperation().getConfiguration("target-tags"));
+    String sourceFlavors = StringUtils.trimToNull(workflowInstance.getCurrentOperation().getConfiguration(
+            "source-flavors"));
+    String sourcePriorityFlavors = StringUtils.trimToNull(workflowInstance.getCurrentOperation().getConfiguration(
+            "source-priority-flavors"));
 
-      // Check which tags have been configured
-      String sourceTags = workflowInstance.getCurrentOperation().getConfiguration("source-tags");
-      String targetTags = workflowInstance.getCurrentOperation().getConfiguration("target-tags");
-      if (StringUtils.trimToNull(sourceTags) == null) {
-        logger.warn("No tags have been specified");
+    AbstractMediaPackageElementSelector<MediaPackageElement> elementSelector;
+
+    if (sourcePriorityFlavors != null) {
+      if (sourceFlavors != null || sourceTags != null)
+        throw new IllegalArgumentException(
+                "Source-flavors or source-tags can not be used in case of source-priority-flavors property");
+
+      elementSelector = new SimpleFlavorPrioritySelector();
+      for (String flavor : asList(sourcePriorityFlavors)) {
+        elementSelector.addFlavor(MediaPackageElementFlavor.parseFlavor(flavor));
+      }
+    } else {
+
+      if (sourceTags == null && sourceFlavors == null) {
+        logger.warn("No tags or flavors have been specified");
         return createResult(mediaPackage, Action.CONTINUE);
       }
+      elementSelector = new SimpleElementSelector();
 
-      // Look for elements matching the tag
-      Set<String> elementIds = new HashSet<String>();
-      MediaPackageElement[] elts = mediaPackage.getElementsByTags(asList(sourceTags));
-      for (MediaPackageElement e : elts) {
-        if (elementIds.add(e.getIdentifier())) {
-          logger.info("Distributing '{}' to the local repository", e.getIdentifier(), mediaPackage);
+      if (sourceFlavors != null) {
+        for (String flavor : asList(sourceFlavors)) {
+          elementSelector.addFlavor(MediaPackageElementFlavor.parseFlavor(flavor));
         }
       }
+      if (sourceTags != null) {
+        for (String tag : asList(sourceTags)) {
+          elementSelector.addTag(tag);
+        }
+      }
+    }
 
-      // Also distribute all of the metadata catalogs
-      for (Catalog c : mediaPackage.getCatalogs())
-        elementIds.add(c.getIdentifier());
+    try {
+
+      Set<String> elementIds = new HashSet<String>();
+
+      // Look for elements matching the tag
+      Collection<MediaPackageElement> elements = elementSelector.select(mediaPackage, false);
+      for (MediaPackageElement elem : elements) {
+        elementIds.add(elem.getIdentifier());
+      }
 
       // Also distribute the security configuration
+      // -----
+      // This was removed in the meantime by a fix for MH-8515, but could now be used again.
+      // -----
       Attachment[] securityAttachments = mediaPackage.getAttachments(MediaPackageElements.XACML_POLICY);
       if (securityAttachments != null && securityAttachments.length > 0) {
         for (Attachment a : securityAttachments) {
@@ -137,10 +175,18 @@ public class DistributeWorkflowOperationHandler extends AbstractWorkflowOperatio
       Map<String, Job> jobs = new HashMap<String, Job>(elementIds.size());
       try {
         for (String elementId : elementIds) {
-          jobs.put(elementId, distributionService.distribute(mediaPackage, elementId));
+          Job job = distributionService.distribute(mediaPackage, elementId);
+          if (job == null)
+            continue;
+          jobs.put(elementId, job);
         }
       } catch (DistributionException e) {
         throw new WorkflowOperationException(e);
+      }
+
+      if (jobs.size() < 1) {
+        logger.info("No mediapackage element was found for distribution");
+        return createResult(mediaPackage, Action.CONTINUE);
       }
 
       // Wait until all distribution jobs have returned
@@ -200,5 +246,4 @@ public class DistributeWorkflowOperationHandler extends AbstractWorkflowOperatio
     }
     return createResult(mediaPackage, Action.CONTINUE);
   }
-
 }

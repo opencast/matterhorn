@@ -26,6 +26,7 @@ import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.mediapackage.elementbuilder.TrackBuilderPlugin;
+import org.opencastproject.util.IoSupport;
 
 import junit.framework.Assert;
 
@@ -35,6 +36,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.w3c.dom.Document;
 
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.net.URI;
 
@@ -83,8 +85,8 @@ public class TrackTest {
    */
   @Test
   public void testSetDuration() {
-    track.setDuration(-1);
-    track.setDuration(10);
+    track.setDuration(null);
+    track.setDuration(new Long(10));
   }
 
   /**
@@ -92,7 +94,7 @@ public class TrackTest {
    */
   @Test
   public void testGetDuration() {
-    assertEquals(-1, track.getDuration());
+    assertEquals(null, track.getDuration());
   }
 
   /**
@@ -145,14 +147,24 @@ public class TrackTest {
     StringWriter writer = new StringWriter();
     marshaller.marshal(track, writer);
     Unmarshaller unmarshaller = context.createUnmarshaller();
-    TrackImpl t1 = unmarshaller.unmarshal(new StreamSource(IOUtils.toInputStream(writer.toString(), "UTF-8")),
-            TrackImpl.class).getValue();
-    Assert.assertEquals(MediaPackageElements.PRESENTATION_SOURCE, t1.getFlavor());
+    InputStream inputStream = IOUtils.toInputStream(writer.toString(), "UTF-8");
+    try {
+      TrackImpl t1 = unmarshaller.unmarshal(new StreamSource(inputStream), TrackImpl.class).getValue();
+      Assert.assertEquals(MediaPackageElements.PRESENTATION_SOURCE, t1.getFlavor());
+    } finally {
+      IoSupport.closeQuietly(inputStream);
+    }
 
     // Now again without namespaces
-    String xml = "<track type=\"presentation/source\"><tags/><url>http://downloads.opencastproject.org/media/movie.m4v</url><duration>-1</duration></track>";
-    TrackImpl t2 = unmarshaller.unmarshal(new StreamSource(IOUtils.toInputStream(xml)), TrackImpl.class).getValue();
-    Assert.assertEquals(MediaPackageElements.PRESENTATION_SOURCE, t2.getFlavor());
+    String xml = "<oc:track xmlns:oc=\"http://mediapackage.opencastproject.org\" type=\"presentation/source\"><oc:tags/><oc:url>http://downloads.opencastproject.org/media/movie.m4v</oc:url><oc:duration>-1</oc:duration></oc:track>";
+    inputStream = IOUtils.toInputStream(xml);
+    try {
+      TrackImpl t2 = unmarshaller.unmarshal(new StreamSource(inputStream), TrackImpl.class).getValue();
+      Assert.assertEquals(MediaPackageElements.PRESENTATION_SOURCE, t2.getFlavor());
+      Assert.assertEquals("http://downloads.opencastproject.org/media/movie.m4v", t2.getURI().toString());
+    } finally {
+      IoSupport.closeQuietly(inputStream);
+    }
 
     // Get the xml from the object itself
     String xmlFromTrack = MediaPackageElementParser.getAsXml(track);
@@ -165,5 +177,6 @@ public class TrackTest {
     Track t3 = (Track) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
             .elementFromManifest(doc.getDocumentElement(), new DefaultMediaPackageSerializerImpl());
     Assert.assertEquals(MediaPackageElements.PRESENTATION_SOURCE, t3.getFlavor());
+    Assert.assertEquals("http://downloads.opencastproject.org/media/movie.m4v", t3.getURI().toURL().toExternalForm());
   }
 }

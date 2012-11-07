@@ -43,10 +43,17 @@ public interface GStreamerProperties {
   String BITRATE = "bitrate";
 
   /** x264 Properties **/
+  String INTERLACED = "interlaced";
+  String NOISE_REDUCTION = "noise-reduction";
   String PASS = "pass";
+  String PROFILE = "profile";
+  String QP_MIN = "qp-min";
+  String QP_MAX = "qp-max";
   String QUANTIZER = "quantizer";
+  String SPEED_PRESET = "speed-preset";
 
   /** Caps Properties **/
+  String AUDIO_X_RAW_INT = "audio/x-raw-int";
   String VIDEO_X_RAW_YUV = "video/x-raw-yuv";
   String FRAMERATE = "framerate";
   String CAPS = "caps";

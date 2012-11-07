@@ -47,7 +47,7 @@ while [[ true ]]; do
     echo "deb ${mirrors[1]:-$DEFAULT_SECURITY} ${DIST_NAME}-security main restricted universe multiverse" >> $SRC_LIST
     echo "deb ${mirrors[2]:-$DEFAULT_PARTNER} ${DIST_NAME} partner" >> $SRC_LIST
     
-    apt-get -qq update &> /dev/null
+    apt-get -qq update > /dev/null
     
     if [[ $? -eq 0 ]]; then
 	break
@@ -57,6 +57,13 @@ while [[ true ]]; do
 	unset mirrors
     fi
 done
+hasBrokenJDK=`grep '10.04\|10.10' /etc/lsb-release`
+if [ -n "$hasBrokenJDK" ]; then
+	echo "Ubuntu 10.04 detected.  This version ships a JDK with a known issue.  Updating to use a newer JDK."
+	sudo apt-get install -qq --force-yes python-software-properties > /dev/null
+	sudo add-apt-repository ppa:openjdk/ppa > /dev/null
+	apt-get -qq update > /dev/null
+fi
 echo "Done"
 
 # Auto set selections when installing postfix and jdk packages
@@ -69,8 +76,6 @@ echo "Done"
 debconf-set-selections <<EOF
 postfix postfix/mailname string fax
 postfix postfix/main_mailer_type select Internet Site
-sun-java5-jdk shared/accepted-sun-dlj-v1-1 boolean true
-?sun-java6-jdk shared/accepted-sun-dlj-v1-1 boolean true
 EOF
 
 # Changes the default array delimiter: from 'space' to 'newline'
@@ -152,8 +157,27 @@ for (( i=0; i < ${#noinst[@]}; i++ )); do
     echo "${noinst[$i]}" >> $PKG_BACKUP
 done
 
-# Set up java-6-sun as the default alternative
-echo -n "Setting up java-6-sun as the default jvm... "
+# Find the version of java to use. 
+found_java=false
+for java_version in $JAVA_PATTERNS
+do
+    # The location we would expect to find java. 
+    java_location="$JAVA_PREFIX/`ls $JAVA_PREFIX | grep ^$java_version$`"
+    # Check to make sure that it found the $java_version and that it is a valid directory. 
+    if [[ "$java_location" != "$JAVA_PREFIX/" && -d $java_location ]]; then
+        echo Found java at $java_location
+        JAVA_PATTERN="$java_version"
+        found_java=true
+    fi
+done
+
+if ! $found_java ; then
+    echo "Haven't found a valid install of java ($JAVA_PATTERNS)in $JAVA_PREFIX so exiting."
+    exit 1
+fi
+
+# Set up the default alternative
+echo -n "Setting up $JAVA_PATTERN as the default jvm... "
 update-java-alternatives -s $JAVA_PATTERN 2> /dev/null
 echo "Done"
 
@@ -164,37 +188,6 @@ export JAVA_HOME=$JAVA_PREFIX/`ls $JAVA_PREFIX | grep ^$JAVA_PATTERN$`
 echo >> $LOG_FILE
 echo "# Installed packages" >> $LOG_FILE
 [[ -e $PKG_BACKUP ]] && echo "$(cat $PKG_BACKUP)" >> $LOG_FILE
-
-# Setup felix
-echo -n "Downloading Felix... "
-while [[ true ]]; do 
-    if [[ ! -s ${FELIX_FILENAME} ]]; then
-	wget -q ${FELIX_URL}
-    fi
-    # On success, uncompress the felix files in their location
-    if [[ $? -eq 0 ]]; then
-	echo -n "Uncompressing... "
-	dir_name=$(tar tzf ${FELIX_FILENAME} | grep -om1 '^[^/]*')
-	tar xzf ${FELIX_FILENAME}
-	if [[ $? -eq 0 ]]; then
-	    rm -rf $FELIX_HOME
-	    mv ${dir_name%/} -T $FELIX_HOME
-	    mv $FELIX_FILENAME $CA_DIR
-	    #mkdir -p ${FELIX_HOME}/load
-	    echo "Done"
-	    break
-	fi
-    fi
-    # Else, ask for the actions to take
-    echo
-    yesno -d yes "Error retrieving the Felix files from the web. Retry?" retry
-    if [[ "$retry" ]]; then
-    	echo -n "Retrying... "
-    else
-    	echo "You must download Felix manually and install it under $OC_DIR, in order for matterhorn to work"
-	break
-    fi
-done
 
 # Setup jv4linfo
 if [[ ! -e "$JV4LINFO_PATH/$JV4LINFO_LIB" ]]; then

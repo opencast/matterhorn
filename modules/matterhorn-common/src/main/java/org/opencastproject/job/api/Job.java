@@ -27,7 +27,7 @@ public interface Job {
 
   /** The status of the job that this receipt represents */
   public static enum Status {
-    QUEUED, PAUSED, RUNNING, FINISHED, FAILED, DELETED, INSTANTIATED, DISPATCHING
+    QUEUED, PAUSED, RUNNING, FINISHED, FAILED, DELETED, INSTANTIATED, DISPATCHING, RESTART, CANCELED
   }
 
   /**
@@ -231,5 +231,12 @@ public interface Job {
    * @return the job's URI
    */
   URI getUri();
+
+  /**
+   * Gets the job signature by calculating the hash code from the concatenation of the jobType + the job arguments
+   * 
+   * @return
+   */
+  int getSignature();
 
 }

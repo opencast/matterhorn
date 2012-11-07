@@ -109,10 +109,21 @@ public interface MediaPackageElements {
   MediaPackageElementFlavor XACML_POLICY = new MediaPackageElementFlavor("security", "xacml",
           "Security policy for the mediapackage");
   
+  /** Export Files Policy flavor */
+  MediaPackageElementFlavor EXPORT_POLICY = new MediaPackageElementFlavor("security", "acl",
+          "Security policy for the export files");
+  
   // Other flavors
 
+  /** A default flavor for caption files */
+  MediaPackageElementFlavor CAPTION_GENERAL = new MediaPackageElementFlavor("captions", "timedtext",
+          "DFXP Captions catalog");
+  
   /** A flavor for DFXP caption files */
   MediaPackageElementFlavor CAPTION_DFXP_FLAVOR = new MediaPackageElementFlavor("caption", "dfxp",
           "DFXP Captions catalog");
+
+  /** Track delivered to youtube */
+  MediaPackageElementFlavor YOUTUBE = new MediaPackageElementFlavor("youtube", "watchpage");
 
 }

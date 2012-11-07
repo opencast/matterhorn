@@ -16,11 +16,12 @@
 package org.opencastproject.serviceregistry.impl;
 
 import org.opencastproject.serviceregistry.api.JaxbServiceRegistration;
+import org.opencastproject.serviceregistry.api.ServiceState;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Set;
+import java.util.Date;
 
 import javax.persistence.Access;
 import javax.persistence.AccessType;
@@ -29,12 +30,14 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.Lob;
 import javax.persistence.ManyToOne;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
-import javax.persistence.OneToMany;
 import javax.persistence.PostLoad;
 import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
 import javax.persistence.Transient;
 import javax.persistence.UniqueConstraint;
 import javax.xml.bind.annotation.XmlAccessType;
@@ -51,39 +54,39 @@ import javax.xml.bind.annotation.XmlType;
 @XmlRootElement(name = "service", namespace = "http://serviceregistry.opencastproject.org")
 @Entity(name = "ServiceRegistration")
 @Access(AccessType.PROPERTY)
-@Table(name = "SERVICE_REGISTRATION", uniqueConstraints = @UniqueConstraint(columnNames = { "HOST_REG", "SERVICE_TYPE" }))
+@Table(name = "service_registration", uniqueConstraints = @UniqueConstraint(columnNames = { "host_registration",
+        "service_type" }))
 @NamedQueries({
-        @NamedQuery(name = "ServiceRegistration.statistics", query = "SELECT sr, job.status, "
-                + "count(job.status) as numJobs, " + "avg(job.queueTime) as meanQueue, "
-                + "avg(job.runTime) as meanRun FROM ServiceRegistration sr LEFT OUTER JOIN sr.processorJobs job "
-                + "group by sr, job.status"),
-        @NamedQuery(name = "ServiceRegistration.hostload", query = "SELECT sr, job.status, count(job.status) as numJobs "
-                + "FROM ServiceRegistration sr LEFT OUTER JOIN sr.processorJobs job "
-                + "WHERE sr.online=true and sr.hostRegistration.maintenanceMode=false "
-                + "GROUP BY sr, job.status"),
+        @NamedQuery(name = "ServiceRegistration.statistics", query = "SELECT job.processorServiceRegistration as serviceRegistration, job.status, "
+                + "count(job.status) as numJobs, "
+                + "avg(job.queueTime) as meanQueue, "
+                + "avg(job.runTime) as meanRun FROM Job job " + "group by job.processorServiceRegistration, job.status"),
+        @NamedQuery(name = "ServiceRegistration.hostload", query = "SELECT job.processorServiceRegistration as serviceRegistration, job.status, count(job.status) as numJobs "
+                + "FROM Job job "
+                + "WHERE job.processorServiceRegistration.online=true and job.processorServiceRegistration.hostRegistration.maintenanceMode=false "
+                + "GROUP BY job.processorServiceRegistration, job.status"),
         @NamedQuery(name = "ServiceRegistration.getRegistration", query = "SELECT r from ServiceRegistration r "
                 + "where r.hostRegistration.baseUrl = :host and r.serviceType = :serviceType"),
         @NamedQuery(name = "ServiceRegistration.getAll", query = "SELECT rh FROM ServiceRegistration rh"),
         @NamedQuery(name = "ServiceRegistration.getByHost", query = "SELECT rh FROM ServiceRegistration rh "
                 + "where rh.hostRegistration.baseUrl=:host"),
         @NamedQuery(name = "ServiceRegistration.getByType", query = "SELECT rh FROM ServiceRegistration rh "
-                + "where rh.serviceType=:serviceType") })
+                + "where rh.serviceType=:serviceType"),
+        @NamedQuery(name = "ServiceRegistration.relatedservices.warning_error", query = "SELECT rh FROM ServiceRegistration rh "
+                + "WHERE rh.serviceType = :serviceType AND (rh.serviceState = org.opencastproject.serviceregistry.api.ServiceState.WARNING OR "
+                + "rh.serviceState = org.opencastproject.serviceregistry.api.ServiceState.ERROR)"),
+        @NamedQuery(name = "ServiceRegistration.relatedservices.warning", query = "SELECT rh FROM ServiceRegistration rh "
+                + "WHERE rh.serviceType = :serviceType AND rh.serviceState = org.opencastproject.serviceregistry.api.ServiceState.WARNING") })
 public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
 
   /** The logger */
   private static final Logger logger = LoggerFactory.getLogger(ServiceRegistrationJpaImpl.class);
 
   /** The primary key */
-  protected Long id;
-
-  /** The set of jobs created with this service registration */
-  protected Set<JobJpaImpl> creatorJobs;
-
-  /** The set of jobs running on this service registration */
-  protected Set<JobJpaImpl> processorJobs;
+  private Long id;
 
   /** The host that provides this service */
-  protected HostRegistration hostRegistration;
+  private HostRegistrationJpaImpl hostRegistration;
 
   /**
    * Creates a new service registration which is online
@@ -102,7 +105,7 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
    * @param path
    *          the URL path on this host to the service endpoint
    */
-  public ServiceRegistrationJpaImpl(HostRegistration hostRegistration, String serviceType, String path) {
+  public ServiceRegistrationJpaImpl(HostRegistrationJpaImpl hostRegistration, String serviceType, String path) {
     super(serviceType, hostRegistration.getBaseUrl(), path);
     this.hostRegistration = hostRegistration;
   }
@@ -116,7 +119,7 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
    *          the job type
    * @param jobProducer
    */
-  public ServiceRegistrationJpaImpl(HostRegistration hostRegistration, String serviceType, String path,
+  public ServiceRegistrationJpaImpl(HostRegistrationJpaImpl hostRegistration, String serviceType, String path,
           boolean jobProducer) {
     super(serviceType, hostRegistration.getBaseUrl(), path, jobProducer);
     this.hostRegistration = hostRegistration;
@@ -128,10 +131,18 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
    * @return the primary key
    */
   @Id
-  @Column
+  @Column(name = "id")
   @GeneratedValue
   public Long getId() {
     return id;
+  }
+
+  @Column(name = "online_from")
+  @Temporal(TemporalType.TIMESTAMP)
+  @XmlElement
+  @Override
+  public Date getOnlineFrom() {
+    return super.getOnlineFrom();
   }
 
   /**
@@ -144,50 +155,71 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
     this.id = id;
   }
 
-  @Column(name = "SERVICE_TYPE", nullable = false)
+  /** The length was chosen this short because MySQL complains when trying to create an index larger than this */
+  @Column(name = "service_type", nullable = false, length = 255)
   @XmlElement(name = "type")
   @Override
   public String getServiceType() {
     return super.getServiceType();
   }
 
-  @Column(name = "PATH", nullable = false)
+  @Lob
+  @Column(name = "path", nullable = false, length = 65535)
   @XmlElement(name = "path")
   @Override
   public String getPath() {
     return super.getPath();
   }
 
-  @Column(name = "ONLINE", nullable = false)
+  @Column(name = "service_state")
+  @XmlElement(name = "service_state")
+  @Override
+  public ServiceState getServiceState() {
+    return super.getServiceState();
+  }
+
+  @Column(name = "state_changed")
+  @Temporal(TemporalType.TIMESTAMP)
+  @XmlElement(name = "state_changed")
+  @Override
+  public Date getStateChanged() {
+    return super.getStateChanged();
+  }
+
+  @Column(name = "warning_state_trigger")
+  @XmlElement(name = "warning_state_trigger")
+  @Override
+  public int getWarningStateTrigger() {
+    return warningStateTrigger;
+  }
+
+  public void setWarningStateTrigger(int jobSignature) {
+    this.warningStateTrigger = jobSignature;
+  }
+
+  @Column(name = "error_state_trigger")
+  @XmlElement(name = "error_state_trigger")
+  @Override
+  public int getErrorStateTrigger() {
+    return errorStateTrigger;
+  }
+
+  public void setErrorStateTrigger(int jobSignature) {
+    this.errorStateTrigger = jobSignature;
+  }
+
+  @Column(name = "online", nullable = false)
   @XmlElement(name = "online")
   @Override
   public boolean isOnline() {
     return super.isOnline();
   }
 
-  @Column(name = "JOB_PRODUCER", nullable = false)
+  @Column(name = "job_producer", nullable = false)
   @XmlElement(name = "jobproducer")
   @Override
   public boolean isJobProducer() {
     return super.isJobProducer();
-  }
-
-  @OneToMany(mappedBy = "creatorServiceRegistration")
-  public Set<JobJpaImpl> getCreatorJobs() {
-    return creatorJobs;
-  }
-
-  public void setCreatorJobs(Set<JobJpaImpl> creatorJobs) {
-    this.creatorJobs = creatorJobs;
-  }
-
-  @OneToMany(mappedBy = "processorServiceRegistration")
-  public Set<JobJpaImpl> getProcessorJobs() {
-    return processorJobs;
-  }
-
-  public void setProcessorJobs(Set<JobJpaImpl> processorJobs) {
-    this.processorJobs = processorJobs;
   }
 
   /**
@@ -202,13 +234,13 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
   }
 
   /**
-   * Gets the associated {@link HostRegistration}
+   * Gets the associated {@link HostRegistrationJpaImpl}
    * 
    * @return the host registration
    */
   @ManyToOne
-  @JoinColumn(name = "host_reg")
-  public HostRegistration getHostRegistration() {
+  @JoinColumn(name = "host_registration")
+  public HostRegistrationJpaImpl getHostRegistration() {
     return hostRegistration;
   }
 
@@ -216,7 +248,7 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
    * @param hostRegistration
    *          the hostRegistration to set
    */
-  public void setHostRegistration(HostRegistration hostRegistration) {
+  public void setHostRegistration(HostRegistrationJpaImpl hostRegistration) {
     this.hostRegistration = hostRegistration;
   }
 
@@ -227,7 +259,7 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
     } else {
       super.host = hostRegistration.getBaseUrl();
       super.maintenanceMode = hostRegistration.isMaintenanceMode();
-      if (!hostRegistration.online)
+      if (!hostRegistration.isOnline())
         super.online = false;
     }
   }

@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-SNAPSHOT</version>
+    <version>1.5-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -43,6 +43,11 @@
     <dependency>
       <groupId>org.opencastproject</groupId>
       <artifactId>matterhorn-workspace-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.opencastproject</groupId>
+      <artifactId>matterhorn-working-file-repository-service-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -119,6 +124,10 @@
       <version>3.2.1</version>
     </dependency>
     <dependency>
+      <groupId>com.googlecode.guava-osgi</groupId>
+      <artifactId>guava-osgi</artifactId>
+    </dependency>
+    <dependency>
       <groupId>net.sourceforge.htmlunit</groupId>
       <artifactId>htmlunit</artifactId>
       <version>2.6</version>
@@ -160,7 +169,7 @@
     <dependency>
       <groupId>com.sun.jersey</groupId>
       <artifactId>jersey-server</artifactId>
-      <version>1.1.5</version>
+      <version>1.12</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -190,6 +199,7 @@
             <Bundle-SymbolicName> ${project.artifactId} </Bundle-SymbolicName>
             <Export-Package>
               org.opencastproject.ingest.impl;version=${project.version},
+              org.opencastproject.ingest.impl.jmx;version=${project.version},
               org.opencastproject.ingest.endpoint;version=${project.version},
               org.opencastproject.ingest.scanner;version=${project.version}
             </Export-Package>
@@ -206,7 +216,7 @@
             <Service-Component>
               OSGI-INF/ingest-service.xml,
               OSGI-INF/ingest-service-rest.xml,
-              OSGI-INF/inbox-scanner.xml
+              OSGI-INF/inbox-scanner-service.xml
             </Service-Component>
             <JPA-PersistenceUnits>
               org.opencastproject.ingest.endpoint

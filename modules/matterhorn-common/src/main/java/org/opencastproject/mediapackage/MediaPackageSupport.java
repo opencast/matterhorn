@@ -17,11 +17,17 @@
 package org.opencastproject.mediapackage;
 
 import org.opencastproject.util.PathSupport;
-
+import org.opencastproject.util.data.Effect;
+import org.opencastproject.util.data.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+
+import static org.opencastproject.util.IoSupport.withResource;
 
 /**
  * Utility class used for media package handling.
@@ -118,4 +124,63 @@ public final class MediaPackageSupport {
     return f;
   }
 
+  /** Immutable modification of a media package. */
+  public static MediaPackage modify(MediaPackage mp, Effect<MediaPackage> e) {
+    final MediaPackage clone = (MediaPackage) mp.clone();
+    e.apply(clone);
+    return clone;
+  }
+
+  /**
+   * Immutable modification of a media package element. Attention: The returned element loses
+   * its media package membership (see {@link org.opencastproject.mediapackage.AbstractMediaPackageElement#clone()})
+   */
+  public static <A extends MediaPackageElement> A modify(A mpe, Effect<A> e) {
+    final A clone = (A) mpe.clone();
+    e.apply(clone);
+    return clone;
+  }
+
+  /** Create a copy of the given media package. */
+  public static MediaPackage copy(MediaPackage mp) {
+    return (MediaPackage) mp.clone();
+  }
+
+  /** Rewrite the URIs of all media package elements. Modifications are done on a copy of the given package. */
+  public static MediaPackage rewriteUris(final MediaPackage mp, final Function<MediaPackageElement, URI> f) {
+    return modify(mp, new Effect<MediaPackage>() {
+      @Override public void run(MediaPackage mp) {
+        for (MediaPackageElement e : mp.getElements()) {
+          e.setURI(f.apply(e));
+        }
+      }
+    });
+  }
+
+  /**
+   * Rewrite the URI of a media package element. Modification is done on a copy of the given element.
+   * Attention: The returned element loses its media package membership (see {@link org.opencastproject.mediapackage.AbstractMediaPackageElement#clone()})
+   */
+  public static <A extends MediaPackageElement> A rewriteUri(final A mpe, final Function<A, URI> f) {
+    return modify(mpe, new Effect<A>() {
+      @Override protected void run(A e) {
+        e.setURI(f.apply(e));
+      }
+    });
+  }
+
+  /** For testing purposes only! Loads a mediapackage from the class path. */
+  public static MediaPackage loadMediaPackageFromClassPath(String manifest) {
+    final MediaPackageBuilder mediaPackageBuilder = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder();
+    final URL rootUrl = MediaPackageSupport.class.getResource("/");
+    mediaPackageBuilder.setSerializer(new DefaultMediaPackageSerializerImpl(rootUrl));
+    final InputStream in = MediaPackageSupport.class.getResourceAsStream(manifest);
+    if (in == null)
+      throw new Error(manifest + "can not be found");
+    return withResource(in, new Function.X<InputStream, MediaPackage>() {
+      @Override public MediaPackage xapply(InputStream is) throws MediaPackageException {
+        return mediaPackageBuilder.loadFromXml(is);
+      }
+    });
+  }
 }

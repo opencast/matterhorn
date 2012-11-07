@@ -18,10 +18,16 @@ package org.opencastproject.workingfilerepository.impl;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static org.opencastproject.util.IoSupport.withFile;
+import static org.opencastproject.util.RestUtil.fileResponse;
+import static org.opencastproject.util.RestUtil.streamResponse;
+import static org.opencastproject.util.data.Option.none;
+import static org.opencastproject.util.data.Option.some;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.FILE;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 
 import org.opencastproject.util.NotFoundException;
+import org.opencastproject.util.data.Function2;
 import org.opencastproject.util.doc.rest.RestParameter;
 import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
@@ -32,9 +38,10 @@ import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.http.HttpStatus;
 import org.apache.tika.metadata.HttpHeaders;
 import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.sax.BodyContentHandler;
@@ -44,6 +51,7 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -63,20 +71,24 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 @Path("/")
-@RestService(name = "filerepo", title = "Working File Repository", abstractText = "Stores and retrieves files for use during media processing.", notes = WorkingFileRepositoryRestEndpoint.NOTES)
+@RestService(name = "filerepo", title = "Working File Repository",
+  abstractText = "Stores and retrieves files for use during media processing.",
+  notes = {
+        "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
+        "If the service is down or not working it will return a status 503, this means the the underlying service is "
+        + "not working and is either restarting or has failed",
+        "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
+        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl {
-
-  public static final String NOTES = "All paths above are relative to the REST endpoint base (something like "
-          + "http://your.server/files).  If the service is down or not working it will return a status 503, this means the "
-          + "underlying service is not working and is either restarting or has failed.  A status code 500 means a general "
-          + "failure has occurred which is not recoverable and was not anticipated. In other words, there is a bug! You "
-          + "should file an error report with your server logs from the time when the error occurred: "
-          + "<a href=\"https://issues.opencastproject.org\">Opencast Issue Tracker</a>";
 
   private static final Logger logger = LoggerFactory.getLogger(WorkingFileRepositoryRestEndpoint.class);
 
   private final MimetypesFileTypeMap mimeMap = new MimetypesFileTypeMap(getClass().getClassLoader()
           .getResourceAsStream("mimetypes"));
+
+  /** The Apache Tika parser */
+  private Parser tikaParser;
 
   /**
    * Callback from OSGi that is called when this service is activated.
@@ -84,8 +96,17 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
    * @param cc
    *          OSGi component context
    */
-  public void activate(ComponentContext cc) {
+  public void activate(ComponentContext cc) throws IOException {
     super.activate(cc);
+  }
+
+  /**
+   * Sets the Apache Tika parser.
+   * 
+   * @param tikaParser
+   */
+  public void setTikaParser(Parser tikaParser) {
+    this.tikaParser = tikaParser;
   }
 
   @POST
@@ -93,7 +114,7 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   @Path(WorkingFileRepository.MEDIAPACKAGE_PATH_PREFIX + "{mediaPackageID}/{mediaPackageElementID}")
   @RestQuery(name = "put", description = "Store a file in working repository under ./mediaPackageID/mediaPackageElementID", returnDescription = "The URL to access the stored file", pathParameters = {
           @RestParameter(name = "mediaPackageID", description = "the mediapackage identifier", isRequired = true, type = STRING),
-          @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "OK, file stored") })
+          @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "OK, file stored") }, restParameters = { @RestParameter(name = "file", description = "the filename", isRequired = true, type = FILE) })
   public Response restPut(@PathParam("mediaPackageID") String mediaPackageID,
           @PathParam("mediaPackageElementID") String mediaPackageElementID, @Context HttpServletRequest request)
           throws Exception {
@@ -117,11 +138,16 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   @RestQuery(name = "putWithFilename", description = "Store a file in working repository under ./mediaPackageID/mediaPackageElementID/filename", returnDescription = "The URL to access the stored file", pathParameters = {
           @RestParameter(name = "mediaPackageID", description = "the mediapackage identifier", isRequired = true, type = STRING),
           @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING),
-          @RestParameter(name = "filename", description = "the filename", isRequired = true, type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "OK, file stored") })
-  public Response restPutURLEncoded(@PathParam("mediaPackageID") String mediaPackageID,
+          @RestParameter(name = "filename", description = "the filename", isRequired = true, type = FILE) }, reponses = { @RestResponse(responseCode = SC_OK, description = "OK, file stored") })
+  public Response restPutURLEncoded(@Context HttpServletRequest request,
+          @PathParam("mediaPackageID") String mediaPackageID,
           @PathParam("mediaPackageElementID") String mediaPackageElementID, @PathParam("filename") String filename,
           @FormParam("content") String content) throws Exception {
-    URI url = this.put(mediaPackageID, mediaPackageElementID, filename, IOUtils.toInputStream(content));
+    String encoding = request.getCharacterEncoding();
+    if (encoding == null)
+      encoding = "utf-8";
+
+    URI url = this.put(mediaPackageID, mediaPackageElementID, filename, IOUtils.toInputStream(content, encoding));
     return Response.ok(url.toString()).build();
   }
 
@@ -149,12 +175,16 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   @Path(WorkingFileRepository.MEDIAPACKAGE_PATH_PREFIX + "{mediaPackageID}/{mediaPackageElementID}")
   @RestQuery(name = "delete", description = "Remove the file from the working repository under /mediaPackageID/mediaPackageElementID", returnDescription = "No content", pathParameters = {
           @RestParameter(name = "mediaPackageID", description = "the mediapackage identifier", isRequired = true, type = STRING),
-          @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING) }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "File deleted") })
+          @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "File deleted"),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "File did not exist") })
   public Response restDelete(@PathParam("mediaPackageID") String mediaPackageID,
           @PathParam("mediaPackageElementID") String mediaPackageElementID) {
     try {
-      this.delete(mediaPackageID, mediaPackageElementID);
-      return Response.noContent().build();
+      if (delete(mediaPackageID, mediaPackageElementID))
+        return Response.ok().build();
+      else
+        return Response.status(HttpStatus.SC_NOT_FOUND).build();
     } catch (Exception e) {
       return Response.serverError().entity(e.getMessage()).build();
     }
@@ -182,28 +212,29 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
           @RestParameter(name = "mediaPackageElementID", description = "the mediapackage element identifier", isRequired = true, type = STRING) }, reponses = {
           @RestResponse(responseCode = SC_OK, description = "File returned"),
           @RestResponse(responseCode = SC_NOT_FOUND, description = "Not found") })
-  public Response restGet(@PathParam("mediaPackageID") String mediaPackageID,
-          @PathParam("mediaPackageElementID") String mediaPackageElementID,
-          @HeaderParam("If-None-Match") String ifNoneMatch) throws NotFoundException {
-    String contentType = null;
-    InputStream in = null;
+  public Response restGet(@PathParam("mediaPackageID") final String mediaPackageID,
+          @PathParam("mediaPackageElementID") final String mediaPackageElementID,
+          @HeaderParam("If-None-Match") String ifNoneMatch) throws NotFoundException, IOException {
+
+    // Check the If-None-Match header first
     try {
-      String md5 = this.hashMediaPackageElement(mediaPackageID, mediaPackageElementID);
-      if (md5.equals(ifNoneMatch)) {
-        IOUtils.closeQuietly(in);
-        return Response.notModified().build();
+      final String md5 = getMediaPackageElementDigest(mediaPackageID, mediaPackageElementID);
+      if (StringUtils.isNotBlank(ifNoneMatch) && md5.equals(ifNoneMatch)) {
+        return Response.notModified(md5).build();
       }
-      in = this.get(mediaPackageID, mediaPackageElementID);
-      contentType = extractContentType(in);
-      return Response.ok(this.get(mediaPackageID, mediaPackageElementID)).header("Content-Type", contentType).build();
-    } catch (IllegalStateException e) {
-      IOUtils.closeQuietly(in);
-      throw new NotFoundException();
     } catch (IOException e) {
-      IOUtils.closeQuietly(in);
-      return Response.status(javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR).build();
-    } finally {
-      IOUtils.closeQuietly(in);
+      logger.warn("Error reading digest of {}/{}", new Object[] { mediaPackageElementID, mediaPackageElementID });
+    }
+    try {
+      return withFile(getFile(mediaPackageID, mediaPackageElementID), new Function2.X<InputStream, File, Response>() {
+        @Override
+        public Response xapply(InputStream in, File f) throws Exception {
+          return streamResponse(get(mediaPackageID, mediaPackageElementID), extractContentType(in), some(f.length()),
+                  none("")).build();
+        }
+      }).orError(new NotFoundException()).get();
+    } catch (IllegalStateException e) {
+      throw new NotFoundException();
     }
   }
 
@@ -220,9 +251,8 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
       // Find the content type, based on the stream content
       BodyContentHandler contenthandler = new BodyContentHandler();
       Metadata metadata = new Metadata();
-      Parser parser = new AutoDetectParser();
       ParseContext context = new ParseContext();
-      parser.parse(in, contenthandler, metadata, context);
+      tikaParser.parse(in, contenthandler, metadata, context);
       return metadata.get(HttpHeaders.CONTENT_TYPE);
     } catch (Exception e) {
       logger.warn("Unable to extract mimetype from input stream, ", e);
@@ -241,26 +271,23 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   public Response restGet(@PathParam("mediaPackageID") String mediaPackageID,
           @PathParam("mediaPackageElementID") String mediaPackageElementID, @PathParam("fileName") String fileName,
           @HeaderParam("If-None-Match") String ifNoneMatch) throws NotFoundException {
-    InputStream in = null;
+    String md5 = null;
+    // Check the If-None-Match header first
     try {
-      in = get(mediaPackageID, mediaPackageElementID);
-      String md5 = this.hashMediaPackageElement(mediaPackageID, mediaPackageElementID);
-      if (md5.equals(ifNoneMatch)) {
-        IOUtils.closeQuietly(in);
+      md5 = getMediaPackageElementDigest(mediaPackageID, mediaPackageElementID);
+      if (StringUtils.isNotBlank(ifNoneMatch) && md5.equals(ifNoneMatch)) {
         return Response.notModified(md5).build();
       }
-      String contentType = mimeMap.getContentType(fileName);
-      int contentLength = 0;
-      contentLength = in.available();
-      return Response.ok().header("Content-disposition", "attachment; filename=" + fileName)
-              .header("Content-Type", contentType).header("Content-length", contentLength).tag(md5).entity(in).build();
-    } catch (IllegalStateException e) {
-      IOUtils.closeQuietly(in);
-      throw new NotFoundException();
     } catch (IOException e) {
-      IOUtils.closeQuietly(in);
-      logger.info("unable to get the content length for {}/{}/{}", new Object[] { mediaPackageElementID,
-              mediaPackageElementID, fileName });
+      logger.warn("Error reading digest of {}/{}/{}", new Object[] { mediaPackageElementID, mediaPackageElementID,
+              fileName });
+    }
+
+    // No If-Non-Match header provided, or the file changed in the meantime
+    try {
+      return fileResponse(getFile(mediaPackageID, mediaPackageElementID), mimeMap.getContentType(fileName),
+              some(fileName)).tag(md5).build();
+    } catch (IllegalStateException e) {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
@@ -273,17 +300,9 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
           @RestResponse(responseCode = SC_OK, description = "File returned"),
           @RestResponse(responseCode = SC_NOT_FOUND, description = "Not found") })
   public Response restGetFromCollection(@PathParam("collectionId") String collectionId,
-          @PathParam("fileName") String fileName) throws NotFoundException {
-    InputStream in = super.getFromCollection(collectionId, fileName);
-    String contentType = mimeMap.getContentType(fileName);
-    int contentLength = 0;
-    try {
-      contentLength = in.available();
-    } catch (IOException e) {
-      logger.info("unable to get the content length for collection/{}/{}", new Object[] { collectionId, fileName });
-    }
-    return Response.ok().header("Content-disposition", "attachment; filename=" + fileName)
-            .header("Content-Type", contentType).header("Content-length", contentLength).entity(in).build();
+          @PathParam("fileName") String fileName) throws NotFoundException, IOException {
+    return fileResponse(getFileFromCollection(collectionId, fileName), mimeMap.getContentType(fileName), some(fileName))
+            .build();
   }
 
   @GET
@@ -390,10 +409,12 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   public Response restGetTotalStorage() {
     long total = this.getTotalSpace();
     long usable = this.getUsableSpace();
+    long used = this.getUsedSpace();
     String summary = this.getDiskSpace();
     JSONObject json = new JSONObject();
     json.put("size", total);
     json.put("usable", usable);
+    json.put("used", used);
     json.put("summary", summary);
     return Response.ok(json.toJSONString()).build();
   }

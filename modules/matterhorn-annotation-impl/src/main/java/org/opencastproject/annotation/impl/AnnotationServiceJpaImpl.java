@@ -46,8 +46,7 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
   private static final Logger logger = LoggerFactory.getLogger(AnnotationRestService.class);
 
   /** The persistence unit properties */
-  @SuppressWarnings("unchecked")
-  protected Map persistenceProperties;
+  protected Map<String, Object> persistenceProperties;
 
   /** The factory used to generate the entity manager */
   protected EntityManagerFactory emf = null;
@@ -72,8 +71,7 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
    * @param persistenceProperties
    *          the persistenceProperties to set
    */
-  @SuppressWarnings("unchecked")
-  public void setPersistenceProperties(Map persistenceProperties) {
+  public void setPersistenceProperties(Map<String, Object> persistenceProperties) {
     this.persistenceProperties = persistenceProperties;
   }
 
@@ -111,20 +109,45 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
       q.setParameter("userId", securityService.getUser().getUserName());
       return ((Long) q.getSingleResult()).intValue();
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
   public Annotation addAnnotation(Annotation a) {
     // set the User ID on the annotation
     a.setUserId(securityService.getUser().getUserName());
-    EntityManager em = emf.createEntityManager();
-    EntityTransaction tx = em.getTransaction();
+    EntityManager em = null;
+    EntityTransaction tx = null;
     try {
+      em = emf.createEntityManager();
+      tx = em.getTransaction();
       tx.begin();
       em.persist(a);
       tx.commit();
       return a;
+    } finally {
+      if (tx.isActive()) {
+        tx.rollback();
+      }
+      if (em != null)
+        em.close();
+    }
+  }
+
+  public boolean removeAnnotation(Annotation a) {
+    EntityManager em = null;
+    EntityTransaction tx = null;
+    try {
+      em = emf.createEntityManager();
+      tx = em.getTransaction();
+      tx.begin();
+      //first merge then remove element
+      em.remove(em.merge(a));
+      tx.commit();
+      return true;
+    } catch (Exception e) {
+      return false;
     } finally {
       if (tx.isActive()) {
         tx.rollback();
@@ -144,7 +167,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
         return a;
       }
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -169,7 +193,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
       }
       return result;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -198,7 +223,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
 
       return result;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -262,7 +288,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
       }
       return result;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
 
   }
@@ -299,7 +326,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
       }
       return result;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 
@@ -325,7 +353,8 @@ public class AnnotationServiceJpaImpl implements AnnotationService {
       }
       return result;
     } finally {
-      em.close();
+      if (em != null)
+        em.close();
     }
   }
 

@@ -25,7 +25,6 @@ import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.MediaPackageParser;
-import org.opencastproject.mediapackage.Track;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.UserDirectoryService;
@@ -162,8 +161,24 @@ public class StreamingDistributionService extends AbstractJobProducer implements
    * @see org.opencastproject.distribution.api.DistributionService#distribute(String, MediaPackageElement)
    */
   protected MediaPackageElement distribute(Job job, MediaPackage mediapackage, String elementId)
-          throws DistributionException, MediaPackageException {
+          throws DistributionException {
+    return distributeElement(mediapackage, elementId);
+  }
 
+  /**
+   * Distribute a Mediapackage element to the download distribution service.
+   * 
+   * @param mediapackage
+   *          The media package that contains the element to distribute.
+   * @param elementId
+   *          The id of the element that should be distributed contained within the media package.
+   * @return A reference to the MediaPackageElement that has been distributed.
+   * @throws DistributionException
+   *           Thrown if the parent directory of the MediaPackageElement cannot be created, if the MediaPackageElement
+   *           cannot be copied or another unexpected exception occurs.
+   */
+  public MediaPackageElement distributeElement(MediaPackage mediapackage, String elementId)
+          throws DistributionException {
     if (mediapackage == null)
       throw new IllegalArgumentException("Mediapackage must be specified");
     if (elementId == null)
@@ -172,18 +187,21 @@ public class StreamingDistributionService extends AbstractJobProducer implements
     String mediaPackageId = mediapackage.getIdentifier().compact();
     MediaPackageElement element = mediapackage.getElementById(elementId);
 
+    // Streaming servers only deal with tracks
+    if (!MediaPackageElement.Type.Track.equals(element.getElementType())) {
+      logger.debug("Skipping {} {} for distribution to the streaming server", element.getElementType().toString()
+              .toLowerCase(), element.getIdentifier());
+      return null;
+    }
+
     // Make sure the element exists
     if (mediapackage.getElementById(elementId) == null)
       throw new IllegalStateException("No element " + elementId + " found in mediapackage");
-    
+
     try {
-      // The streaming server only supports tracks
-      if (!(element instanceof Track)) {
-        return null;
-      }
-      File sourceFile;
+      File source;
       try {
-        sourceFile = workspace.get(element.getURI());
+        source = workspace.get(element.getURI());
       } catch (NotFoundException e) {
         throw new DistributionException("Unable to find " + element.getURI() + " in the workspace", e);
       } catch (IOException e) {
@@ -200,9 +218,9 @@ public class StreamingDistributionService extends AbstractJobProducer implements
       logger.info("Distributing {} to {}", elementId, destination);
 
       try {
-        FileSupport.copy(sourceFile, destination);
+        FileSupport.link(source, destination, true);
       } catch (IOException e) {
-        throw new DistributionException("Unable to copy " + sourceFile + " to " + destination, e);
+        throw new DistributionException("Unable to copy " + source + " to " + destination, e);
       }
 
       // Create a representation of the distributed file in the mediapackage
@@ -280,7 +298,7 @@ public class StreamingDistributionService extends AbstractJobProducer implements
     // Find the element that has been created as part of the distribution process
     String mediaPackageId = mediapackage.getIdentifier().compact();
     URI distributedURI = null;
-    MediaPackageElement distributedElement = null; 
+    MediaPackageElement distributedElement = null;
     try {
       distributedURI = getDistributionUri(mediaPackageId, element);
       for (MediaPackageElement e : mediapackage.getElements()) {
@@ -296,7 +314,7 @@ public class StreamingDistributionService extends AbstractJobProducer implements
     // Has this element been distributed?
     if (distributedElement == null)
       return null;
-    
+
     String mediapackageId = mediapackage.getIdentifier().compact();
     try {
 
@@ -304,8 +322,9 @@ public class StreamingDistributionService extends AbstractJobProducer implements
       File elementDir = getDistributionFile(mediapackage, element);
 
       // Does the file exist? If not, the current element has not been distributed to this channel
+      // or has been removed otherwise
       if (!elementDir.exists())
-        return null;
+        return distributedElement;
 
       // Try to remove the file and - if possible - the parent folder
       FileUtils.forceDelete(elementDir);
@@ -339,7 +358,7 @@ public class StreamingDistributionService extends AbstractJobProducer implements
   protected File getDistributionFile(MediaPackage mediaPackage, MediaPackageElement element) {
     String elementId = element.getIdentifier();
     String fileName = FilenameUtils.getName(element.getURI().toString());
-    
+
     String directoryName = distributionDirectory.getAbsolutePath();
     String destinationFileName = PathSupport.concat(new String[] { directoryName,
             mediaPackage.getIdentifier().compact(), elementId, fileName });
@@ -360,11 +379,12 @@ public class StreamingDistributionService extends AbstractJobProducer implements
   protected URI getDistributionUri(String mediaPackageId, MediaPackageElement element) throws URISyntaxException {
     String elementId = element.getIdentifier();
     String fileName = FilenameUtils.getName(element.getURI().toString());
-    
+
+    String tag = "";
     if (fileName.endsWith(".mp4"))
-    	fileName = "mp4:" + fileName;
-    
-    String destinationURI = UrlSupport.concat(new String[] { streamingUrl, mediaPackageId, elementId, fileName });
+      tag = "mp4:";
+
+    String destinationURI = UrlSupport.concat(new String[] { streamingUrl, tag + mediaPackageId, elementId, fileName });
     return new URI(destinationURI);
   }
 
@@ -501,5 +521,4 @@ public class StreamingDistributionService extends AbstractJobProducer implements
   protected OrganizationDirectoryService getOrganizationDirectoryService() {
     return organizationDirectoryService;
   }
-
 }

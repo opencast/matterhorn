@@ -26,27 +26,6 @@ import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZ
 import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_NAME;
 import static org.opencastproject.util.UrlSupport.DEFAULT_BASE_URL;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-
-import junit.framework.Assert;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.solr.client.solrj.SolrServer;
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
 import org.opencastproject.job.api.JaxbJob;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.Job.Status;
@@ -64,6 +43,7 @@ import org.opencastproject.search.api.SearchQuery;
 import org.opencastproject.search.api.SearchResult;
 import org.opencastproject.search.api.SearchResultItem;
 import org.opencastproject.search.api.SearchService;
+import org.opencastproject.search.impl.persistence.SearchServiceDatabaseImpl;
 import org.opencastproject.search.impl.solr.SolrIndexManager;
 import org.opencastproject.search.impl.solr.SolrRequester;
 import org.opencastproject.security.api.AccessControlEntry;
@@ -78,7 +58,35 @@ import org.opencastproject.series.api.SeriesService;
 import org.opencastproject.series.impl.SeriesServiceImpl;
 import org.opencastproject.series.impl.solr.SeriesServiceSolrIndex;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
+import org.opencastproject.util.PathSupport;
 import org.opencastproject.workspace.api.Workspace;
+
+import com.mchange.v2.c3p0.ComboPooledDataSource;
+import com.mchange.v2.c3p0.DataSources;
+
+import junit.framework.Assert;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.solr.client.solrj.SolrServer;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.eclipse.persistence.jpa.PersistenceProvider;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+
+import java.io.File;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Tests the functionality of the search service.
@@ -100,18 +108,31 @@ public class SearchServiceImplTest {
   /** The authorization service */
   private AuthorizationService authorizationService = null;
 
+  /** Student role */
+  private static final String ROLE_STUDENT = "ROLE_STUDENT";
+
+  /** Other student role */
+  private static final String ROLE_OTHER_STUDENT = "ROLE_OTHER_STUDENT";
+
   /** A user with permissions. */
-  private final User userWithPermissions = new User("sample", "opencastproject.org", new String[] { "ROLE_STUDENT",
-          "ROLE_OTHERSTUDENT", new DefaultOrganization().getAnonymousRole() });
+  private final User userWithPermissions = new User("sample", "opencastproject.org", new String[] { ROLE_STUDENT,
+          ROLE_OTHER_STUDENT, new DefaultOrganization().getAnonymousRole() });
 
   /** A user without permissions. */
-  private final User userWithoutPermissions = new User("sample", "opencastproject.org", new String[] { "ROLE_NOTHING" });
+  private final User userWithoutPermissions = new User("sample", "opencastproject.org", new String[] { "ROLE_NOTHING",
+          new DefaultOrganization().getAnonymousRole() });
 
   private final Organization defaultOrganization = new DefaultOrganization();
   private final User defaultUser = userWithPermissions;
 
   private Responder<User> userResponder;
   private Responder<Organization> organizationResponder;
+
+  private SearchServiceDatabaseImpl searchDatabase;
+
+  private ComboPooledDataSource pooledDataSource;
+
+  private String storage;
 
   private static class Responder<A> implements IAnswer<A> {
     private A response;
@@ -168,6 +189,28 @@ public class SearchServiceImplTest {
     EasyMock.expect(securityService.getOrganization()).andAnswer(organizationResponder).anyTimes();
     EasyMock.replay(securityService);
 
+    long currentTime = System.currentTimeMillis();
+    storage = PathSupport.concat("target", "db" + currentTime + ".h2.db");
+
+    pooledDataSource = new ComboPooledDataSource();
+    pooledDataSource.setDriverClass("org.h2.Driver");
+    pooledDataSource.setJdbcUrl("jdbc:h2:./target/db" + currentTime);
+    pooledDataSource.setUser("sa");
+    pooledDataSource.setPassword("sa");
+
+    // Collect the persistence properties
+    Map<String, Object> props = new HashMap<String, Object>();
+    props.put("javax.persistence.nonJtaDataSource", pooledDataSource);
+    props.put("eclipselink.ddl-generation", "create-tables");
+    props.put("eclipselink.ddl-generation.output-mode", "database");
+
+    // Persistence storage
+    searchDatabase = new SearchServiceDatabaseImpl();
+    searchDatabase.setPersistenceProvider(new PersistenceProvider());
+    searchDatabase.setPersistenceProperties(props);
+    searchDatabase.activate(null);
+    searchDatabase.setSecurityService(securityService);
+
     // search service
     service = new SearchServiceImpl();
     StaticMetadataService mdService = newStaticMetadataService(workspace);
@@ -177,12 +220,14 @@ public class SearchServiceImplTest {
     service.setMpeg7CatalogService(mpeg7CatalogService);
     service.setSecurityService(securityService);
     service.setServiceRegistry(serviceRegistry);
+    service.setPersistence(searchDatabase);
     SolrServer solrServer = SearchServiceImpl.setupSolr(new File(solrRoot));
     service.testSetup(solrServer, new SolrRequester(solrServer, securityService), new SolrIndexManager(solrServer,
             workspace, Arrays.asList(mdService), seriesService, mpeg7CatalogService, securityService));
 
     // acl
-    acl = new AccessControlList();
+    String anonymousRole = securityService.getOrganization().getAnonymousRole();
+    acl = new AccessControlList(new AccessControlEntry(anonymousRole, "read", true));
     authorizationService = EasyMock.createNiceMock(AuthorizationService.class);
     EasyMock.expect(authorizationService.getAccessControlList((MediaPackage) EasyMock.anyObject())).andReturn(acl)
             .anyTimes();
@@ -206,13 +251,14 @@ public class SearchServiceImplTest {
   }
 
   @After
-  public void tearDown() {
+  public void tearDown() throws Exception {
+    searchDatabase.deactivate(null);
+    DataSources.destroy(pooledDataSource);
+    FileUtils.deleteQuietly(new File(storage));
+    searchDatabase = null;
     service.deactivate();
-    try {
-      FileUtils.deleteDirectory(new File(solrRoot));
-    } catch (IOException e) {
-      fail("Error on cleanup");
-    }
+    FileUtils.deleteDirectory(new File(solrRoot));
+    service = null;
   }
 
   /**
@@ -232,10 +278,8 @@ public class SearchServiceImplTest {
     MediaPackage mediaPackage = getMediaPackage("/manifest-simple.xml");
 
     // Make sure our mocked ACL has the read and write permission
-    acl.getEntries()
-            .add(new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.READ_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -249,8 +293,7 @@ public class SearchServiceImplTest {
 
     acl.getEntries().clear();
     acl.getEntries().add(new AccessControlEntry("ROLE_UNKNOWN", SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -292,8 +335,45 @@ public class SearchServiceImplTest {
     SearchResult episodeMetadataResult = service.getByQuery(new SearchQuery().withText("Vegetation"));
     SearchResult seriesMetadataResult = service.getByQuery(new SearchQuery().withText("Atmospheric Science"));
 
-    assertTrue(episodeMetadataResult.getItems().length == 1);
-    assertTrue(seriesMetadataResult.getItems().length == 1);
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmospheric")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("atmospheric")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("atmospheric science")).size());
+    assertEquals(1, episodeMetadataResult.getItems().length);
+    assertEquals(1, seriesMetadataResult.getItems().length);
+  }
+
+  @Test
+  public void testSearchForPartialStrings() throws Exception {
+    MediaPackage mediaPackage = getMediaPackage("/manifest-simple.xml");
+    service.add(mediaPackage);
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmo")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmos")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmosp")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmosph")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmosphe")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmospher")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmospheri")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Atmospheric")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("atmospheri")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("tmospheric")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("tmospheri")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Vegetatio")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("vege")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("egetatio")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("egetation")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("lecture")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("lectur")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("ecture")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("ectur")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Science")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Scienc")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("ience")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("cienc")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("ducti")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Institute")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("nstitute")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("nstitut")).size());
+    assertEquals(1, service.getByQuery(new SearchQuery().withText("Institut")).size());
   }
 
   /**
@@ -304,10 +384,8 @@ public class SearchServiceImplTest {
     MediaPackage mediaPackage = getMediaPackage("/manifest-simple.xml");
 
     // Make sure our mocked ACL has the read and write permission
-    acl.getEntries()
-            .add(new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.READ_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -358,10 +436,8 @@ public class SearchServiceImplTest {
     }
 
     // Make sure our mocked ACL has the read and write permission
-    acl.getEntries()
-            .add(new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.READ_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -384,10 +460,8 @@ public class SearchServiceImplTest {
     MediaPackage mediaPackage = getMediaPackage("/manifest-simple.xml");
 
     // Make sure our mocked ACL has the read and write permission
-    acl.getEntries()
-            .add(new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.READ_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -450,10 +524,8 @@ public class SearchServiceImplTest {
     }
 
     // Make sure our mocked ACL has the read and write permission
-    acl.getEntries()
-            .add(new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.READ_PERMISSION, true));
-    acl.getEntries().add(
-            new AccessControlEntry(userWithPermissions.getRoles()[0], SearchService.WRITE_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.READ_PERMISSION, true));
+    acl.getEntries().add(new AccessControlEntry(ROLE_STUDENT, SearchService.WRITE_PERMISSION, true));
 
     // Add the media package to the search index
     service.add(mediaPackage);
@@ -479,6 +551,7 @@ public class SearchServiceImplTest {
     for (long i = 0; i < 10; i++) {
       MediaPackage mediaPackage = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
       mediaPackage.setIdentifier(IdBuilderFactory.newInstance().newIdBuilder().createNew());
+      searchDatabase.storeMediaPackage(mediaPackage, acl, new Date());
       String payload = MediaPackageParser.getAsXml(mediaPackage);
       JaxbJob job = new JaxbJob();
       job.setId(i);

@@ -16,6 +16,7 @@
 package org.opencastproject.mediapackage;
 
 import org.opencastproject.util.Checksum;
+import org.opencastproject.util.IoSupport;
 import org.opencastproject.util.MimeType;
 
 import org.w3c.dom.Document;
@@ -555,20 +556,22 @@ public abstract class AbstractMediaPackageElement implements MediaPackageElement
   }
 
   /**
-   * {@inheritDoc}
-   * 
-   * @see java.lang.Object#clone()
+   * Attention: The media package reference is not being cloned so that calling <code>getMediaPackage()</code>
+   * on the clone yields null.
    */
   public Object clone() {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
+    ByteArrayInputStream in = null;
     try {
       Marshaller marshaller = MediaPackageImpl.context.createMarshaller();
       marshaller.marshal(this, out);
       Unmarshaller unmarshaller = MediaPackageImpl.context.createUnmarshaller();
-      ByteArrayInputStream in = new ByteArrayInputStream(out.toByteArray());
+      in = new ByteArrayInputStream(out.toByteArray());
       return unmarshaller.unmarshal(in);
     } catch (JAXBException e) {
       throw new RuntimeException(e.getLinkedException() != null ? e.getLinkedException() : e);
+    } finally {
+      IoSupport.closeQuietly(in);
     }
   }
 
