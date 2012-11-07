@@ -212,13 +212,17 @@ Opencast.Annotation_Comment_List = (function ()
 		nameBoxValue = nameBoxValue.replace(/'/g, "`");
 		nameBoxValue = nameBoxValue.replace(/"/g, "`");
 		$.log("click submit " + textBoxValue + " " + nameBoxValue);
+		var isPrivate = false;
+		if ($("#oc-comments-list-private").attr("checked") !== undefined) {
+			isPrivate = true;
+		}
 		if(textBoxValue !== defaultText && nameBoxValue !== default_name) {
 			if(isTimed) {
 				//pause player
 				Opencast.Player.doPause();
-				addComment(textBoxValue, nameBoxValue, "scrubber", Math.round(Opencast.Player.getCurrentPosition()));
+				addComment(textBoxValue, nameBoxValue, "scrubber", isPrivate, Math.round(Opencast.Player.getCurrentPosition()));
 			} else {
-				addComment(textBoxValue, nameBoxValue, "normal");
+				addComment(textBoxValue, nameBoxValue, "normal", isPrivate);
 			}
 
 			$("#oc-comments-list-textbox").val(defaultText);
@@ -249,7 +253,7 @@ Opencast.Annotation_Comment_List = (function ()
      * @description Add a comment
      * @param Int position, String value
      */
-    function addComment(value,user,type,pos,replyID)
+    function addComment(value,user,type,isPrivate,pos,replyID)
     {      
         /* // Get user by system
         var user = "Anonymous";
@@ -276,14 +280,23 @@ Opencast.Annotation_Comment_List = (function ()
 	        if(pos !== undefined)
 	        	  timePos = pos;      
         }
+        var data = "episode="+mediaPackageId+"&type="+annotationType+"&in="+timePos+"&value="+data+"&out="+0;
+        if (Opencast.clipshow.core.getCurrentClipshow()) {
+          data = data + "&clipshowId=" + Opencast.clipshow.core.getCurrentClipshow();
+        }
+        if (isPrivate) {
+            data = data + "&isPrivate=true"
+        }
+
         $.ajax(
         {
             type: 'PUT',
             url: "../../annotation/",
-            data: "episode="+mediaPackageId+"&type="+annotationType+"&in="+timePos+"&value="+data+"&out="+0,
+            data: data,
             dataType: 'xml',
             success: function (xml)
             {
+        		Opencast.Player.addEvent("ADD_COMMENT_LIST");
                 $.log("Add_Comment success");
                 isOpen = false;
                 isOpening = false;
@@ -294,6 +307,7 @@ Opencast.Annotation_Comment_List = (function ()
 	                	if(Opencast.Annotation_Comment.getAnnotationCommentDisplayed() === false){
 	            			$("#oc_checkbox-annotation-comment").attr('checked', true);
 	        			}
+	                	Opencast.Annotation_Comment.hide();
 	        			Opencast.Annotation_Comment.show();
 	        		}    			
                 }                           
@@ -318,6 +332,7 @@ Opencast.Annotation_Comment_List = (function ()
 
 	if(!isOpen && !isOpening)
 	{
+		Opencast.Player.addEvent("SHOW_COMMENT_LIST");
 	    isOpening = true;
             // Hide other Tabs		
 	    Opencast.Plugin_Controller.hideAll(Opencast.Annotation_Comment_List);
@@ -336,11 +351,16 @@ Opencast.Annotation_Comment_List = (function ()
             $('#oc-comments-list').hide();
             $('#oc-comments-list-add-form').hide();
             
+            var data = "episode=" + mediaPackageId+"&type="+annotationType+"&limit=1000";
+            if (Opencast.clipshow.core.getCurrentClipshow()) {
+              data = data + "&clipshowId=" + Opencast.clipshow.core.getCurrentClipshow();
+            }
+
             // Request JSONP data
             $.ajax(
 		{
 		    url: Opencast.Watch.getAnnotationURL(),
-		    data: "episode=" + mediaPackageId+"&type="+annotationType+"&limit=1000",
+		    data: data,
 		    dataType: 'json',
 		    jsonp: 'jsonp',
 		    success: function (data)
@@ -385,15 +405,20 @@ Opencast.Annotation_Comment_List = (function ()
 									   comment.user = dataArray[0];
 									   comment.text = dataArray[1];
 									   comment.type = dataArray[2];                            
+									   comment.isPrivate = data['annotations'].annotation[i].isPrivate;
 									   if(dataArray[2] === "slide"){
 									       comment.slide = dataArray[5];
-									       slideCount++;                                    
+									       slideCount++;                
+										   comment.isPrivate = data['annotations'].annotation[i].isPrivate;
 									   }else if(dataArray[2] === "scrubber"){
 									       scrubberCount++;
+										   comment.isPrivate = data['annotations'].annotation[i].isPrivate;
 									   }else if(dataArray[2] === "normal"){
 									       normalCount++;
+										   comment.isPrivate = data['annotations'].annotation[i].isPrivate;
 									   }else if(dataArray[2] === "reply"){
                             						       comment.replyID = dataArray[3];
+                       									   comment.isPrivate = data['annotations'].annotation[i].isPrivate;
 									   }
 									   if(dataArray[2] !== "reply"){
                             						       commentArray[count] = comment;
@@ -420,16 +445,20 @@ Opencast.Annotation_Comment_List = (function ()
 				comment.created = $.getDateString(dateCr) + " " + $.getTimeString(dateCr);
 				comment.user = dataArray[0];
 				comment.text = dataArray[1];
-				comment.type = dataArray[2];                            
+				comment.type = dataArray[2]; 
 				if(dataArray[2] === "slide"){
                                     comment.slide = dataArray[5];
-                                    slideCount++;                                    
+                                    slideCount++;
+                    				comment.isPrivate = data['annotations'].annotation.isPrivate;
 				}else if(dataArray[2] === "scrubber"){
+									comment.isPrivate = data['annotations'].annotation.isPrivate;
                                     scrubberCount++;
 				}else if(dataArray[2] === "normal"){
+									comment.isPrivate = data['annotations'].annotation.isPrivate;
                                     normalCount++;
 				}else if(dataArray[2] === "reply"){
                             	    comment.replyID = dataArray[3];
+									comment.isPrivate = data['annotations'].annotation.isPrivate;
 				}
 				if(dataArray[2] !== "reply"){
                             	    commentArray[0] = comment;
@@ -517,6 +546,7 @@ Opencast.Annotation_Comment_List = (function ()
 
 	if(isOpen)
 	{
+		Opencast.Player.addEvent("HIDE_COMMENT_LIST");
             // Change Tab Caption
             $('#oc_btn-comments').attr(
 		{
@@ -581,12 +611,18 @@ Opencast.Annotation_Comment_List = (function ()
         {
             type: 'DELETE',
             url: "../../annotation/"+commentID,
-            statusCode: {
+            success: function() {
+            	Opencast.Player.addEvent("DELETE_COMMENT_LIST_" + commentID);
+            	reshow();
+            	if (Opencast.Annotation_Comment.isShown()) {
+            		Opencast.Annotation_Comment.hide();
+            		Opencast.Annotation_Comment.show()
+            	}
+            }
+            /*statusCode: {
                 200: function() {
                     $.log("Comment DELETE Ajax call: Request success");
-                    isOpen = false;
-                    isOpening = false;
-                    show();
+                    reshow();
                     if(Opencast.Annotation_Comment !== undefined){
 	                    if(Opencast.Annotation_Comment.getAnnotationCommentDisplayed() === true){
 	                        Opencast.Annotation_Comment.show();
@@ -597,15 +633,13 @@ Opencast.Annotation_Comment_List = (function ()
             complete:
                 function(jqXHR, textStatus){
                     $.log("Comment DELETE Ajax call: Request success");
-                    isOpen = false;
-                    isOpening = false;
-                    show();
+                    reshow();
                     if(Opencast.Annotation_Comment !== undefined){
 	                    if(Opencast.Annotation_Comment.getAnnotationCommentDisplayed() === true){
 	                        Opencast.Annotation_Comment.show();
 	                    }       
 	            	}
-                }
+                }*/
             
         });
     }   
@@ -617,6 +651,7 @@ Opencast.Annotation_Comment_List = (function ()
      */
     function goToComment(commentID, commentValue, commentTime, commentSlide, userId, type)
     {
+    	Opencast.Player.addEvent("GOTO_COMMENT_LIST_" + commentID);
         if(Opencast.Annotation_Comment !== undefined){
             if(Opencast.Annotation_Comment.getAnnotationCommentDisplayed() === true){
                 Opencast.Annotation_Comment.show();
@@ -673,8 +708,12 @@ Opencast.Annotation_Comment_List = (function ()
 				nameBoxValue = nameBoxValue.replace(/'/g, "`");
 				nameBoxValue = nameBoxValue.replace(/"/g, "`");
 				$.log("click submit " + textBoxValue + " " + nameBoxValue);
+				var isPrivate = false;
+				if ($("#oc-comments-list-private").attr("checked") !== undefined) {
+					isPrivate = true;
+				}
 				if(textBoxValue !== defaultText && nameBoxValue !== default_name) {
-					addComment(textBoxValue, nameBoxValue, "reply",0, commentID);
+					addComment(textBoxValue, nameBoxValue, "reply", isPrivate, 0, commentID);
 					cancelReply();
 				} else if(textBoxValue === defaultText) {
 					$("#oc-comments-list-reply-textbox").focus();
@@ -772,6 +811,18 @@ Opencast.Annotation_Comment_List = (function ()
     {
     	return cm_username;
     }
+
+    function isShown()
+    {
+      return isOpen;
+    }
+
+    function reshow()
+    {
+		isOpen = false;
+	    isOpening = false;
+	    show();
+    }
     
     return {
         initialize: initialize,
@@ -788,6 +839,8 @@ Opencast.Annotation_Comment_List = (function ()
         hoverOutCommentList: hoverOutCommentList,
         goToComment: goToComment,
         doToggle: doToggle,
-        setMediaPackageId: setMediaPackageId
+        setMediaPackageId: setMediaPackageId,
+        isShown: isShown,
+        reshow: reshow
     };
 }());

@@ -31,16 +31,17 @@
     <sec:intercept-url pattern='/info/me.json' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
 
     <!-- Enable anonymous access to the engage player and the GET endpoints it requires -->
-    <sec:intercept-url pattern='/engage/ui/**' access='ROLE_ANONYMOUS, ROLE_USER' />
+    <sec:intercept-url pattern='/engage/ui/**' access='ROLE_USER' />
     <sec:intercept-url pattern='/search/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
-    <sec:intercept-url pattern='/usertracking/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
+    <sec:intercept-url pattern='/usertracking/**' method="GET" access='ROLE_USER' />
     <sec:intercept-url pattern='/static/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
     <sec:intercept-url pattern='/export/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
 
     <!-- Enable anonymous access to the annotation and the series endpoints -->
     <sec:intercept-url pattern='/series/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
-    <sec:intercept-url pattern='/annotation/**' method="GET" access='ROLE_ANONYMOUS, ROLE_USER' />
-    <sec:intercept-url pattern='/annotation/**' method="PUT" access='ROLE_ANONYMOUS, ROLE_USER' />
+    <sec:intercept-url pattern='/annotation/**' method="GET" access='ROLE_USER' />
+    <sec:intercept-url pattern='/annotation/**' method="PUT" access='ROLE_USER' />
+    <sec:intercept-url pattern='/clipshow/**' access='ROLE_USER' />
 
     <!-- Enable anonymous access to the OAI-PMH repository              -->
     <!-- The OAI-PMH specification demands boths GET and POST requests  -->

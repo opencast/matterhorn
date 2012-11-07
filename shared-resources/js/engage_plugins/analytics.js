@@ -141,7 +141,7 @@ Opencast.Analytics = (function ()
 			{
 			    if (Opencast.segments.getSlideLength() > 0)
 			    {
-				if ($.browser.webkit || $.browser.msie)
+				/*if ($.browser.webkit || $.browser.msie)
 				{
 				    $(".segments").css('top', '-25px');
 				    $('#oc_video-view').css('top', '-22px');
@@ -150,15 +150,16 @@ Opencast.Analytics = (function ()
 				{
 				    $(".segments").css('top', '-25px');
 				    $('#oc_video-view').css('top', '-21px');
-				}
+				}*/
 				$('#segmentstable1').css('opacity', '0.65');
 				$('#segmentstable1').css('filter', 'alpha(opacity=65)');
-				$('#oc_video-view').css('position', 'relative');
+				//$('#oc_video-view').css('position', 'relative');
 			    }
-			    $('#annotation').css('top', '-25px');
+			    //$('#annotation').css('top', '-25px');
 			    $("#analytics").show();
 			    isOpen = true;
 			    //$.sparkline_display_visible();
+			    intervalRunning = true;
 			    if (!intervalRunning)
 			    {
 				// Display actual Results every updateIntervall Milliseconds

@@ -49,6 +49,9 @@
                                     <div class="timeDate">
                                         <xsl:value-of select="ns2:dcCreated"/>
                                     </div>
+                                    <div class="clipshowCount">
+                                        <xsl:value-of select="mp:mediapackage/@id" />
+                                    </div>
                                     <xsl:value-of select='substring(ns2:dcDescription, 0, 200)' />
                                     <xsl:if test='string-length(ns2:dcDescription)>200'>
                                         ...

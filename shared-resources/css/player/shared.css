@@ -115,4 +115,6 @@ body {
 
 #analytics-and-annotations {
     height: 25px;
+    position: relative;
+    width: 100%;
 }

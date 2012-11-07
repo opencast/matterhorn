@@ -59,7 +59,7 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotations(int offset, int limit);
+  AnnotationList getAnnotations(int offset, int limit, Long clipshowId);
 
 
   /**
@@ -73,7 +73,7 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotationsByMediapackageId(String mediapackageId, int offset, int limit);
+  AnnotationList getAnnotationsByMediapackageId(String mediapackageId, int offset, int limit, Long clipshowId);
 
   /**
    * Returns annotations of a given type
@@ -86,7 +86,7 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotationsByType(String type, int offset, int limit);
+  AnnotationList getAnnotationsByType(String type, int offset, int limit, Long clipshowId);
 
   /**
    * Returns annotations of a given day (YYYYMMDD)
@@ -99,7 +99,7 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotationsByDay(String day, int offset, int limit);
+  AnnotationList getAnnotationsByDay(String day, int offset, int limit, Long clipshowId);
 
   /**
    * Returns annotations of a given type and day
@@ -114,7 +114,7 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotationsByTypeAndDay(String type, String day, int offset, int limit);
+  AnnotationList getAnnotationsByTypeAndDay(String type, String day, int offset, int limit, Long clipshowId);
 
   /**
    * Returns annotations of a given type and mediapackage id
@@ -129,6 +129,6 @@ public interface AnnotationService {
    *          the limit
    * @return the annotation list
    */
-  AnnotationList getAnnotationsByTypeAndMediapackageId(String type, String mediapackageId, int offset, int limit);
+  AnnotationList getAnnotationsByTypeAndMediapackageId(String type, String mediapackageId, int offset, int limit, Long clipshowId);
 
 }

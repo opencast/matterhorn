@@ -387,6 +387,7 @@ Opencast.Initialize = (function ()
 
     $(document).ready(function ()
     {
+        $("#oc_clipshow-series-confirm-dialog").hide();
         keyboardListener();
         $('#wysiwyg').wysiwyg(
         {
@@ -802,11 +803,17 @@ Opencast.Initialize = (function ()
                     Opencast.Annotation_Comment_List.doToggle();
                     break;
                 case 4:
+                    Opencast.clipshow.user.core.doToggle();
+                    break;
+                case 5:
+                    Opencast.clipshow.series.core.doToggle();
+                case 6:
                     // Have a look at the - (engage-ui) watch.html - search trigger-function
                     break;
                 }
             }
         });
+
         $("#oc_ui_tabs .ui-tabs-nav li").last().css('float', 'right');
         $(window).resize(function (e)
         {
@@ -814,7 +821,10 @@ Opencast.Initialize = (function ()
             {
                 Opencast.Player.showShare();
             }
-	    Opencast.Player.addEvent(Opencast.logging.RESIZE_TO + $(window).width() + 'x' + $(window).height());
+            //WTF, why is this firing when you resize a clip?
+            if (e.target == window) {
+            	Opencast.Player.addEvent(Opencast.logging.RESIZE_TO + $(window).width() + 'x' + $(window).height());
+            }
         });
         //bind click functions
         $('#oc_share-button').click(function (e)
@@ -837,6 +847,14 @@ Opencast.Initialize = (function ()
         $('#oc_checkbox-statistics').click(function ()
         {
             Opencast.Analytics.doToggle();
+        });
+        $('#oc_checkbox-clipshow').click(function ()
+        {
+            Opencast.clipshow.core.doToggleClipshow();
+        });
+        $('#oc_checkbox-clipshowEditor').click(function ()
+        {
+            Opencast.clipshow.core.doToggleClipshowEditor();
         });
         $('#oc_checkbox-annotations').click(function ()
         {
@@ -907,6 +925,66 @@ Opencast.Initialize = (function ()
             }
         });
 
+        var allFields = $( [] ).add($(".clipshow-input"));
+        $("#oc_clipshow-dialog").dialog({
+          autoOpen: false,
+          height: 495,
+          width: 350,
+          modal: true,
+          buttons: {
+            "Save Clipshow": function() {
+              var validated = true;
+              var validText = "";
+
+              var title = "";
+              if ($("#oc-input-clipshow-title").val().length > 0) {
+                title = $("#oc-input-clipshow-title").val();
+              } else {
+                validated = false;
+                validText = validText + "Title must be at least one character";
+              }
+
+              var series = $("#oc-input-series-id").val();
+              var seriesName = $("#oc-input-series-name-select").val();
+
+              var tags = "";
+              if ($("#oc-input-tags").val().length > 0) {
+                tags = $("#oc-input-tags").val();
+              } else if ($("#oc-input-tags-select").val().length > 0) {
+                tags = $("#oc-input-tags-select").val();
+              }
+
+              var allowedUsers = "";
+              if ($("#oc-input-allowed-users").val().length > 0) {
+                allowedUsers = $("#oc-input-allowed-users").val();
+              } else if ($("#oc-input-allowed-users-select").val().length > 0) {
+                allowedUsers = $("#oc-input-allowed-users-select").val();
+              }
+
+              if (validated && $("#oc-clipshow-ordering-dest").sortable('toArray').length < 1) {
+                validated = false;
+                validText = "You must select at least one clip";
+              }
+
+              if (validated) {
+                Opencast.clipshow.editor.saveClipshow(title, series, seriesName, tags, allowedUsers);
+                $(this).dialog("close");
+              } else {
+                $(".validateTips").text(validText).addClass("ui-state-highlight");
+              }
+            },
+            Cancel: function() {
+              $(this).dialog("close");
+							$("#oc-clipshow-ordering-source").html("");
+							$("#oc-clipshow-ordering-dest").html("");
+            }
+          },
+          close: function() {
+            allFields.val("").removeClass("ui-state-error");
+          }
+        });
+
+
         onPlayerReadyListener();
         var mediaPackageId = $.getURLParameter('id');
         $.ajax(
@@ -969,6 +1047,7 @@ Opencast.Initialize = (function ()
 		Opencast.Player.addEvent(Opencast.logging.NORMAL_DETAILED_LOGGING_AJAX_FAILED);
             }
         });
+        Opencast.clipshow.core.initialize();
     });
 
     /**
