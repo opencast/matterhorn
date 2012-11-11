@@ -265,7 +265,7 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
         results.add(editedTrack);
       }
       logger.info("Smil {} precessing finished.", smil.getId());
-            
+      
       return MediaPackageElementParser.getArrayAsXml(results);
     }
 
