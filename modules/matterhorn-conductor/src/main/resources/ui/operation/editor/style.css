@@ -91,6 +91,19 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   float: left;
 }
 
+#leftBoxDescription {
+  font-weight:bold;
+  float: left;
+  width: 400px;
+}
+
+#rightBoxDescription {
+  font-weight:bold;
+  float: left;
+  margin-left: 10px;
+  width: 350px;
+}
+
 #leftBox {
   float: left;
   border: 1px solid black;
