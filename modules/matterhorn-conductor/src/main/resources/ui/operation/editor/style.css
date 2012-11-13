@@ -292,7 +292,8 @@ a.secondaryButton:hover,a.secondaryButton:focus {
 }
 
 .splitItemSelected {
-  border: 1px solid blue !important;
+  /* border: 1px solid blue !important; */
+  background-color:#657BF7;
 }
 
 .disabled {
