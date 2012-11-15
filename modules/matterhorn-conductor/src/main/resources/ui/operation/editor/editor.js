@@ -631,7 +631,7 @@ function playCurrentSplitItem() {
  */
 function onPlay(evt) {
   timeout = window.setTimeout(onTimeout, evt.data.duration);
-  editor.player.off("play");
+  // editor.player.off("play");
   endTime = evt.data.endTime;
 }
 
