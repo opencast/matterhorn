@@ -642,7 +642,7 @@ function onTimeout() {
   editor.player[0].pause();
   var check = function() {
     if (endTime > editor.player.prop("currentTime")) {
-      editor.player[0].play();
+      // editor.player[0].play();
       window.setTimeout(check, 10);
     } else {
       editor.player[0].pause();
