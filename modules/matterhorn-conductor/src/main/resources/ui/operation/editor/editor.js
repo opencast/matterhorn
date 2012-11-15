@@ -316,6 +316,7 @@ function playWithoutDeleted() {
     });
     editor.player[0].play();
   } else {
+    editor.player.prop("currentTimeSave", currentTime);
     editor.player.on("play", {
       duration : 4000,
       endTime : currentTime + 2
@@ -645,6 +646,7 @@ function onTimeout() {
       window.setTimeout(check, 10);
     } else {
       editor.player[0].pause();
+      editor.player.prop("currentTime", editor.player.prop("currentTimeSave"));
     }
   }
   check();
