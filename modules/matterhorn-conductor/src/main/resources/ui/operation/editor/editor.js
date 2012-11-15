@@ -288,6 +288,7 @@ function playEnding() {
 function playWithoutDeleted() {
   editor.player[0].pause();
   currentTime = editor.player.prop("currentTime");
+    editor.player.prop("currentTimeSave", currentTime);
   currentSplit = getCurrentSplitItem();
   if(!currentSplit.enabled) {
     currentSplit = editor.splitData.splits[currentSplit.id - 1];
@@ -316,7 +317,6 @@ function playWithoutDeleted() {
     });
     editor.player[0].play();
   } else {
-    editor.player.prop("currentTimeSave", currentTime);
     editor.player.on("play", {
       duration : 4000,
       endTime : currentTime + 2
@@ -642,7 +642,7 @@ function onTimeout() {
   editor.player[0].pause();
   var check = function() {
     if (endTime > editor.player.prop("currentTime")) {
-      // editor.player[0].play();
+      editor.player[0].play();
       window.setTimeout(check, 10);
     } else {
       editor.player[0].pause();
