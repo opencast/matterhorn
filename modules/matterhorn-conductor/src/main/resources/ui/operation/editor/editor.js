@@ -336,28 +336,60 @@ function jumpToSegment() {
   editor.player.prop("currentTime", editor.splitData.splits[id].clipBegin.replace("s", ""));
 }
 
+function isInInterval(toCheck, lower, upper) {
+    return (toCheck >= lower) && (toCheck <= upper);
+}
+
 /**
  * jump to next segment
  */
 function nextSegment() {
-  split = getCurrentSplitItem();
-  if (split != null) {
-    new_id = split.id + 1;
-    if (new_id <= editor.splitData.splits.length - 1) {
-      editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+    var currentTime = editor.player.prop("currentTime");
+    var new_id = -1;
+    for (var i = 0; i < editor.splitData.splits.length; ++i) {
+	var splitItem = editor.splitData.splits[i];
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	if((isInInterval(currentTime, clipBegin - 0.1, clipBegin + 0.1) || (currentTime >= clipBegin)) &&
+	   (!isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1) && (currentTime < clipEnd))) {
+	    new_id = i + 1;
+	    break;
+	}
+    
     }
-  }
+    if(new_id > 0) {
+	if (new_id <= editor.splitData.splits.length - 1) {
+	    editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+	} else if (new_id <= editor.splitData.splits.length) {
+	    editor.player.prop("currentTime", editor.player.prop("duration"));
+	}
+    }
 }
 
 /**
  * jump to previous segment
  */
 function previousSegment() {
-  split = getCurrentSplitItem();
-  new_id = split.id - 1;
-  if (new_id >= 0) {
-    editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
-  }
+    var currentTime = editor.player.prop("currentTime");
+    var new_id = -1;
+    for (var i = 0; i < editor.splitData.splits.length; ++i) {
+	var splitItem = editor.splitData.splits[i];
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	if(((currentTime > clipBegin) && (currentTime < clipEnd)) || isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1)) {
+	    new_id = i;
+	    break;
+	} else if(isInInterval(currentTime, clipBegin - 0.1, clipBegin + 0.1)) {
+	    new_id = i - 1;
+	    break;
+	} else if ((i == (editor.splitData.splits.length - 1)) && (currentTime >= clipEnd)) {
+	    new_id = editor.splitData.splits.length - 1;
+	    break;
+	}
+    }
+    if (new_id >= 0) {
+	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+    }
 }
 
 /**
@@ -625,7 +657,7 @@ function onTimeout() {
  */
 function getCurrentSplitItem() {
   var currentTime = editor.player.prop("currentTime");
-  for ( var i = 0; i < editor.splitData.splits.length; i++) {
+  for (var i = 0; i < editor.splitData.splits.length; ++i) {
     var splitItem = editor.splitData.splits[i];
     var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
     var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
