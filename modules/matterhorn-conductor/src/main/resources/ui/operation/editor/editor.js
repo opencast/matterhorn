@@ -51,8 +51,13 @@ default_config[PREVIOUS_MARKER] = "Up";
 default_config[NEXT_MARKER] = "Down";
 default_config[PLAY_ENDING_OF_CURRENT_SEGMENT] = "n";
 
-var timeout = null;
+var timeout1 = null;
+var timeout2 = null;
 var endTime = 0;
+var jumpBackTime = 0;
+var jumpBackBool = false;
+var currEvt = null;
+var timeoutUsed = false;
 
 editor.splitData = {};
 editor.splitData.splits = [];
@@ -288,7 +293,6 @@ function playEnding() {
 function playWithoutDeleted() {
   editor.player[0].pause();
   currentTime = editor.player.prop("currentTime");
-    editor.player.prop("currentTimeSave", currentTime);
   currentSplit = getCurrentSplitItem();
   if(!currentSplit.enabled) {
     currentSplit = editor.splitData.splits[currentSplit.id - 1];
@@ -317,9 +321,12 @@ function playWithoutDeleted() {
     });
     editor.player[0].play();
   } else {
+      timeoutUsed = false;
     editor.player.on("play", {
-      duration : 4000,
-      endTime : currentTime + 2
+	duration : 4000,
+	endTime : currentTime + 2,
+	jumpBackTime : currentTime,
+	jumpBackBool : true
     }, onPlay);
     editor.player[0].play();
   }
@@ -609,6 +616,7 @@ function setCurrentTimeAsNewOutpoint() {
  */
 function playCurrentSplitItem() {
   var splitItem = getCurrentSplitItem();
+    var currentTime = editor.player.prop("currentTime");
   if (splitItem != null) {
     var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
     var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
@@ -616,8 +624,8 @@ function playCurrentSplitItem() {
     editor.player.prop("currentTime", clipBegin);
 
     editor.player.on("play", {
-      duration : duration,
-      endTime : clipEnd
+	duration : duration,
+	endTime : clipEnd
     }, onPlay);
     editor.player[0].play();
   }
@@ -630,26 +638,37 @@ function playCurrentSplitItem() {
  *          the event
  */
 function onPlay(evt) {
-  timeout = window.setTimeout(onTimeout, evt.data.duration);
+  timeout1 = window.setTimeout(onTimeout, evt.data.duration);
   // editor.player.off("play");
   endTime = evt.data.endTime;
+  jumpBackTime = evt.data.jumpBackTime;
+  jumpBackBool = ((evt.data.jumpBackBool === undefined) || (evt.data.jumpBackBool != true)) ? null : evt.data.jumpBackBool;
+  currEvt = evt;
 }
 
 /**
  * the timeout function pausing the video again
  */
 function onTimeout() {
-  editor.player[0].pause();
-  var check = function() {
-    if (endTime > editor.player.prop("currentTime")) {
-      editor.player[0].play();
-      window.setTimeout(check, 10);
-    } else {
-      editor.player[0].pause();
-      editor.player.prop("currentTime", editor.player.prop("currentTimeSave"));
+    if(!timeoutUsed) {
+	editor.player[0].pause();
+	var check = function() {
+	    if ((timeout1 != null) && endTime > editor.player.prop("currentTime")) {
+		editor.player[0].play();
+		timeout2 = window.setTimeout(check, 10);
+	    } else {
+		if((jumpBackBool != null) && (jumpBackTime != null)) {
+		    clearEvents(currEvt);
+		    editor.player[0].pause();
+		    timeoutUsed = true;
+		    jumpBackBool = null;
+		    editor.player.prop("currentTime", jumpBackTime);
+		    jumpBackTime = null;
+		}
+	    }
+	}
+	check();
     }
-  }
-  check();
 }
 
 /**
@@ -835,11 +854,13 @@ function playerReady() {
  * clearing events
  */
 function clearEvents(evt) {
-  window.clearTimeout(timeout);
-  editor.player.off("play");
-  editor.player.off("seeking");
-  editor.player.off("pause");
-  console.log(evt);
+  window.clearTimeout(timeout1);
+  timeout1 = null;
+  timeout2 = null;
+  window.clearTimeout(timeout2);
+  // editor.player.off("play");
+  // editor.player.off("seeking");
+  // editor.player.off("pause");
 }
 
 /**
