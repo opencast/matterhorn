@@ -352,6 +352,10 @@ function isInInterval(toCheck, lower, upper) {
  * jump to next segment
  */
 function nextSegment() {
+    var playerPaused = editor.player.prop("paused");
+    if(!playerPaused) {
+	editor.player[0].pause();
+    }
     var currentTime = editor.player.prop("currentTime");
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
@@ -372,12 +376,19 @@ function nextSegment() {
 	    editor.player.prop("currentTime", editor.player.prop("duration"));
 	}
     }
+    // if(!playerPaused) {
+	// editor.player[0].play();
+    // }
 }
 
 /**
  * jump to previous segment
  */
 function previousSegment() {
+    var playerPaused = editor.player.prop("paused");
+    if(!playerPaused) {
+	editor.player[0].pause();
+    }
     var currentTime = editor.player.prop("currentTime");
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
@@ -398,6 +409,9 @@ function previousSegment() {
     if (new_id >= 0) {
 	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
     }
+    // if(!playerPaused) {
+	// editor.player[0].play();
+    // }
 }
 
 /**
