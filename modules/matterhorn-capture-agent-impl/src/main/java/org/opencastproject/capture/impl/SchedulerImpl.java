@@ -15,62 +15,6 @@
  */
 package org.opencastproject.capture.impl;
 
-import org.opencastproject.capture.CaptureParameters;
-import org.opencastproject.capture.admin.api.AgentState;
-import org.opencastproject.capture.api.ScheduledEvent;
-import org.opencastproject.capture.api.ScheduledEventImpl;
-import org.opencastproject.capture.impl.jobs.CleanCaptureJob;
-import org.opencastproject.capture.impl.jobs.IngestJob;
-import org.opencastproject.capture.impl.jobs.JobCreator;
-import org.opencastproject.capture.impl.jobs.JobDetailTriggerPair;
-import org.opencastproject.capture.impl.jobs.JobParameters;
-import org.opencastproject.capture.impl.jobs.PollCalendarJob;
-import org.opencastproject.capture.impl.jobs.SerializeJob;
-import org.opencastproject.capture.impl.jobs.StartCaptureJob;
-import org.opencastproject.capture.impl.jobs.StopCaptureJob;
-import org.opencastproject.capture.pipeline.GStreamerPipeline;
-import org.opencastproject.capture.pipeline.InvalidCaptureDevicesSpecifiedException;
-import org.opencastproject.mediapackage.MediaPackage;
-import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
-import org.opencastproject.mediapackage.MediaPackageElement;
-import org.opencastproject.mediapackage.MediaPackageElements;
-import org.opencastproject.mediapackage.MediaPackageException;
-import org.opencastproject.mediapackage.identifier.IdImpl;
-import org.opencastproject.security.api.TrustedHttpClient;
-import org.opencastproject.security.api.TrustedHttpClientException;
-import org.opencastproject.util.IoSupport;
-import org.opencastproject.util.QueryStringBuilder;
-
-import net.fortuna.ical4j.data.CalendarBuilder;
-import net.fortuna.ical4j.data.ParserException;
-import net.fortuna.ical4j.model.Calendar;
-import net.fortuna.ical4j.model.Component;
-import net.fortuna.ical4j.model.Dur;
-import net.fortuna.ical4j.model.Property;
-import net.fortuna.ical4j.model.PropertyList;
-import net.fortuna.ical4j.model.component.VEvent;
-import net.fortuna.ical4j.model.property.Duration;
-
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.http.Header;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.message.BasicHeader;
-import org.osgi.service.cm.ConfigurationException;
-import org.quartz.CronExpression;
-import org.quartz.CronTrigger;
-import org.quartz.JobDetail;
-import org.quartz.Scheduler;
-import org.quartz.SchedulerException;
-import org.quartz.SimpleTrigger;
-import org.quartz.Trigger;
-import org.quartz.impl.StdSchedulerFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -96,6 +40,61 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
 import javax.ws.rs.core.Response;
+
+import net.fortuna.ical4j.data.CalendarBuilder;
+import net.fortuna.ical4j.data.ParserException;
+import net.fortuna.ical4j.model.Calendar;
+import net.fortuna.ical4j.model.Component;
+import net.fortuna.ical4j.model.Dur;
+import net.fortuna.ical4j.model.Property;
+import net.fortuna.ical4j.model.PropertyList;
+import net.fortuna.ical4j.model.component.VEvent;
+import net.fortuna.ical4j.model.property.Duration;
+
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.http.Header;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.message.BasicHeader;
+import org.opencastproject.capture.CaptureParameters;
+import org.opencastproject.capture.admin.api.AgentState;
+import org.opencastproject.capture.api.ScheduledEvent;
+import org.opencastproject.capture.api.ScheduledEventImpl;
+import org.opencastproject.capture.impl.jobs.CleanCaptureJob;
+import org.opencastproject.capture.impl.jobs.IngestJob;
+import org.opencastproject.capture.impl.jobs.JobCreator;
+import org.opencastproject.capture.impl.jobs.JobDetailTriggerPair;
+import org.opencastproject.capture.impl.jobs.JobParameters;
+import org.opencastproject.capture.impl.jobs.PollCalendarJob;
+import org.opencastproject.capture.impl.jobs.SerializeJob;
+import org.opencastproject.capture.impl.jobs.StartCaptureJob;
+import org.opencastproject.capture.impl.jobs.StopCaptureJob;
+import org.opencastproject.capture.pipeline.GStreamerPipeline;
+import org.opencastproject.capture.pipeline.InvalidCaptureDevicesSpecifiedException;
+import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
+import org.opencastproject.mediapackage.MediaPackageElement;
+import org.opencastproject.mediapackage.MediaPackageElements;
+import org.opencastproject.mediapackage.MediaPackageException;
+import org.opencastproject.mediapackage.identifier.IdImpl;
+import org.opencastproject.security.api.TrustedHttpClient;
+import org.opencastproject.security.api.TrustedHttpClientException;
+import org.opencastproject.util.IoSupport;
+import org.opencastproject.util.QueryStringBuilder;
+import org.osgi.service.cm.ConfigurationException;
+import org.quartz.CronExpression;
+import org.quartz.CronTrigger;
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SimpleTrigger;
+import org.quartz.Trigger;
+import org.quartz.impl.StdSchedulerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Scheduler implementation class. This class is responsible for retrieving iCal and then scheduling captures from the
@@ -581,10 +580,18 @@ public class SchedulerImpl {
     if (calendarString == null) {
       // If the calendar is null, which only happens the first time through
       // This case handles not having a network connection by just reading from the cached copy of the calendar
-      if (calendar == null) {
-        if (localCalendarCacheURL != null) {
-          calendarString = IoSupport.readFileFromURL(localCalendarCacheURL);
-        } else {
+    	if (calendar == null) {
+    		if (localCalendarCacheURL != null) {
+    			//The file might contain Unice characters so be sure to read in UTF8
+    			File file = new File(localCalendarCacheURL.getFile()); 
+    			try {
+    				calendarString = FileUtils.readFileToString(file, "UTF-8");
+    			} catch (IOException e) {
+    				log.warn("Error reading schedule file from disc", e);
+
+    			} 
+
+    		} else {
           log.warn("Unable to read calendar from local calendar cache because location was null.");
           return null;
         }
