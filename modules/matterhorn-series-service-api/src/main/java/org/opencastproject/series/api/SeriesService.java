@@ -37,6 +37,11 @@ public interface SeriesService {
   String CONTRIBUTE_CONTENT_PERMISSION = "contribute";
 
   /**
+   * Identifier for service registration and location
+   */
+  String JOB_TYPE = "org.opencastproject.series";
+
+  /**
    * Adds or updates series. IllegalArgumentException is thrown if dc argument is null.
    * 
    * @param dc
