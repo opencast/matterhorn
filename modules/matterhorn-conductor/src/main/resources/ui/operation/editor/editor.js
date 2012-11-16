@@ -70,8 +70,10 @@ editor.ready = false;
 /**
  * update split list in UI
  */
-editor.updateSplitList = function() {
-  cancelButtonClick();
+editor.updateSplitList = function(dontClickCancel) {
+    if(!dontClickCancel) {
+	cancelButtonClick();
+    }
   $('#leftBox').html($('#splitElements').jqote(editor.splitData));
   $('#splitSegments').html($('#splitSegmentTemplate').jqote(editor.splitData));
   $('.splitItemDiv').click(splitItemClick);
@@ -519,8 +521,8 @@ function okButtonClick() {
 
     checkPrevAndNext(id);
 
-    cancelButtonClick();
-    editor.updateSplitList();
+    // cancelButtonClick();
+    editor.updateSplitList(true);
   }
 }
 
@@ -849,16 +851,18 @@ function playerReady() {
     // add evtl handler for enter in editing fields
     $('#clipBegin input').keyup(function(evt) {
       if (evt.keyCode == 13) {
-        editor.selectedSplit.clipBegin = $('#clipBegin').timefield('option', 'value');
-        checkPrevAndNext(editor.selectedSplit.id);
-        editor.updateSplitList();
+        // editor.selectedSplit.clipBegin = $('#clipBegin').timefield('option', 'value');
+        // checkPrevAndNext(editor.selectedSplit.id);
+        // editor.updateSplitList();
+	  okButtonClick();
       }
     });
     $('#clipEnd input').keyup(function(evt) {
       if (evt.keyCode == 13) {
-        editor.selectedSplit.clipEnd = $('#clipEnd').timefield('option', 'value');
-        checkPrevAndNext(editor.selectedSplit.id);
-        editor.updateSplitList();
+        // editor.selectedSplit.clipEnd = $('#clipEnd').timefield('option', 'value');
+        // checkPrevAndNext(editor.selectedSplit.id);
+        // editor.updateSplitList();
+	  okButtonClick();
       }
     });
   }
