@@ -19,6 +19,7 @@ import java.io.File;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import junit.framework.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencastproject.videoeditor.gstreamer.sources.SourceBinsFactory;
 import org.slf4j.Logger;
@@ -32,12 +33,63 @@ public class VideoEditorPipelineTest extends GstreamerAbstractTest {
   
   /** The logging instance */
   private static final Logger logger = LoggerFactory.getLogger(VideoEditorPipelineTest.class);
+  
+  private static boolean gstreamerInstalled = true;
+  
+  @BeforeClass
+  public static void setUpClass() throws Exception {
+    GstreamerAbstractTest.setUpClass();
+    
+    /* gstreamer-core */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.FILESRC)) {
+      gstreamerInstalled = false;
       
+      logger.info("Skip tests because gstreamer-base is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-base*/
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.DECODEBIN)) {
+      gstreamerInstalled = false;
+      logger.info("Skip tests because gstreamer-plugins-base is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-good */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.CUTTER)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-plugins-good is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-bad */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.FAAC)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-plugins-bad is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-ugly */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.X264ENC)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-plugins-ugly is not installed!");
+      return;
+    }
+    /* gstreamer-gnonlin */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.GNL_COMPOSITION)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-gnonlin is not installed!");
+      return;
+    }
+  }
+  
   /**
    * Test of run and stop methods, of class VideoEditorPipeline.
    */
   @Test
   public void testRunStopDemuxedSourceFiles() {
+    if (!gstreamerInstalled) return;
+    
     logger.info("Test pipeline with demuxed source files...");
     try {
       SourceBinsFactory sourceBins = new SourceBinsFactory(new File(outputFilePath).getAbsolutePath());
@@ -70,6 +122,8 @@ public class VideoEditorPipelineTest extends GstreamerAbstractTest {
    */
   @Test
   public void testRunStopMuxedSourceFile() {
+    if (!gstreamerInstalled) return;
+    
     logger.info("Test pipeline with muxed source file...");
         
     try {

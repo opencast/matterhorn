@@ -17,6 +17,7 @@
 package org.opencastproject.videoeditor.gstreamer;
 
 import junit.framework.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,8 +33,32 @@ public class GstreamerTypeFinderTest extends GstreamerAbstractTest {
    */
   private static final Logger logger = LoggerFactory.getLogger(GstreamerTypeFinderTest.class);
   
+  private static boolean gstreamerInstalled = true;
+  
+  @BeforeClass
+  public static void setUpClass() throws Exception {
+    GstreamerAbstractTest.setUpClass();
+    
+    /* gstreamer-core */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.FILESRC)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-base is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-base */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.DECODEBIN2)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-plugins-base is not installed!");
+      return;
+    }
+  }
+  
   @Test
   public void typefinderAudioTest() {
+    if (!gstreamerInstalled) return;
+    
     GstreamerTypeFinder typeFinder = new GstreamerTypeFinder(audioFilePath);
     Assert.assertTrue(typeFinder.isAudioFile());
     Assert.assertFalse(typeFinder.isVideoFile());
@@ -43,6 +68,8 @@ public class GstreamerTypeFinderTest extends GstreamerAbstractTest {
   
   @Test
   public void typefinderVideoTest() {
+    if (!gstreamerInstalled) return;
+    
     GstreamerTypeFinder typeFinder = new GstreamerTypeFinder(videoFilePath);
     Assert.assertTrue(typeFinder.isVideoFile());
     Assert.assertFalse(typeFinder.isAudioFile());
@@ -52,6 +79,8 @@ public class GstreamerTypeFinderTest extends GstreamerAbstractTest {
   
   @Test
   public void typefinderMuxedTest() {
+    if (!gstreamerInstalled) return;
+    
     GstreamerTypeFinder typeFinder = new GstreamerTypeFinder(muxedFilePath);
     Assert.assertTrue(typeFinder.isAudioFile());
     Assert.assertTrue(typeFinder.isVideoFile());
@@ -62,6 +91,8 @@ public class GstreamerTypeFinderTest extends GstreamerAbstractTest {
   
   @Test
   public void typefinderFailTest() {
+    if (!gstreamerInstalled) return;
+    
     GstreamerTypeFinder typeFinder = new GstreamerTypeFinder("foo");
     Assert.assertFalse(typeFinder.isAudioFile());
     Assert.assertFalse(typeFinder.isVideoFile());

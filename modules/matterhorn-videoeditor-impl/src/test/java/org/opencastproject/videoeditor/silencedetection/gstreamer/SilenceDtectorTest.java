@@ -18,9 +18,11 @@ package org.opencastproject.videoeditor.silencedetection.gstreamer;
 import java.util.Properties;
 import org.gstreamer.ClockTime;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.gstreamer.GstreamerAbstractTest;
+import org.opencastproject.videoeditor.gstreamer.GstreamerElements;
 import org.opencastproject.videoeditor.gstreamer.exceptions.PipelineBuildException;
 import org.opencastproject.videoeditor.silencedetection.api.MediaSegment;
 import org.opencastproject.videoeditor.silencedetection.api.MediaSegments;
@@ -36,8 +38,38 @@ public class SilenceDtectorTest extends GstreamerAbstractTest {
   
   private static final Logger logger = LoggerFactory.getLogger(SilenceDtectorTest.class);
   
+  private static boolean gstreamerInstalled = true;
+  
+  @BeforeClass
+  public static void setUpClass() throws Exception {
+    GstreamerAbstractTest.setUpClass();
+    
+    /* gstreamer-core */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.FILESRC)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-base is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-base*/
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.DECODEBIN)) {
+      gstreamerInstalled = false;
+      logger.info("Skip tests because gstreamer-plugins-base is not installed!");
+      return;
+    }
+    /* gstreamer-plugins-good */
+    if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.CUTTER)) {
+      gstreamerInstalled = false;
+      
+      logger.info("Skip tests because gstreamer-plugins-good is not installed!");
+      return;
+    }
+  }
+  
   @Test
   public void detectorTest() {
+    if (!gstreamerInstalled) return;
+    
     logger.info("segmenting audio file '{}'...", audioFilePath);
     try {
       GstreamerSilenceDetector silenceDetector = new GstreamerSilenceDetector(new Properties(), "track-1", audioFilePath);
@@ -69,6 +101,8 @@ public class SilenceDtectorTest extends GstreamerAbstractTest {
   
   @Test
   public void detectorSingleSegmentTest() {
+    if (!gstreamerInstalled) return;
+    
     logger.info("segmenting audio file '{}' with minimum silence length of 30 sec...", audioFilePath);
     
     Properties properties = new Properties();
@@ -104,6 +138,8 @@ public class SilenceDtectorTest extends GstreamerAbstractTest {
   
   @Test
   public void detectorFailTest() {
+    if (!gstreamerInstalled) return;
+    
     logger.info("segmenting video only file '{}' should fail...", videoFilePath);
     try {
       GstreamerSilenceDetector silenceDetector = new GstreamerSilenceDetector(new Properties(), "track-1", videoFilePath);

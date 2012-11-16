@@ -17,6 +17,7 @@ package org.opencastproject.videoeditor.gstreamer;
 
 import java.io.File;
 import java.net.URISyntaxException;
+import org.gstreamer.ElementFactory;
 import org.gstreamer.Gst;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -61,6 +62,19 @@ public abstract class GstreamerAbstractTest {
       new File(outputFilePath).delete();
     } else if (!new File(outputFilePath).getParentFile().exists()) {
       new File(outputFilePath).getParentFile().mkdir();
+    }
+  }
+  
+  /**
+   * Test if Gstreamer {@code ElementFactory} can find element with given name.
+   * @param factoryName Gstreamer Element factory name
+   * @return true if Gstreamer Element installed, flase otherwise
+   */
+  public static boolean testGstreamerElementInstalled(String factoryName) {
+    try {
+      return null != ElementFactory.make(factoryName, null);
+    } catch (Exception e) {
+      return false;
     }
   }
 }
