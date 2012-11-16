@@ -486,20 +486,53 @@
       function onPrevFrame() {
         onSeekFrames(-1);
       }
+
+	var intv = null;
+	var nr_of_frames = 0;
+	var mouseDown = false;
+
+	function initFrameButtonsMouseEvents() {
+	    next_btn.mousedown(function() {
+		mouseDown = true;
+		onSeekFrames(1);
+	    });
+	    prev_btn.mousedown(function() {
+		mouseDown = true;
+		onSeekFrames(-1);
+	    });
+	    next_btn.mouseup(function() {
+		mouseDown = false;
+	    });
+	    prev_btn.mouseup(function() {
+		mouseDown = false;
+	    });
+	}
+
+	function updateScrubberPosition() {
+            var fps = options.fps;
+	    //var currentFrames = Math.round(video.currentTime * fps);
+	    var currentFrames = mhVideo.prop('currentTime') * fps;
+	    var newPos = (currentFrames + nr_of_frames) / fps;
+	    newPos = newPos + 0.00001; // FIXES A SAFARI SEEK ISSUE. myVdieo.currentTime = 0.04 would give SMPTE 00:00:00:00 wheras it should give 00:00:00:01
+	    
+	    mhVideo.prop('currentTime', newPos); // TELL THE PLAYER TO GO HERE
+	    updateTime();
+	    if(!mouseDown) {
+		window.clearInterval(intv);
+	    }
+	}
       
-      function onSeekFrames(nr_of_frames) {
-        var fps = options.fps;
-        if (mhVideo.prop('paused') == false) {
-          pause();
-        }
-        //var currentFrames = Math.round(video.currentTime * fps);
-        var currentFrames = mhVideo.prop('currentTime') * fps;
-        var newPos = (currentFrames + nr_of_frames) / fps;
-        newPos = newPos + 0.00001; // FIXES A SAFARI SEEK ISSUE. myVdieo.currentTime = 0.04 would give SMPTE 00:00:00:00 wheras it should give 00:00:00:01
-        
-        mhVideo.prop('currentTime', newPos); // TELL THE PLAYER TO GO HERE
-        updateTime();
-      } 
+	function onSeekFrames(_nr_of_frames) {
+	    nr_of_frames = _nr_of_frames;
+            if (mhVideo.prop('paused') == false) {
+		pause();
+            }
+	    if(mouseDown) {
+		intv = window.setInterval(updateScrubberPosition, 100);
+	    } else {
+		updateScrubberPosition();
+	    }
+	}
 
       /*************************************************************************
        * binds
@@ -593,6 +626,7 @@
       
       prev_btn.click(onPrevFrame);
       next_btn.click(onNextFrame);
+      initFrameButtonsMouseEvents();
 
       $.addSrt();
 
