@@ -16,13 +16,14 @@
 
 package org.opencastproject.videoeditor.endpoint;
 
+import java.util.List;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import org.opencastproject.job.api.JaxbJob;
+import org.opencastproject.job.api.JaxbJobList;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobProducer;
 import org.opencastproject.rest.AbstractJobProducerEndpoint;
@@ -50,24 +51,23 @@ public class VideoEditorServiceEndpoint extends AbstractJobProducerEndpoint {
   private ServiceRegistry serviceRegistry;
   private VideoEditorService videoEditorService;
   
-  
   @POST
   @Path("/process-smil")
   @Produces({ MediaType.APPLICATION_XML })
-  @RestQuery(name = "processsmil", description = "Create smil processing job.", 
-          returnDescription = "Smil processing job.",
+  @RestQuery(name = "processsmil", description = "Create smil processing jobs.", 
+          returnDescription = "Smil processing jobs.",
           restParameters = {
             @RestParameter(name = "smil", type = RestParameter.Type.TEXT,
               description = "Smil document to process.", isRequired = true)
           },
           reponses = {
-            @RestResponse(description = "Smil processing job created successfully.", responseCode = 200),
+            @RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
             @RestResponse(description = "Internal server error.", responseCode = 500)
           })
-  public Response processSmil(@QueryParam("smil") Smil smil) {
+  public Response processSmilElements(@QueryParam("smil") Smil smil) {
     try {
-      Job job = videoEditorService.processSmil(smil);
-      return Response.ok(new JaxbJob(job)).build();
+      List<Job> jobs = videoEditorService.processSmil(smil);
+      return Response.ok(new JaxbJobList(jobs)).build();
     } catch (Exception ex) {
       return Response.serverError().entity(ex.getMessage()).build();
     }

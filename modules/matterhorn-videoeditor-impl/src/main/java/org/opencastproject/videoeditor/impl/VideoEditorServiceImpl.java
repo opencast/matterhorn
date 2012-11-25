@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.LinkedList;
@@ -59,283 +60,279 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Implementation of VideoeditorService using Gstreamer framework and Gnonlin elements.
+ * Implementation of VideoeditorService using Gstreamer framework and Gnonlin
+ * elements.
  */
 public class VideoEditorServiceImpl extends AbstractJobProducer implements VideoEditorService, ManagedService {
 
-  /**
-   * The logging instance
-   */
-  private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceImpl.class);
-  
-  private static final String JOB_TYPE = "org.opencastproject.videoeditor";
-  private static final String COLLECTION_ID = "videoeditor";
-  
-  private static enum Operation {
-    PROCESS_SMIL
-  }
-      
-  /** Reference to the media inspection service */
-  private MediaInspectionService inspectionService = null;
+    /**
+     * The logging instance
+     */
+    private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceImpl.class);
+    private static final String JOB_TYPE = "org.opencastproject.videoeditor";
+    private static final String COLLECTION_ID = "videoeditor";
 
-  /** Reference to the workspace service */
-  private Workspace workspace = null;
-  
-  /** Id builder used to create ids for encoded tracks */
-  private final IdBuilder idBuilder = IdBuilderFactory.newInstance().newIdBuilder();
-
-  /** Reference to the receipt service */
-  private ServiceRegistry serviceRegistry;
-
-  /** The organization directory service */
-  protected OrganizationDirectoryService organizationDirectoryService = null;
-
-  /** The security service */
-  protected SecurityService securityService = null;
-
-  /** The user directory service */
-  protected UserDirectoryService userDirectoryService = null;
-  
-  /** Bundle properties */
-  private Properties properties;
-  
-  /** Temp storage directory */
-  private String storageDir;
-
-  public VideoEditorServiceImpl() {
-    super(JOB_TYPE);
-  }
-
-  /**
-   * Splice segments given by smil document for the given track to the new one.
-   * 
-   * @param job processing job
-   * @param smil smil document with media segments description
-   * @param track source track
-   * @return processed track
-   * @throws ProcessFailedException if an error occured
-   */
-  protected Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
-    // get output file extension
-    String outputFileExtension = properties.getProperty(VideoEditorProperties.OUTPUT_FILE_EXTENSION, VideoEditorPipeline.DEFAULT_OUTPUT_FILE_EXTENSION);
-    if (!outputFileExtension.startsWith("."))
-      outputFileExtension = '.' + outputFileExtension;
-
-    // create working directory
-    String sourceFlavor = track.getFlavor().getType();
-    File outputPath = new File(storageDir + "/" + job.getId(),
-            sourceFlavor + "_" + track.getIdentifier() + outputFileExtension);
-
-    if (!outputPath.getParentFile().exists()) {
-      outputPath.getParentFile().mkdirs();
+    private static enum Operation {
+        PROCESS_SMIL
     }
-    SourceBinsFactory sourceBins = new SourceBinsFactory(outputPath.getAbsolutePath());
+    /**
+     * Reference to the media inspection service
+     */
+    private MediaInspectionService inspectionService = null;
+    /**
+     * Reference to the workspace service
+     */
+    private Workspace workspace = null;
+    /**
+     * Id builder used to create ids for encoded tracks
+     */
+    private final IdBuilder idBuilder = IdBuilderFactory.newInstance().newIdBuilder();
+    /**
+     * Reference to the receipt service
+     */
+    private ServiceRegistry serviceRegistry;
+    /**
+     * The organization directory service
+     */
+    protected OrganizationDirectoryService organizationDirectoryService = null;
+    /**
+     * The security service
+     */
+    protected SecurityService securityService = null;
+    /**
+     * The user directory service
+     */
+    protected UserDirectoryService userDirectoryService = null;
+    /**
+     * Bundle properties
+     */
+    private Properties properties;
+    /**
+     * Temp storage directory
+     */
+    private String storageDir;
 
-    // create source bins
-    try {
-      for (ParallelElement pe : smil.getBody().getSequence().getElements()) {
-        for (MediaElement me : pe.getElements()) {
-          if (!track.getIdentifier().equals(me.getMhElement())) {
-            continue;
-          }
+    public VideoEditorServiceImpl() {
+        super(JOB_TYPE);
+    }
 
-          long begin = me.getClipBeginMS();
-          long end = me.getClipEndMS();
-          long duration = end - begin;
-          String srcFilePath = me.getSrc();
-
-          sourceBins.addFileSource(srcFilePath, begin, duration);
+    /**
+     * Splice segments given by smil document for the given track to the new
+     * one.
+     *
+     * @param job processing job
+     * @param smil smil document with media segments description
+     * @param track source track
+     * @return processed track
+     * @throws ProcessFailedException if an error occured
+     */
+    protected Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
+		logger.info("Start processing track {}", track.getIdentifier());
+		
+        // get output file extension
+        String outputFileExtension = properties.getProperty(VideoEditorProperties.OUTPUT_FILE_EXTENSION, 
+				VideoEditorPipeline.DEFAULT_OUTPUT_FILE_EXTENSION);
+        if (!outputFileExtension.startsWith(".")) {
+            outputFileExtension = '.' + outputFileExtension;
         }
-      }
 
-      // create and run editing pipeline
-      VideoEditorPipeline runningPipeline = new VideoEditorPipeline(properties);
-      runningPipeline.addSourceBinsAndCreatePipeline(sourceBins);
-      runningPipeline.run();
-      runningPipeline.mainLoop();
-      String error = runningPipeline.getLastErrorMessage();
+        // create working directory
+        String sourceFlavor = track.getFlavor().getType();
+        File outputPath = new File(storageDir + "/" + job.getId(),
+                sourceFlavor + "_" + track.getIdentifier() + outputFileExtension);
 
-      if (error != null) {
-        FileUtils.deleteDirectory(outputPath.getParentFile());
-        throw new ProcessFailedException("Editing pipeline exited abnormaly! Error: " + error);
-      }
-      
-      // create Track for edited file
-      String newTrackId = idBuilder.createNew().toString();
-      InputStream in = new FileInputStream(outputPath);
-      URI newTrackURI;
-      try {
-        newTrackURI = workspace.putInCollection(COLLECTION_ID, sourceFlavor + "-" + newTrackId + outputFileExtension, in);
-      } catch (IllegalArgumentException ex) {
-        throw new ProcessFailedException("Copy track into workspace failed! " + ex.getMessage());
-      } finally {
-        IOUtils.closeQuietly(in);
-      }
-      logger.info("Copied the edited file to workspace at {}.", newTrackURI);
-      FileUtils.deleteDirectory(outputPath.getParentFile());
-      
-      // inspect new Track
-      Job inspectionJob = inspectionService.inspect(newTrackURI);
-      JobBarrier barrier = new JobBarrier(serviceRegistry, inspectionJob);
-      if (!barrier.waitForJobs().isSuccess()) {
-        throw new ProcessFailedException("Media inspection of " + newTrackURI + " failed");
-      }
-      Track editedTrack = (Track) MediaPackageElementParser.getFromXml(inspectionJob.getPayload());
-      editedTrack.setIdentifier(newTrackId);
-      editedTrack.setFlavor(track.getFlavor());
-      editedTrack.referTo(track);
-            
-      return editedTrack;
+        if (!outputPath.getParentFile().exists()) {
+            outputPath.getParentFile().mkdirs();
+        }
+        SourceBinsFactory sourceBins = new SourceBinsFactory(outputPath.getAbsolutePath());
 
-    } catch (MediaInspectionException ex) {
-      throw new ProcessFailedException("Inspecting encoded Track failed with: " + ex.getMessage());
+        // create source bins
+        try {
+            for (ParallelElement pe : smil.getBody().getSequence().getElements()) {
+                for (MediaElement me : pe.getElements()) {
+                    if (!track.getIdentifier().equals(me.getMhElement())) {
+                        continue;
+                    }
+
+                    long begin = me.getClipBeginMS();
+                    long end = me.getClipEndMS();
+                    long duration = end - begin;
+                    String srcFilePath = me.getSrc();
+
+                    sourceBins.addFileSource(srcFilePath, begin, duration);
+                }
+            }
+
+            // create and run editing pipeline
+            VideoEditorPipeline runningPipeline = new VideoEditorPipeline(properties);
+            runningPipeline.addSourceBinsAndCreatePipeline(sourceBins);
+            runningPipeline.run();
+            runningPipeline.mainLoop();
+            String error = runningPipeline.getLastErrorMessage();
+
+            if (error != null) {
+                FileUtils.deleteDirectory(outputPath.getParentFile());
+                throw new ProcessFailedException("Editing pipeline exited abnormaly! Error: " + error);
+            }
+
+            // create Track for edited file
+            String newTrackId = idBuilder.createNew().toString();
+            InputStream in = new FileInputStream(outputPath);
+            URI newTrackURI;
+            try {
+                newTrackURI = workspace.putInCollection(COLLECTION_ID, sourceFlavor + "-" + newTrackId + outputFileExtension, in);
+            } catch (IllegalArgumentException ex) {
+                throw new ProcessFailedException("Copy track into workspace failed! " + ex.getMessage());
+            } finally {
+                IOUtils.closeQuietly(in);
+            }
+            logger.info("Copied the edited file to workspace at {}.", newTrackURI);
+            FileUtils.deleteDirectory(outputPath.getParentFile());
+
+            // inspect new Track
+            Job inspectionJob = inspectionService.inspect(newTrackURI);
+            JobBarrier barrier = new JobBarrier(serviceRegistry, inspectionJob);
+            if (!barrier.waitForJobs().isSuccess()) {
+                throw new ProcessFailedException("Media inspection of " + newTrackURI + " failed");
+            }
+            Track editedTrack = (Track) MediaPackageElementParser.getFromXml(inspectionJob.getPayload());
+            editedTrack.setIdentifier(newTrackId);
+            editedTrack.setFlavor(track.getFlavor());
+            editedTrack.referTo(track);
+
+			logger.info("Processing track {} finished", track.getIdentifier());
+            return editedTrack;
+
+        } catch (MediaInspectionException ex) {
+            throw new ProcessFailedException("Inspecting encoded Track failed with: " + ex.getMessage());
 //    } catch (FileNotFoundException ex) {
 //      throw new ProcessFailedException(ex.getMessage());
 //    } catch (PipelineBuildException ex) {
 //      throw new ProcessFailedException("Pipeline build error: " + ex.getMessage());
 //    } catch (IOException ex) {
 //      throw new ProcessFailedException(ex.getMessage());
-    } catch (MediaPackageException ex) {
-      throw new ProcessFailedException("Unable to serialize edited Track! " + ex.getMessage());
-    } catch (Exception ex) {
-      throw new ProcessFailedException(ex.getMessage());
-    }
-  }
-
-  /**
-   * {@inheritDoc}
-   * 
-   * @see org.opencastproject.videoeditor.api.VideoEditorService#processSmil(org.opencastproject.smil.entity.Smil) 
-   */
-  @Override
-  public Job processSmil(Smil smil) throws ProcessFailedException {
-    if (smil == null) {
-      throw new ProcessFailedException("Smil document is null!");
+        } catch (MediaPackageException ex) {
+            throw new ProcessFailedException("Unable to serialize edited Track! " + ex.getMessage());
+        } catch (Exception ex) {
+            throw new ProcessFailedException(ex.getMessage());
+        }
     }
 
-    MediaPackage mp = smil.getMediaPackage();
-    List<String> args = new LinkedList<String>();
+    /**
+     * {@inheritDoc}
+     *
+     * @see
+     * org.opencastproject.videoeditor.api.VideoEditorService#processSmil(org.opencastproject.smil.entity.Smil)
+     */
+    @Override
+    public List<Job> processSmil(Smil smil) throws ProcessFailedException {
+        if (smil == null) {
+            throw new ProcessFailedException("Smil document is null!");
+        }
 
-    try {
-      args.add(smil.toXML());
-      
-      // get all tracks from first sequence of smil document
-      for (MediaElement me : smil.getBody().getSequence().getElements().get(0).getElements()) {
-        Track track = mp.getTrack(me.getMhElement());
-        if (!args.contains(track))
-          args.add(MediaPackageElementParser.getAsXml(track));
-      }
-      
-      // create processing job
-      return serviceRegistry.createJob(
-                getJobType(), 
-                Operation.PROCESS_SMIL.toString(), 
-                args);
+        MediaPackage mp = smil.getMediaPackage();
+        List<Job> jobs = new LinkedList<Job>();
 
-    } catch (MediaPackageException ex) {
-      throw new ProcessFailedException("Unable to serailize track!");
-    } catch (ServiceRegistryException ex) {
-      throw new ProcessFailedException("unable to create job for smil processing! " + ex.getMessage());
-    } catch (JAXBException ex) {
-      throw new ProcessFailedException("Unable to serialize smil document!");
-    }
-  }
+        Track track = null;
+        try {
+            for (MediaElement me : smil.getBody().getSequence().getElements().get(0).getElements()) {
+                track = mp.getTrack(me.getMhElement());
 
-  @Override
-  protected String process(Job job) throws Exception {
-    if (Operation.PROCESS_SMIL.toString().equals(job.getOperation())) {
-      
-      List<String> args = job.getArguments();
-      
-      Smil smil = Smil.fromXML(args.remove(0));
-      if (smil == null) {
-        throw new ProcessFailedException("Smil document is null!");
-      }
-      
-      logger.info("Start processing smil {}.", smil.getId());
-      List<Track> results = new LinkedList<Track>();
-      for (String trackXml : args) {
-        Track track = (Track) MediaPackageElementParser.getFromXml(trackXml);
-        logger.debug("Editing track '{}' id: {}.", new String[] {
-          track.getFlavor().getType(), track.getIdentifier()
-        });
-        
-        Track editedTrack = processSmil(job, smil, track);
-        logger.debug("Track {} edited.", track.getIdentifier());
-        results.add(editedTrack);
-      }
-      logger.info("Smil {} precessing finished.", smil.getId());
-      
-      return MediaPackageElementParser.getArrayAsXml(results);
+                jobs.add(serviceRegistry.createJob(getJobType(), Operation.PROCESS_SMIL.toString(),
+                        Arrays.asList(smil.toXML(), MediaPackageElementParser.getAsXml(track))));
+            }
+
+            return jobs;
+        } catch (JAXBException ex) {
+            throw new ProcessFailedException("Failed to serialize smil " + smil.getId());
+        } catch (MediaPackageException ex) {
+            throw new ProcessFailedException("Failed to serialize track " + track.getIdentifier());
+        } catch (ServiceRegistryException ex) {
+            throw new ProcessFailedException("Failed to create job: " + ex.getMessage());
+        } catch (Exception ex) {
+            throw new ProcessFailedException(ex.getMessage());
+        }
     }
 
-    throw new ProcessFailedException("Can't handle this operation: " + job.getOperation());
-  }
+    @Override
+    protected String process(Job job) throws Exception {
+        if (Operation.PROCESS_SMIL.toString().equals(job.getOperation())) {
+            Smil smil = Smil.fromXML(job.getArguments().get(0));
+            if (smil == null) {
+                throw new ProcessFailedException("Smil document is null!");
+            }
+            Track sourceTrack = (Track) MediaPackageElementParser.getFromXml(job.getArguments().get(1));
+            Track editedTrack = processSmil(job, smil, sourceTrack);
+            return MediaPackageElementParser.getAsXml(editedTrack);
+        }
 
-  @Override
-  protected ServiceRegistry getServiceRegistry() {
-    return serviceRegistry;
-  }
-
-  @Override
-  protected SecurityService getSecurityService() {
-    return securityService;
-  }
-
-  @Override
-  protected UserDirectoryService getUserDirectoryService() {
-    return userDirectoryService;
-  }
-
-  @Override
-  protected OrganizationDirectoryService getOrganizationDirectoryService() {
-    return organizationDirectoryService;
-  }
-  
-  protected void activate(ComponentContext context) {
-    logger.debug("activating...");
-    Gst.setUseDefaultContext(true);
-    Gst.init();
-    
-    storageDir = context.getBundleContext().getProperty("org.opencastproject.storage.dir");
-  }
-
-  protected void deactivate(ComponentContext context) {
-    logger.debug("deactivating...");
-  }
-
-  @Override
-  public void updated(Dictionary properties) throws ConfigurationException {
-    this.properties = new Properties();
-    Enumeration keys = properties.keys();
-    while (keys.hasMoreElements()) {
-      Object key = keys.nextElement();
-      this.properties.put(key, properties.get(key));
+        throw new ProcessFailedException("Can't handle this operation: " + job.getOperation());
     }
-    logger.debug("Properties updated!");
-  }
-  
-  public void setMediaInspectionService(MediaInspectionService inspectionService) {
-    this.inspectionService = inspectionService;
-  }
-  
-  public void setServiceRegistry(ServiceRegistry serviceRegistry) {
-    this.serviceRegistry = serviceRegistry;
-  }
-  
-  public void setWorkspace(Workspace workspace) {
-    this.workspace = workspace;
-  }
-  
-  public void setSecurityService(SecurityService securityService) {
-    this.securityService = securityService;
-  }
-  
-  public void setUserDirectoryService(UserDirectoryService userDirectoryService) {
-    this.userDirectoryService = userDirectoryService;
-  }
-  
-  public void setOrganizationDirectoryService(OrganizationDirectoryService organizationDirectoryService) {
-    this.organizationDirectoryService = organizationDirectoryService;
-  }
+
+    @Override
+    protected ServiceRegistry getServiceRegistry() {
+        return serviceRegistry;
+    }
+
+    @Override
+    protected SecurityService getSecurityService() {
+        return securityService;
+    }
+
+    @Override
+    protected UserDirectoryService getUserDirectoryService() {
+        return userDirectoryService;
+    }
+
+    @Override
+    protected OrganizationDirectoryService getOrganizationDirectoryService() {
+        return organizationDirectoryService;
+    }
+
+    protected void activate(ComponentContext context) {
+        logger.debug("activating...");
+        Gst.setUseDefaultContext(true);
+        Gst.init();
+
+        storageDir = context.getBundleContext().getProperty("org.opencastproject.storage.dir");
+    }
+
+    protected void deactivate(ComponentContext context) {
+        logger.debug("deactivating...");
+    }
+
+    @Override
+    public void updated(Dictionary properties) throws ConfigurationException {
+        this.properties = new Properties();
+        Enumeration keys = properties.keys();
+        while (keys.hasMoreElements()) {
+            Object key = keys.nextElement();
+            this.properties.put(key, properties.get(key));
+        }
+        logger.debug("Properties updated!");
+    }
+
+    public void setMediaInspectionService(MediaInspectionService inspectionService) {
+        this.inspectionService = inspectionService;
+    }
+
+    public void setServiceRegistry(ServiceRegistry serviceRegistry) {
+        this.serviceRegistry = serviceRegistry;
+    }
+
+    public void setWorkspace(Workspace workspace) {
+        this.workspace = workspace;
+    }
+
+    public void setSecurityService(SecurityService securityService) {
+        this.securityService = securityService;
+    }
+
+    public void setUserDirectoryService(UserDirectoryService userDirectoryService) {
+        this.userDirectoryService = userDirectoryService;
+    }
+
+    public void setOrganizationDirectoryService(OrganizationDirectoryService organizationDirectoryService) {
+        this.organizationDirectoryService = organizationDirectoryService;
+    }
 }

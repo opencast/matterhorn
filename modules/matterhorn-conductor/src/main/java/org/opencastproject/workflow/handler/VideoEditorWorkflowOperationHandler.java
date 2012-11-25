@@ -15,6 +15,7 @@
  */
 package org.opencastproject.workflow.handler;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -22,14 +23,15 @@ import org.apache.commons.io.FilenameUtils;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
-import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
+import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.smil.api.SmilException;
 import org.opencastproject.smil.api.SmilService;
 import org.opencastproject.smil.entity.Smil;
 import org.opencastproject.util.NotFoundException;
+import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.api.VideoEditorService;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
@@ -139,11 +141,10 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
                                             Map<String, String> properties)
       throws WorkflowOperationException {
 
-    logger.info("VideoEditing workflow {} using SMIL Document", workflowInstance.getId());
+    logger.info("VideoEdit workflow {} using SMIL Document", workflowInstance.getId());
 
     Smil smil = null;
-
-    try {
+	try {
       smil = smilService.getSmil(workflowInstance.getId());
       logger.debug("SMIL is ready for processing");
     } catch (SmilException e) {
@@ -151,75 +152,50 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
     } catch (NotFoundException e) {
       throw new WorkflowOperationException("SMIL NOT FOUND", e);
     }
-
-    // Get the source flavor to match
-    WorkflowOperationInstance currentOperation = workflowInstance.getCurrentOperation();
-    String configuredTargetFlavorSubtype = currentOperation
-        .getConfiguration(TARGET_FLAVOR_SUBTYPE_PROPERTY);
-    
-    MediaPackage mp = workflowInstance.getMediaPackage();
-    try {
-      
-      Job job = videoEditorService.processSmil(smil);
-      if (!waitForStatus(job).isSuccess()) {
-        throw new WorkflowOperationException("Smil processing failed!");
-      }
-      
-      String editedTracks = job.getPayload();
-      if (editedTracks == null || editedTracks.isEmpty()) {
-        throw new WorkflowOperationException("Smil processing failed! Service returned empty track list.");
-      }
-      
-      List<? extends MediaPackageElement> tracks =  MediaPackageElementParser.getArrayFromXml(editedTracks);
-      
-      for (MediaPackageElement editedMPElem : tracks) {
-        if (!(editedMPElem instanceof Track)) continue;
-        
-        Track editedTrack = (Track) editedMPElem;
-        editedTrack.setFlavor(new MediaPackageElementFlavor(editedTrack.getFlavor().getType(), configuredTargetFlavorSubtype));
-        
-        // check if track reference to another
-        Track sourceTrack = null;
-        if (editedTrack.getReference() != null &&  !editedTrack.getReference().getIdentifier().isEmpty()) {
-          sourceTrack = mp.getTrack(editedTrack.getReference().getIdentifier());
-        }
-        
-        String fileName = null;
-        URI newUri;
-        
-        // add track to mediapackage
-        if (sourceTrack != null) {
-          fileName = FilenameUtils.getBaseName(sourceTrack.getURI().getPath().toString())
-                + "." + FilenameUtils.getExtension(editedTrack.getURI().getPath().toString());
-          newUri = workspace.moveTo(editedTrack.getURI(), mp.getIdentifier().compact(), editedTrack.getIdentifier(), fileName);
-          editedTrack.setURI(newUri);
-          logger.info("Add track for '{}' {} as a derived version of {} to mediapackage {}.", new String[] {
-            editedTrack.getFlavor().toString(), editedTrack.getIdentifier(), sourceTrack.getIdentifier(), mp.getIdentifier().toString()
-          });
-          mp.addDerived(editedTrack, sourceTrack);
-        } else {
-          fileName = FilenameUtils.getBaseName(editedTrack.getURI().getPath().toString())
-                + "." + FilenameUtils.getExtension(editedTrack.getURI().getPath().toString());
-          newUri = workspace.moveTo(editedTrack.getURI(), mp.getIdentifier().compact(), editedTrack.getIdentifier(), fileName);
-          editedTrack.setURI(newUri);
-          logger.info("Add track for '{}' {} to mediapackage {}.", new String[] {
-            editedTrack.getFlavor().toString(), editedTrack.getIdentifier(), mp.getIdentifier().toString()
-          });
-          mp.add(editedTrack);
-        }
-      }
-
-//    } catch (MediaPackageException ex) {
-//      throw new WorkflowOperationException("Smil processing failed! " + ex.getMessage());
-//    } catch (ProcessFailedException ex) {
-//      throw new WorkflowOperationException("Smil processing failed! " + ex.getMessage());
-    } catch (Exception ex) {
-      throw new WorkflowOperationException("Smil processing failed! " + ex.getMessage());
-    }
-
-    logger.info("Videoeditor workflow {} finished.", workflowInstance.getId());
-    return createResult(mp, Action.CONTINUE);
-//    return super.resume(workflowInstance, context, properties);
+	
+	MediaPackage mp = workflowInstance.getMediaPackage();
+	WorkflowOperationInstance currentOperation = workflowInstance.getCurrentOperation();
+    String configuredTargetFlavorSubtype = currentOperation.getConfiguration(TARGET_FLAVOR_SUBTYPE_PROPERTY);
+	
+	List<Job> jobs = null;
+	try {
+		jobs = videoEditorService.processSmil(smil);
+		if (!waitForStatus(jobs.toArray(new Job[jobs.size()])).isSuccess()) {
+			throw new WorkflowOperationException("Smil processing jobs are ended unsuccessfull");
+		}
+		logger.info("Processing jobs for SMIL {} done", smil.getId());
+		
+		for (Job job : jobs) {
+			// throws MediaPackageException
+			Track sourceTrack = (Track) MediaPackageElementParser.getFromXml(job.getArguments().get(1));
+			// throws MediaPackageException
+			Track encodedTrack = (Track) MediaPackageElementParser.getFromXml(job.getPayload());
+			String encodedTrackFileName = FilenameUtils.getBaseName(encodedTrack.getURI().getPath().toString())
+					+ "." + FilenameUtils.getExtension(encodedTrack.getURI().getPath().toString());
+			// throws NotFoundException IOException IllegalArgumentException
+			URI newUri = workspace.moveTo(encodedTrack.getURI(), mp.getIdentifier().compact(), 
+					encodedTrack.getIdentifier(), encodedTrackFileName);
+            encodedTrack.setURI(newUri);
+			encodedTrack.setFlavor(new MediaPackageElementFlavor(sourceTrack.getFlavor().getType(), configuredTargetFlavorSubtype));
+			mp.addDerived(encodedTrack, sourceTrack);
+		}
+		logger.info("VideoEdit workflow {} exit successfull", workflowInstance.getId());
+		
+		return createResult(mp, Action.CONTINUE);
+		
+	} catch (NotFoundException ex) {
+		throw new WorkflowOperationException(ex);
+	} catch (IOException ex) {
+		throw new WorkflowOperationException(ex);
+	} catch (IllegalArgumentException ex) {
+		throw new WorkflowOperationException(ex);
+	} catch (ProcessFailedException ex) {
+		throw new WorkflowOperationException(ex);
+	} catch (MediaPackageException ex) {
+		throw new WorkflowOperationException(ex);
+	} catch (Exception ex) {
+		throw new WorkflowOperationException(ex);
+	}
   }
 
   public void setSmilService(SmilService smilService) {

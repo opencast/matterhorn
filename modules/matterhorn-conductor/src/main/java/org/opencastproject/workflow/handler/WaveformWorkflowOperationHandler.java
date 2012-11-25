@@ -212,8 +212,6 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       logger.debug("adding waveform as an attachment to mediapackage");
       mediaPackage = ingestService.addAttachment(is, "waveform.png", waveformFlavor, mediaPackage);
 
-      // ImageIO.write(bufferedImage, "png", new File("/home/markus/test.png"));
-
     } catch (Exception e) {
       logger.error(e.getMessage());
       throw new WorkflowOperationException(e);

@@ -15,6 +15,7 @@
  */
 package org.opencastproject.videoeditor.api;
 
+import java.util.List;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.smil.entity.Smil;
 
@@ -22,12 +23,12 @@ public interface VideoEditorService {
     
   /**
    * Create {@see org.opencastproject.smil.entity.Smil} processing 
-   * {@see org.opencastproject.job.api.Job} to edit Tracks.
+   * {@see org.opencastproject.job.api.Job}s to edit Tracks.
    * Parse Smil document, extract Tracks to edit and split points where to cut.
    * 
    * @param smil
-   * @return Processing Job
+   * @return Processing Jobs
    * @throws ProcessFailedException if an error occures
    */
-  Job processSmil(Smil smil) throws ProcessFailedException;
+  List<Job> processSmil(Smil smil) throws ProcessFailedException;
 }
