@@ -940,12 +940,10 @@ Opencast.Player = (function ()
     function doSeekToClip(clipIndex)
     {
       if (clipIndex < 0 || clipIndex >= currentClips.length) {
-    	$("#clip" + currentClips[clipIndex]["id"]).text("");
+      	$(".clipshow-component").text("");
         return;
       }
-      if (currentClip >= 0) {
-        $("#clip" + currentClips[currentClip]["id"]).text("");
-      }
+      $(".clipshow-component").text("");
       currentClip = clipIndex;
       $("#clip" + currentClips[clipIndex]["id"]).text("Current");
       if (clipIndex + 1 < currentClips.length) {
