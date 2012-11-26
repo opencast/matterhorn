@@ -25,8 +25,9 @@
           <instructions>
             <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
             <Import-Package>
-              org.opencastproject.mediapackage;version=${project.version}
-              org.opencastproject.mediapackage.track;version=${project.version}
+              org.opencastproject.mediapackage;version=${project.version},
+              org.opencastproject.mediapackage.track;version=${project.version},
+              org.opencastproject.util;version=${project.version}
             </Import-Package>
             <Export-Package>
             </Export-Package>

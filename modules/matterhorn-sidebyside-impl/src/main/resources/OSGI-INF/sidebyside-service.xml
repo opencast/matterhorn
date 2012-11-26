@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scr:components xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0">
+  <scr:component name="org.opencastproject.sidebyside.impl.SideBySideServiceImpl" immediate="true">
+    <implementation class="org.opencastproject.sidebyside.impl.SideBySideServiceImpl" />
+    <property name="service.description" value="Composes two video tracks, side by side, into one" />
+    <service>
+      <provide interface="org.opencastproject.sidebyside.api.SideBySideService" />
+    </service>
+    <reference name="workspace" interface="org.opencastproject.workspace.api.Workspace" cardinality="1..1"
+    policy="static" bind="setWorkspace" />
+  </scr:component>
+</scr:components>
+    

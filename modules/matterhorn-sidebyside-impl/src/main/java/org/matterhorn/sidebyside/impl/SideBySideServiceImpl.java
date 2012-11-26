@@ -1,10 +1,13 @@
 package org.matterhorn.sidebyside.impl;
 
 import java.awt.Rectangle;
+import java.io.File;
+import java.io.IOException;
 
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.mediapackage.VideoStream;
-
+import org.opencastproject.util.NotFoundException;
+import org.opencastproject.workspace.api.Workspace;
 import org.matterhorn.sidebyside.api.SideBySideService;
 
 /**
@@ -12,10 +15,12 @@ import org.matterhorn.sidebyside.api.SideBySideService;
  */
 public class SideBySideServiceImpl implements SideBySideService {
 
+  private Workspace workspace;
+
   @Override
   public Track process(Track presenterTrack, int presenterX, int presenterY,
           Track presentationTrack, int presentationX, int presentationY,
-          int layoutWidth, int layoutHeight) {
+          int layoutWidth, int layoutHeight) throws NotFoundException, IOException {
 
     return process(presenterTrack, 0, presenterX, presenterY,
             presentationTrack, 0, presentationX, presentationY,
@@ -26,7 +31,7 @@ public class SideBySideServiceImpl implements SideBySideService {
   @Override
   public Track process(Track presenterTrack, int presenterStreamIndex, int presenterX, int presenterY,
           Track presentationTrack, int presentationStreamIndex, int presentationX, int presentationY,
-          int layoutWidth, int layoutHeight) {
+          int layoutWidth, int layoutHeight) throws NotFoundException, IOException, IllegalArgumentException {
 
     String[] names = {"Presenter", "Presentation"};
     Track[] tracks = {presenterTrack, presentationTrack};
@@ -72,9 +77,23 @@ public class SideBySideServiceImpl implements SideBySideService {
                 trackRectangles[i].y, trackRectangles[i].y + trackRectangles[i].height));
     }
 
+    // Fetch the files from the workspace (this may throw exceptions if they are not accessible)
+    File presenterFile = workspace.get(presenterTrack.getURI());
+    File presentationFile = workspace.get(presentationTrack.getURI());
+    
+    
+    
     return null;
 
   }
 
-
+  /**
+   * Sets the workspace
+   * 
+   * @param workspace
+   *          an instance of the workspace
+   */
+  protected void setWorkspace(Workspace workspace) {
+    this.workspace = workspace;
+  }
 }
