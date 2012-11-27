@@ -1152,22 +1152,20 @@ var ocScheduler = (function() {
           }
         },
         validate: function() {
-          if(this.fields.scheduleRepeat.val() != 'norepeat') {
             if(this.fields.repeatSun[0].checked ||
-              this.fields.repeatMon[0].checked ||
-              this.fields.repeatTue[0].checked ||
-              this.fields.repeatWed[0].checked ||
-              this.fields.repeatThu[0].checked ||
-              this.fields.repeatFri[0].checked ||
-              this.fields.repeatSat[0].checked ){
-              if(ocScheduler.components.recurrenceStart.validate() &&
-                // ocScheduler.components.recurrenceDuration.validate() &&
-              ocScheduler.components.recurrenceEnd.validate()) {
-                return [];
-              }
+               this.fields.repeatMon[0].checked ||
+               this.fields.repeatTue[0].checked ||
+               this.fields.repeatWed[0].checked ||
+               this.fields.repeatThu[0].checked ||
+               this.fields.repeatFri[0].checked ||
+               this.fields.repeatSat[0].checked ){
+                if(ocScheduler.components.recurrenceStart.validate() &&
+                   // ocScheduler.components.recurrenceDuration.validate() &&
+                   ocScheduler.components.recurrenceEnd.validate()) {
+                    return [];
+                }
             }
-          }
-          return this.errors.missingRequired;
+            return this.errors.missingRequired;
         },
         toNode: function(parent) {
           for(var el in this.fields) {
