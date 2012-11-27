@@ -1325,6 +1325,7 @@ Opencast.Player = (function ()
     function highSound()
     {
         $("#oc_btn-volume").attr('className', 'oc_btn-volume-high');
+        $("#oc_btn-volume").attr('class', 'oc_btn-volume-high');
         $("#oc_btn-volume").attr(
         {
             alt: UNMUTE,
@@ -1340,6 +1341,7 @@ Opencast.Player = (function ()
     function muteSound()
     {
         $("#oc_btn-volume").attr('className', 'oc_btn-volume-mute');
+        $("#oc_btn-volume").attr('class', 'oc_btn-volume-mute');
         $("#oc_btn-volume").attr(
         {
             alt: MUTE,
