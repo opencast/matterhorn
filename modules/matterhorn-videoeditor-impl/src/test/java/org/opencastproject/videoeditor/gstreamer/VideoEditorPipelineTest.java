@@ -107,7 +107,6 @@ public class VideoEditorPipelineTest extends GstreamerAbstractTest {
       pipeline.addSourceBinsAndCreatePipeline(sourceBins);
       
       pipeline.run();
-      pipeline.mainLoop();
       
       String lastError = pipeline.getLastErrorMessage();
       Assert.assertNull("Last error should be null but it is: " + pipeline.getLastErrorMessage(), lastError);
@@ -137,7 +136,6 @@ public class VideoEditorPipelineTest extends GstreamerAbstractTest {
       pipeline.addSourceBinsAndCreatePipeline(sourceBins);
       
       pipeline.run();
-      pipeline.mainLoop();
       
       String lastError = pipeline.getLastErrorMessage();
       Assert.assertNull("Last error should be null but it is: " + pipeline.getLastErrorMessage(), lastError);

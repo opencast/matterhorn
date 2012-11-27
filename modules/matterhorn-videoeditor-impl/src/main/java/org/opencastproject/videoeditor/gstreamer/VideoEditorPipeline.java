@@ -59,6 +59,7 @@ public class VideoEditorPipeline {
   private Pipeline pipeline;
   private MainLoop mainLoop = new MainLoop();
   private String lastErrorMessage = null;
+  private static final Object runLock = new Object();
   
   public VideoEditorPipeline(Properties properties) {
     this.properties = properties != null ? properties : new Properties();
@@ -68,10 +69,16 @@ public class VideoEditorPipeline {
   
   /**
    * Run Gstreamer pipeline.
+   * This method blocks until pipline is finished.
    */
   public void run() {
     logger.debug("starting pipeline...");
-    pipeline.play();
+    synchronized (runLock) {
+        pipeline.play();
+        mainLoop.run();
+    }
+    logger.debug("main loop quit!");
+    stop();
   }
   
   /**
@@ -81,16 +88,6 @@ public class VideoEditorPipeline {
   public void stop() {
     if (pipeline == null) return;
     pipeline.setState(State.NULL);
-  }
-  
-  /**
-   * Start Gstreamer pipeline and wait until finish.
-   */
-  public void mainLoop() {
-    
-    mainLoop.run();
-    logger.debug("main loop quit!");
-    stop();
   }
   
   /**
@@ -205,8 +202,8 @@ public class VideoEditorPipeline {
     pipeline.addMany(muxer, fileSink);
     
     fileSink.set("location", sourceBins.getOutputFilePath());
-    fileSink.set("sync", false);
-    fileSink.set("async", false);
+//    fileSink.set("sync", false);
+//    fileSink.set("async", false);
     
     if (!muxer.link(fileSink)) {
       throw new PipelineBuildException();

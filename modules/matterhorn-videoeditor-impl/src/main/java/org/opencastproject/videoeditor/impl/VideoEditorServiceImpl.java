@@ -17,6 +17,7 @@ package org.opencastproject.videoeditor.impl;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
 import javax.xml.bind.JAXBException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -48,6 +50,7 @@ import org.opencastproject.serviceregistry.api.ServiceRegistryException;
 import org.opencastproject.smil.entity.MediaElement;
 import org.opencastproject.smil.entity.ParallelElement;
 import org.opencastproject.smil.entity.Smil;
+import org.opencastproject.util.NotFoundException;
 import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.api.VideoEditorService;
 import org.opencastproject.videoeditor.gstreamer.VideoEditorPipeline;
@@ -71,7 +74,7 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceImpl.class);
     private static final String JOB_TYPE = "org.opencastproject.videoeditor";
     private static final String COLLECTION_ID = "videoeditor";
-
+    
     private static enum Operation {
         PROCESS_SMIL
     }
@@ -111,6 +114,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * Temp storage directory
      */
     private String storageDir;
+    
+    private boolean processingTrack = false;
 
     public VideoEditorServiceImpl() {
         super(JOB_TYPE);
@@ -126,7 +131,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * @return processed track
      * @throws ProcessFailedException if an error occured
      */
-    protected Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
+    protected synchronized Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
+        processingTrack = true;
 		logger.info("Start processing track {}", track.getIdentifier());
 		
         // get output file extension
@@ -145,7 +151,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             outputPath.getParentFile().mkdirs();
         }
         SourceBinsFactory sourceBins = new SourceBinsFactory(outputPath.getAbsolutePath());
-
+        VideoEditorPipeline runningPipeline = null;
+        URI newTrackURI = null;
         // create source bins
         try {
             for (ParallelElement pe : smil.getBody().getSequence().getElements()) {
@@ -164,10 +171,9 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             }
 
             // create and run editing pipeline
-            VideoEditorPipeline runningPipeline = new VideoEditorPipeline(properties);
+            runningPipeline = new VideoEditorPipeline(properties);
             runningPipeline.addSourceBinsAndCreatePipeline(sourceBins);
             runningPipeline.run();
-            runningPipeline.mainLoop();
             String error = runningPipeline.getLastErrorMessage();
 
             if (error != null) {
@@ -178,7 +184,6 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             // create Track for edited file
             String newTrackId = idBuilder.createNew().toString();
             InputStream in = new FileInputStream(outputPath);
-            URI newTrackURI;
             try {
                 newTrackURI = workspace.putInCollection(COLLECTION_ID, sourceFlavor + "-" + newTrackId + outputFileExtension, in);
             } catch (IllegalArgumentException ex) {
@@ -215,6 +220,22 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             throw new ProcessFailedException("Unable to serialize edited Track! " + ex.getMessage());
         } catch (Exception ex) {
             throw new ProcessFailedException(ex.getMessage());
+        } finally {
+            if (runningPipeline != null) {
+                runningPipeline.stop();
+            }
+            FileUtils.deleteQuietly(outputPath.getParentFile());
+            if (newTrackURI != null) {
+                try {
+                    workspace.delete(newTrackURI);
+                } catch (NotFoundException ex) {
+                    // working copy isn't in workspace
+                    // pass
+                } catch (IOException ex) {
+                    logger.error("Can't delete working copy of track at " + newTrackURI.toString(), ex);
+                }
+            }
+            processingTrack = false;
         }
     }
 
@@ -268,7 +289,7 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
 
         throw new ProcessFailedException("Can't handle this operation: " + job.getOperation());
     }
-
+    
     @Override
     protected ServiceRegistry getServiceRegistry() {
         return serviceRegistry;
@@ -287,6 +308,11 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     @Override
     protected OrganizationDirectoryService getOrganizationDirectoryService() {
         return organizationDirectoryService;
+    }
+    
+    @Override
+    public boolean isReadyToAccept(Job job) throws ServiceRegistryException {
+        return !processingTrack;
     }
 
     protected void activate(ComponentContext context) {

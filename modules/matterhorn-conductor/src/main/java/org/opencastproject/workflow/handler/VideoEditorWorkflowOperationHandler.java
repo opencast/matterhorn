@@ -163,7 +163,6 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 		if (!waitForStatus(jobs.toArray(new Job[jobs.size()])).isSuccess()) {
 			throw new WorkflowOperationException("Smil processing jobs are ended unsuccessfull");
 		}
-		logger.info("Processing jobs for SMIL {} done", smil.getId());
 		
 		for (Job job : jobs) {
 			// throws MediaPackageException
@@ -179,7 +178,7 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 			encodedTrack.setFlavor(new MediaPackageElementFlavor(sourceTrack.getFlavor().getType(), configuredTargetFlavorSubtype));
 			mp.addDerived(encodedTrack, sourceTrack);
 		}
-		logger.info("VideoEdit workflow {} exit successfull", workflowInstance.getId());
+		logger.info("SMIL {} processing finished", smil.getId());
 		
 		return createResult(mp, Action.CONTINUE);
 		

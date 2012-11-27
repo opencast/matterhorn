@@ -19,7 +19,7 @@ package org.opencastproject.videoeditor.impl;
  * VideoEditorService properties that can be used to modify default processing values.
  */
 public interface VideoEditorProperties {
-
+  
   /** Custom audio (pre encoder) caps */
   String AUDIO_CAPS = "audio.caps";
   /** Custom audio encoder (gstreamer element) */
