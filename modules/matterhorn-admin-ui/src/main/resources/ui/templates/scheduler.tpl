@@ -319,7 +319,7 @@
             <fieldset>
               <ul class="oc-ui-form-list">
                 <li id="daySelect">
-                  <label class="scheduler-label" for="repeatDays"><span class="scheduler-required-text">* </span><span id="i18n_sched_days">Repeat Weekly on:</span>:</label><br>
+                  <label class="scheduler-label" for="repeatDays"><span class="scheduler-required-text">* </span><span id="i18n_sched_days">Repeat Weekly on</span>:</label>
                   <table id="agentsTable2" class="layout-inline scheduler-day-table">
                     <thead>
                       <tr>
