@@ -17,7 +17,6 @@ package org.opencastproject.videoeditor.impl;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
@@ -49,7 +48,6 @@ import org.opencastproject.serviceregistry.api.ServiceRegistryException;
 import org.opencastproject.smil.entity.MediaElement;
 import org.opencastproject.smil.entity.ParallelElement;
 import org.opencastproject.smil.entity.Smil;
-import org.opencastproject.util.NotFoundException;
 import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.api.VideoEditorService;
 import org.opencastproject.videoeditor.gstreamer.VideoEditorPipeline;
@@ -174,9 +172,11 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             runningPipeline.addSourceBinsAndCreatePipeline(sourceBins);
             runningPipeline.run();
             String error = runningPipeline.getLastErrorMessage();
+            runningPipeline = null;
+            sourceBins = null;
 
             if (error != null) {
-                FileUtils.deleteDirectory(outputPath.getParentFile());
+                FileUtils.deleteQuietly(outputPath.getParentFile());
                 throw new ProcessFailedException("Editing pipeline exited abnormaly! Error: " + error);
             }
 
@@ -189,14 +189,16 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
                 throw new ProcessFailedException("Copy track into workspace failed! " + ex.getMessage());
             } finally {
                 IOUtils.closeQuietly(in);
+                FileUtils.deleteQuietly(outputPath.getParentFile());
             }
             logger.info("Copied the edited file to workspace at {}.", newTrackURI);
-            FileUtils.deleteDirectory(outputPath.getParentFile());
 
             // inspect new Track
             Job inspectionJob = inspectionService.inspect(newTrackURI);
             JobBarrier barrier = new JobBarrier(serviceRegistry, inspectionJob);
             if (!barrier.waitForJobs().isSuccess()) {
+                // inspection fail, delete edited file from worksapce
+                workspace.delete(newTrackURI);
                 throw new ProcessFailedException("Media inspection of " + newTrackURI + " failed");
             }
             Track editedTrack = (Track) MediaPackageElementParser.getFromXml(inspectionJob.getPayload());
@@ -221,18 +223,9 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             throw new ProcessFailedException(ex.getMessage());
         } finally {
             if (runningPipeline != null) {
+                // pipeline running ?! => cleanup
                 runningPipeline.stop();
-            }
-            FileUtils.deleteQuietly(outputPath.getParentFile());
-            if (newTrackURI != null) {
-                try {
-                    workspace.delete(newTrackURI);
-                } catch (NotFoundException ex) {
-                    // working copy isn't in workspace
-                    // pass
-                } catch (IOException ex) {
-                    logger.error("Can't delete working copy of track at " + newTrackURI.toString(), ex);
-                }
+                FileUtils.deleteQuietly(outputPath.getParentFile());
             }
             processingTrack = false;
         }
