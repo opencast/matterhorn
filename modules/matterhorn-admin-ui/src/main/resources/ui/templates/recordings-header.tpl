@@ -117,11 +117,11 @@
         <div class="form-box-content ui-widget-content ui-corner-all">
           <ul class="oc-ui-form-list">
             <li>
-              <label>&nbsp;</label>
+              <label>&#160;</label>
               <span id="bulkActionApplyMessage"></span>
             </li>
             <li>
-              <label>&nbsp;</label>
+              <label>&#160;</label>
               <button type="button" id="applyBulkAction">
                 <span id="i18n_button_apply_bulk_action">Apply Changes</span>
               </button>
@@ -148,13 +148,13 @@
   <div id="controlsFoot" class="ui-helper-clearfix">
     <div id="refreshControlsContainer" class="ui-widget ui-state-hover ui-corner-all">
       <input type="checkbox" id="refreshEnabled" /><label for="refreshEnabled"></label>
-      <span class="refresh-text">Update table every&nbsp;</span>
+      <span class="refresh-text">Update table every&#160;</span>
       <select id="refreshInterval">
         <option value="5">5</option>
         <option value="7">7</option>
         <option value="10">10</option>
       </select>
-      <span class="refresh-text">&nbsp;seconds.</span>
+      <span class="refresh-text">&#160;seconds.</span>
     </div>
 
     <div id="perPageContainer" class="ui-widget ui-state-hover ui-corner-all">
