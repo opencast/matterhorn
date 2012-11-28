@@ -158,30 +158,30 @@ public class UserAndSeriesLoader {
               securityService.setUser(new User("userandseriesloader", orgId,
                       new String[] { SecurityConstants.GLOBAL_ADMIN_ROLE }));
               securityService.setOrganization(org);
-              
+
               try {
                 // Test if the serie already exist, it does not overwrite it.
                 if (seriesService.getSeries(seriesId) != null)
-                  continue;                
-              }
-              catch (NotFoundException e) {
-                // If the serie does not exist, we create it.
+                  continue;
+              } catch (NotFoundException e) {
+                // If the series does not exist, we create it.
                 seriesService.updateSeries(dc);
-                seriesService.updateAccessControl(seriesId, acl);                
+                seriesService.updateAccessControl(seriesId, acl);
               }
-
             } catch (UnauthorizedException e) {
               logger.warn(e.getMessage());
+            } catch (SeriesException e) {
+              logger.warn("Unable to create series {}", dc);
+            } catch (NotFoundException e) {
+              logger.warn("Unable to find series {}", dc);
             } finally {
               securityService.setOrganization(null);
               securityService.setUser(null);
             }
           }
           logger.debug("Added series {}", dc);
-        } catch (SeriesException e) {
-          logger.warn("Unable to create series {}", dc);
         } catch (NotFoundException e) {
-          logger.warn("Unable to find series {}", dc);
+          logger.warn("Unable to find organization {}", e.getMessage());
         }
       }
 
