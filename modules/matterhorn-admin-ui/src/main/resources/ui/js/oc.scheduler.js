@@ -1059,7 +1059,7 @@ var ocScheduler = (function() {
         }
       });
 
-      dcComps.recurrence = new ocAdmin.Component(['scheduleRepeat', 'repeatSun', 'repeatMon', 'repeatTue', 'repeatWed', 'repeatThu', 'repeatFri', 'repeatSat', 'recurrenceStart'],
+      dcComps.recurrence = new ocAdmin.Component(['repeatSun', 'repeatMon', 'repeatTue', 'repeatWed', 'repeatThu', 'repeatFri', 'repeatSat', 'recurrenceStart'],
       {
         required: true,
         key: 'recurrence',
@@ -1073,7 +1073,6 @@ var ocScheduler = (function() {
         getValue: function() {
           var rrule, dotw, days, date, hour, min, dayOffset;
           if(this.validate()) {
-            if(this.fields.scheduleRepeat.val() == 'weekly') {
               rrule     = "FREQ=WEEKLY;BYDAY=";
               dotw      = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
               days      = [];
@@ -1106,7 +1105,6 @@ var ocScheduler = (function() {
                 days.push(dotw[(6 + dayOffset) % 7]);
               }
               this.value = rrule + this.getDays() + ";BYHOUR=" + hour + ";BYMINUTE=" + min;
-            }
           }
           return this.value;
         },
@@ -1118,7 +1116,6 @@ var ocScheduler = (function() {
             };
           }
           if(value.rrule.indexOf('FREQ=WEEKLY') != -1) {
-            this.fields.scheduleRepeat.val('weekly');
             var days = value.rrule.split('BYDAY=');
             if(days[1].length > 0){
               days = days[1].split(',');
