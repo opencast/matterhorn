@@ -772,14 +772,14 @@ Opencast.Initialize = (function ()
 	/* initalise search button */
         $("#oc_btn-search", "#oc_search").button();
         $("#oc_btn-cc", "#oc_video-time").button();
-        $('#oc_btn-leave-share, #oc_btn-leave-session-time').button(
+        $('#oc_btn-leave-share, .oc_btn-leave-session-time').button(
         {
             icons: {
                 primary: 'ui-icon-close'
             },
             text: false
         });
-        $('#oc_btn-leave-share, #oc_btn-leave-session-time').click(function ()
+        $('#oc_btn-leave-share, .oc_btn-leave-session-time').click(function ()
         {
             Opencast.Player.doToggleShare();
         }); /* initalise closed tabs */

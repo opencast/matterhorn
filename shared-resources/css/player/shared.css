@@ -83,6 +83,22 @@ body {
 #skip a, .skip a {
 	position: absolute;
 	top: 0;
+}*/
+
+.skip {
+	position: absolute;
+	width	: 80%;
+	top: -300px;
+	left: -2000px;
+}
+
+.skip a {
+	position: absolute;
+	top: 0;
+}
+
+.hidden {
+	display: none;
 }
 
 #header {

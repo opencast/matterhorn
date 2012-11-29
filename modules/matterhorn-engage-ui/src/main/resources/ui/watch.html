@@ -178,11 +178,12 @@
     <div id="oc_body" class="ui-widget ui-widget-content ui-corner-bottom">
       <div id="oc_flash-player-loading">
         <span id="matterhorn-init-logo"></span>
+        <span id="initializing" class="hidden">initializing</span>
+        <span id="loading-init" class="hidden"></span>
         <!-- START: Hide when no Javascript is activated -->
         <script type="text/javascript">
-          // <!--
-          document.write('<span id="initializing">initializing</span>');
-          document.write('<span id="loading-init"></span>');
+          document.getElementById("initializing").className = "";
+          document.getElementById("loading-init").className = "";
           // --> 
         </script>
         <!-- END: Hide when no Javascript is activated -->
@@ -235,12 +236,10 @@
         </div>
         <!-- END #oc_video-time -->
         <div id="oc_video-controls">
-          <span class="skip">
-            <a name="controls"></a>
-            <span class="h2">
+          <h2 class="skip">
+              <a name="controls"></a>
               Video Player Controls
-            </span>
-          </span>
+          </h2>
           <input id="oc_btn-skip-backward" 
 		 class="oc_btn-skip-backward" 
 		 type="image" 
@@ -323,10 +322,10 @@
           <table id="scrubber-table">
             <tbody>
               <tr class="player-chrome">
-                <td class="progress-segment">
-                  <table class="segments" id="tableData1">
+                <td class="progress-segment" id="tableData1Container">
+                  <!-- table class="segments" id="tableData1" -->
                     <!-- data comes here -->
-                  </table>
+                  <!-- /table -->
                   <div class="progress-list">
                     <span class="load-progress" value="0"></span>
                     <span id="play-progress" class="play-progress" value="0"></span>
@@ -347,9 +346,9 @@
           <div id="oc-comment-scrubber-box"></div>
           <span id="analytics" class="analytics">Loading..</span>
           <span id="annotation" class="annotation">Annotation..</span>
-          <table class="segments" id="segmentstable1">
+          <!-- table class="segments" id="segmentstable1" -->
             <!-- data comes here -->
-          </table>         
+          <!-- /table -->         
         </div>
         <div id="segments_ui_slider_data1"></div>
         <div id="segments_ui_slider_data2"></div>
@@ -360,7 +359,7 @@
         <div id="data2"></div>
         <div id="segments_ui-mediapackagesCatalog"></div>
         <div id="segments-table2">
-          <table id="segmentstable2"></table>
+          <!-- table id="segmentstable2"></table -->
         </div>
       </div>
       <!-- END #data -->
@@ -480,7 +479,7 @@
 	  <div id="oc-comments-list-addbox">
 	    <div>
 	      <input id="oc-comments-list-namebox" name="Name" type="text" />
-	      <textarea id="oc-comments-list-textbox" ></textarea>
+	      <textarea id="oc-comments-list-textbox" rows="4" cols="30"></textarea>
 	      <input id="oc-comments-list-submit" value="Add comment" role="button" type="button" />
 	      <input id="oc-comments-list-submit-timed" value="Add comment at 00:00:00" role="button" type="button" />
 	    </div>
@@ -552,7 +551,7 @@
           </a>
         </li>
       </ul>
-      <button id="oc_btn-leave-session-time" class="oc_btn-close">
+      <button class="oc_btn-leave-session-time" id="oc_btn-close">
         Leave time dialog
       </button>
     </div>
