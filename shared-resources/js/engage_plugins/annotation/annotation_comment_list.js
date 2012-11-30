@@ -784,7 +784,8 @@ Opencast.Annotation_Comment_List = (function ()
     	//Only one reply form allowed
     	cancelEdit(function(){
     		var url = Opencast.Watch.getAnnotationURL();
-    		var commentVal = $("#comment-row-"+commentID).html().replace(/.*<p class=\"oc-comment-list-value-text\">/g, "");
+    		var commentVal = $("#comment-row-"+commentID).html();
+    		commentVal = commentVal.replace(/.*<p class=\"oc-comment-list-value-text\">/g, "");
     		commentVal = commentVal.replace(/<\/p>.*/g, "");
     		var commentContent = $("#comment-row-"+commentID).html().replace(/<p class=\"oc-comment-list-value-text\">.*<\/p>/g, editTemplate);
     		$("#comment-row-"+commentID).html(commentContent);
@@ -792,9 +793,9 @@ Opencast.Annotation_Comment_List = (function ()
     		$("#oc-comments-list-edit-textbox").val(commentVal);
 //			$("#oc-comment-list-reply-wrapper").slideDown(600);
 			//draw identicon			
-//			pwEncrypt = $().crypt( {method: 'md5',source: cm_username});
- //           $(".oc-comment-list-user-icon-reply").html(pwEncrypt);
- //           $(".oc-comment-list-user-icon-reply").identicon5({rotate:true, size:50});
+			pwEncrypt = $().crypt( {method: 'md5',source: cm_username});
+            $(".oc-comment-list-user-icon").html(pwEncrypt);
+            $(".oc-comment-list-user-icon").identicon5({rotate:true, size:50});
 			//Submit Button
 			$("#oc-comments-list-edit-submit").click(function(){
 				var textBoxValue = $("#oc-comments-list-edit-textbox").val();
