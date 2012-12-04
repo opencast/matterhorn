@@ -70,7 +70,7 @@ public final class OaiPmhRepositoryServlet extends HttpServlet implements Manage
    */
   private String currentServletAlias;
 
-  private List<MetadataProvider> metadataProviders = Collections.synchronizedList(new CopyOnWriteArrayList<MetadataProvider>());
+  private List<MetadataProvider> metadataProviders = new CopyOnWriteArrayList<MetadataProvider>();
 
   /**
    * Service dependency. Called by the OSGi container. See the component xml.
