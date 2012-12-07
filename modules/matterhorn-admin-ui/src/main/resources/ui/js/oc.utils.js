@@ -83,7 +83,7 @@ ocUtils.isChunkedUploadCompliable = function() {
 ocUtils.createDoc = function(rootEl, rootNS){
   var doc = null;
   //Create a DOM Document, methods vary between browsers, e.g. IE and Firefox
-  if(document.implementation && document.implementation.createDocument && !ActiveXObject){ //Firefox, Opera, Safari, Chrome, etc.
+  if(document.implementation && document.implementation.createDocument && !(navigator.userAgent.match(/MSIE\s(?!9.0)/))){ //Firefox, Opera, Safari, Chrome, etc.
     doc = document.implementation.createDocument(rootNS, rootEl, null);
   } else { // IE must use an XML specific doc even though IE9 supports createDocument
     doc = new ActiveXObject('MSXML2.DOMDocument');
