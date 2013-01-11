@@ -523,6 +523,7 @@ function okButtonClick() {
 
     // cancelButtonClick();
     editor.updateSplitList(true);
+    selectSegmentListElement(id);
   }
 }
 
