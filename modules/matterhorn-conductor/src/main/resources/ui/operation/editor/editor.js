@@ -736,6 +736,14 @@ function splitButtonClick() {
   }
 }
 
+function selectSegmentListElement(number)
+{
+    if($('#splitItemDiv-' + number))
+    {
+	$('#splitItemDiv-' + number).click();
+    }
+}
+
 /**
  * when player is ready set all neccassary stuff
  */
@@ -788,6 +796,7 @@ function playerReady() {
                 });
                 $(this).dialog('close');
                 editor.updateSplitList();
+		selectSegmentListElement(0);
               },
               No : function() {
                 $(this).dialog('close');
@@ -866,6 +875,7 @@ function playerReady() {
       }
     });
   }
+  selectSegmentListElement(0);
 }
 
 /**

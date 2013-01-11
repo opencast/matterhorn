@@ -1,8 +1,3 @@
-var sourcesInternal = '' +
-    '<source src="media/video.mp4" type=\'video/mp4; codecs="avc1.42E01E, mp4a.40.2"\'>' +
-    '<source src="media/video.webm" type=\'video/webm; codecs="vp8, vorbis"\'>' +
-    '<source src="media/video.ogg" type=\'video/ogg; codecs="theora, vorbis"\'>'+
-    'Your browser does not support HTML5 video.';
 var sourcesExternal = '' +
     '<source src="http://video-js.zencoder.com/oceans-clip.mp4" type=\'video/mp4; codecs="avc1.42E01E, mp4a.40.2"\'>' +
     '<source src="http://video-js.zencoder.com/oceans-clip.webm" type=\'video/webm; codecs="vp8, vorbis"\'>' +
@@ -43,14 +38,6 @@ jQuery(document).ready(function()
 		       {
 			   (function($)
 			    {
-				/*
-				$('#video_player_1').html(sourcesInternal);
-				$('#video_player_2').html(sourcesInternal);
-				$('#video_player_3').html(sourcesInternal);
-				$('#video_player_4').html(sourcesInternal);
-				$('#video_player_5').html(sourcesInternal);
-				$('#video_player_6').html(sourcesInternal);
-				*/
 				$('#video_player_1').html(sourcesExternal);
 				$('#video_player_2').html(sourcesExternal);
 				$('#video_player_3').html(sourcesExternal);
