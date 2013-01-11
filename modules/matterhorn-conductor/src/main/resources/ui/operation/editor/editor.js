@@ -494,6 +494,30 @@ function initPlayButtons() {
 
 }
 
+function checkClipBegin()
+{
+    if(isNaN(parseInt($('#clipBegin').timefield('option', 'value').replace("s", ""))))
+    {
+	$('#clipBegin').timefield('option', 'value', formatTime('0s'));
+    }
+    else
+    {
+	$('#clipBegin').timefield('option', 'value', $('#clipBegin').timefield('option', 'value'));
+    }
+}
+
+function checkClipEnd()
+{
+    if(isNaN(parseInt($('#clipEnd').timefield('option', 'value').replace("s", ""))))
+    {
+	$('#clipEnd').timefield('option', 'value', formatTime('0s'));
+    }
+    else
+    {
+	$('#clipEnd').timefield('option', 'value', $('#clipEnd').timefield('option', 'value'));
+    }
+}
+
 /**
  * click handler for saving data in editing box
  */
@@ -857,6 +881,13 @@ function playerReady() {
     editor.player.on("timeupdate", function() {
       $('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
     });
+
+      $('#clipBegin input').blur(function(evt) {
+	  checkClipBegin();
+      });
+      $('#clipEnd input').blur(function(evt) {
+	  checkClipEnd();
+      });
 
     // add evtl handler for enter in editing fields
     $('#clipBegin input').keyup(function(evt) {
