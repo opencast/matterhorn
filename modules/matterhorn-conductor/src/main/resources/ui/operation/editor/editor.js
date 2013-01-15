@@ -74,35 +74,34 @@ editor.updateSplitList = function(dontClickCancel) {
     if(!dontClickCancel) {
 	cancelButtonClick();
     }
-  $('#leftBox').html($('#splitElements').jqote(editor.splitData));
-  $('#splitSegments').html($('#splitSegmentTemplate').jqote(editor.splitData));
-  $('.splitItemDiv').click(splitItemClick);
-  $('.splitSegmentItem').click(splitItemClick);
-  // $('.splitRemover').click(splitRemoverClick);
+    $('#leftBox').html($('#splitElements').jqote(editor.splitData));
+    $('#splitSegments').html($('#splitSegmentTemplate').jqote(editor.splitData));
+    $('.splitItemDiv').click(splitItemClick);
+    $('.splitSegmentItem').click(splitItemClick);
+    // $('.splitRemover').click(splitRemoverClick);
 
-  $('.splitRemoverLink').button({
-    text : false,
-    icons : {
-      primary : "ui-icon-trash"
-    }
-  });
+    $('.splitRemoverLink').button({
+	text : false,
+	icons : {
+	    primary : "ui-icon-trash"
+	}
+    });
 
-  $('.splitAdderLink').button({
-    text : false,
-    icons : {
-      primary : "ui-icon-arrowreturnthick-1-w"
-    }
-  });
+    $('.splitAdderLink').button({
+	text : false,
+	icons : {
+	    primary : "ui-icon-arrowreturnthick-1-w"
+	}
+    });
 
-  $('.splitRemoverLink').click(splitRemoverClick);
-  $('.splitAdderLink').click(splitRemoverClick);
+    $('.splitRemoverLink').click(splitRemoverClick);
+    $('.splitAdderLink').click(splitRemoverClick);
 
-  $('.splitSegmentItem').dblclick(jumpToSegment);
-  $('.splitItemDiv').dblclick(jumpToSegment);
+    $('.splitSegmentItem').dblclick(jumpToSegment);
+    $('.splitItemDiv').dblclick(jumpToSegment);
 
-  $('.splitSegmentItem').hover(splitHoverIn, splitHoverOut);
-  $('.splitItemDiv').hover(splitHoverIn, splitHoverOut);
-
+    $('.splitSegmentItem').hover(splitHoverIn, splitHoverOut);
+    $('.splitItemDiv').hover(splitHoverIn, splitHoverOut);
 }
 
 /**
@@ -110,41 +109,41 @@ editor.updateSplitList = function(dontClickCancel) {
  * workflowoperationhandler
  */
 editor.createSMIL = function() {
-  $.ajax({
-    url : SMIL_RESTSERVICE + "new",
-    data : {
-      workflowId : workflowInstance.id
-    }
-  });
+    $.ajax({
+	url : SMIL_RESTSERVICE + "new",
+	data : {
+	    workflowId : workflowInstance.id
+	}
+    });
 }
 
 /**
  * clear the content of the smil
  */
 editor.clearSMIL = function() {
-  $.ajax({
-    url : SMIL_RESTSERVICE + "clear/" + workflowInstance.id,
-    async : false
-  });
+    $.ajax({
+	url : SMIL_RESTSERVICE + "clear/" + workflowInstance.id,
+	async : false
+    });
 }
 
 /**
  * save the content to smil file
  */
 editor.saveSplitList = function() {
-  editor.clearSMIL();
-  $.each(editor.splitData.splits, function(key, value) {
-    if (value.enabled) {
-      parallelId = editor.addParallel();
-      $.each(workflowInstance.mediapackage.media.track, function(key, track) {
-        if (track.type.indexOf("work") != -1) {
-          value.src = track.url;
-          value.mhElement = track.id;
-          editor.addMediaElement(parallelId, value);
-        }
-      });
-    }
-  });
+    editor.clearSMIL();
+    $.each(editor.splitData.splits, function(key, value) {
+	if (value.enabled) {
+	    parallelId = editor.addParallel();
+	    $.each(workflowInstance.mediapackage.media.track, function(key, track) {
+		if (track.type.indexOf("work") != -1) {
+		    value.src = track.url;
+		    value.mhElement = track.id;
+		    editor.addMediaElement(parallelId, value);
+		}
+	    });
+	}
+    });
 }
 
 /**
@@ -156,194 +155,194 @@ editor.saveSplitList = function() {
  *          the data of this MediaElement
  */
 editor.addMediaElement = function(parallelId, data) {
-  $.ajax({
-    url : SMIL_RESTSERVICE + "addMediaElement/" + workflowInstance.id + "/" + parallelId,
-    data : data,
-    async : false,
-    success : function(data) {
-    }
-  })
+    $.ajax({
+	url : SMIL_RESTSERVICE + "addMediaElement/" + workflowInstance.id + "/" + parallelId,
+	data : data,
+	async : false,
+	success : function(data) {
+	}
+    })
 }
 
 /**
  * add a ParallelElement to the SMIL
  */
 editor.addParallel = function() {
-  var parallelId = "";
-  $.ajax({
-    url : SMIL_RESTSERVICE + "addParallel/" + workflowInstance.id,
-    success : function(data) {
-      parallelId = data;
-    },
-    async : false
-  });
-  return parallelId;
+    var parallelId = "";
+    $.ajax({
+	url : SMIL_RESTSERVICE + "addParallel/" + workflowInstance.id,
+	success : function(data) {
+	    parallelId = data;
+	},
+	async : false
+    });
+    return parallelId;
 }
 
 /**
  * download the SMIL if there is already one e.g. from silence detection
  */
 editor.downloadSMIL = function() {
-  var smil = null;
-  $.ajax({
-    url : SMIL_RESTSERVICE + "get/" + workflowInstance.id,
-    data : {
-      format : "json"
-    },
-    dataType : "json",
-    async : false,
-    success : function(data) {
-      smil = data;
-    }
-  });
-  return smil;
+    var smil = null;
+    $.ajax({
+	url : SMIL_RESTSERVICE + "get/" + workflowInstance.id,
+	data : {
+	    format : "json"
+	},
+	dataType : "json",
+	async : false,
+	success : function(data) {
+	    smil = data;
+	}
+    });
+    return smil;
 }
 
 /**
  * add all shortcuts
  */
 function addShortcuts() {
-  $.ajax({
-    url : ME_JSON,
-    dataType : "json",
-    async : false,
-    success : function(data) {
-      $.each(data.org.properties, function(key, value) {
-        default_config[key] = value;
-        $('#' + key.replace(".", "_")).html(value);
-      });
-    }
-  });
-  
-  $.each(default_config, function(key, value) {
-    $('#' + key.replace(".", "_")).html(value);
-  });
+    $.ajax({
+	url : ME_JSON,
+	dataType : "json",
+	async : false,
+	success : function(data) {
+	    $.each(data.org.properties, function(key, value) {
+		default_config[key] = value;
+		$('#' + key.replace(".", "_")).html(value);
+	    });
+	}
+    });
+    
+    $.each(default_config, function(key, value) {
+	$('#' + key.replace(".", "_")).html(value);
+    });
 
-  // add shortcuts for easier editing
-  shortcut.add(default_config[SPLIT_AT_CURRENT_TIME], splitButtonClick, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PREVIOUS_FRAME], function() {
-    pauseVideo();
-    $('.video-prev-frame').click();
-  }, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[NEXT_FRAME], function() {
-    pauseVideo();
-    $('.video-next-frame').click();
-  }, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PLAY_PAUSE], function() {
-    if (editor.player.prop("paused")) {
-      editor.player[0].play();
-    } else {
-      editor.player[0].pause();
-    }
-  }, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PLAY_CURRENT_SEGMENT], playCurrentSplitItem, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[DELETE_SELECTED_ITEM], splitRemoverClick, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[SELECT_ITEM_AT_CURRENT_TIME], selectCurrentSplitItem, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[SET_CURRENT_TIME_AS_INPOINT], setCurrentTimeAsNewInpoint, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[SET_CURRENT_TIME_AS_OUTPOINT], setCurrentTimeAsNewOutpoint, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[NEXT_MARKER], nextSegment, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PREVIOUS_MARKER], previousSegment, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PLAY_ENDING_OF_CURRENT_SEGMENT], playEnding, {
-    disable_in_input : true,
-  });
-  shortcut.add(default_config[PLAY_CURRENT_PRE_POST], playWithoutDeleted, {
-    disable_in_input : true
-  });
+    // add shortcuts for easier editing
+    shortcut.add(default_config[SPLIT_AT_CURRENT_TIME], splitButtonClick, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PREVIOUS_FRAME], function() {
+	pauseVideo();
+	$('.video-prev-frame').click();
+    }, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[NEXT_FRAME], function() {
+	pauseVideo();
+	$('.video-next-frame').click();
+    }, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PLAY_PAUSE], function() {
+	if (editor.player.prop("paused")) {
+	    editor.player[0].play();
+	} else {
+	    editor.player[0].pause();
+	}
+    }, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PLAY_CURRENT_SEGMENT], playCurrentSplitItem, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[DELETE_SELECTED_ITEM], splitRemoverClick, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[SELECT_ITEM_AT_CURRENT_TIME], selectCurrentSplitItem, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[SET_CURRENT_TIME_AS_INPOINT], setCurrentTimeAsNewInpoint, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[SET_CURRENT_TIME_AS_OUTPOINT], setCurrentTimeAsNewOutpoint, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[NEXT_MARKER], nextSegment, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PREVIOUS_MARKER], previousSegment, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PLAY_ENDING_OF_CURRENT_SEGMENT], playEnding, {
+	disable_in_input : true,
+    });
+    shortcut.add(default_config[PLAY_CURRENT_PRE_POST], playWithoutDeleted, {
+	disable_in_input : true
+    });
 }
 
 /**
  * play last 2 seconds of the current segment
  */
 function playEnding() {
-  var split = getCurrentSplitItem();
-  if (split != null) {
-    clipEnd = split.clipEnd;
-    editor.player.prop("currentTime", clipEnd - 2);
-    editor.player.on("play", {
-      duration : 2000,
-      endTime : clipEnd
-    }, onPlay);
-    editor.player[0].play();
-  }
+    var split = getCurrentSplitItem();
+    if (split != null) {
+	clipEnd = split.clipEnd;
+	editor.player.prop("currentTime", clipEnd - 2);
+	editor.player.on("play", {
+	    duration : 2000,
+	    endTime : clipEnd
+	}, onPlay);
+	editor.player[0].play();
+    }
 }
 
 /**
  * play from current playhead -2s exclude the removed segments
  */
 function playWithoutDeleted() {
-  editor.player[0].pause();
-  currentTime = editor.player.prop("currentTime");
-  currentSplit = getCurrentSplitItem();
-  if(!currentSplit.enabled) {
-    currentSplit = editor.splitData.splits[currentSplit.id - 1];
-  }
-  startTime = currentTime - 2;
-  nextSplit = editor.splitData.splits[currentSplit.id + 1]
-  nextStart = parseFloat(nextSplit.clipBegin.replace("s", ""));
+    editor.player[0].pause();
+    currentTime = editor.player.prop("currentTime");
+    currentSplit = getCurrentSplitItem();
+    if(!currentSplit.enabled) {
+	currentSplit = editor.splitData.splits[currentSplit.id - 1];
+    }
+    startTime = currentTime - 2;
+    nextSplit = editor.splitData.splits[currentSplit.id + 1]
+    nextStart = parseFloat(nextSplit.clipBegin.replace("s", ""));
 
-  // set current time -2s for pre roll
-  editor.player.prop("currentTime", startTime);
+    // set current time -2s for pre roll
+    editor.player.prop("currentTime", startTime);
 
-  // if next split is disabled jump over it
-  if (!nextSplit.enabled) {
-    ocUtils.log("starting jump over");
-    editor.player.on("play", {
-      duration : (nextStart - startTime) * 1000,
-      endTime : nextStart
-    }, onPlay);
-    editor.player.on("pause", function(evt) {
-      editor.player.off("pause");
-      editor.player.prop("currentTime", nextSplit.clipEnd.replace("s", ""));
-      editor.player.on("play", {
-        duration : 2000,
-        endTime : parseFloat(nextSplit.clipEnd.replace("s", "")) + 2
-      }, onPlay);
-    });
-    editor.player[0].play();
-  } else {
-      timeoutUsed = false;
-    editor.player.on("play", {
-	duration : 4000,
-	endTime : currentTime + 2,
-	jumpBackTime : currentTime,
-	jumpBackBool : true
-    }, onPlay);
-    editor.player[0].play();
-  }
+    // if next split is disabled jump over it
+    if (!nextSplit.enabled) {
+	ocUtils.log("starting jump over");
+	editor.player.on("play", {
+	    duration : (nextStart - startTime) * 1000,
+	    endTime : nextStart
+	}, onPlay);
+	editor.player.on("pause", function(evt) {
+	    editor.player.off("pause");
+	    editor.player.prop("currentTime", nextSplit.clipEnd.replace("s", ""));
+	    editor.player.on("play", {
+		duration : 2000,
+		endTime : parseFloat(nextSplit.clipEnd.replace("s", "")) + 2
+	    }, onPlay);
+	});
+	editor.player[0].play();
+    } else {
+	timeoutUsed = false;
+	editor.player.on("play", {
+	    duration : 4000,
+	    endTime : currentTime + 2,
+	    jumpBackTime : currentTime,
+	    jumpBackBool : true
+	}, onPlay);
+	editor.player[0].play();
+    }
 }
 
 /**
  * jump to beginning of current split item
  */
 function jumpToSegment() {
-  id = $(this).prop('id');
-  id = id.replace('splitItem-', '');
-  id = id.replace('splitItemDiv-', '');
-  id = id.replace('splitSegmentItem-', '');
+    id = $(this).prop('id');
+    id = id.replace('splitItem-', '');
+    id = id.replace('splitItemDiv-', '');
+    id = id.replace('splitSegmentItem-', '');
 
-  editor.player.prop("currentTime", editor.splitData.splits[id].clipBegin.replace("s", ""));
+    editor.player.prop("currentTime", editor.splitData.splits[id].clipBegin.replace("s", ""));
 }
 
 function isInInterval(toCheck, lower, upper) {
@@ -369,7 +368,7 @@ function nextSegment() {
 	    new_id = i + 1;
 	    break;
 	}
-    
+	
     }
     if(new_id > 0) {
 	if (new_id <= editor.splitData.splits.length - 1) {
@@ -379,7 +378,7 @@ function nextSegment() {
 	}
     }
     // if(!playerPaused) {
-	// editor.player[0].play();
+    // editor.player[0].play();
     // }
 }
 
@@ -412,7 +411,7 @@ function previousSegment() {
 	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
     }
     // if(!playerPaused) {
-	// editor.player[0].play();
+    // editor.player[0].play();
     // }
 }
 
@@ -423,15 +422,15 @@ function previousSegment() {
  *          the corresponding event
  */
 function splitHoverIn(evt) {
-  id = $(this).prop('id');
-  id = id.replace('splitItem-', '');
-  id = id.replace('splitItemDiv-', '');
-  id = id.replace('splitSegmentItem-', '');
+    id = $(this).prop('id');
+    id = id.replace('splitItem-', '');
+    id = id.replace('splitItemDiv-', '');
+    id = id.replace('splitSegmentItem-', '');
 
-  $('#splitItem-' + id).addClass('hover');
-  if (!$('#splitSegmentItem-' + id).hasClass("splitSegmentItemSelected")) {
-    $('#splitSegmentItem-' + id).addClass('hover hoverOpacity');
-  }
+    $('#splitItem-' + id).addClass('hover');
+    if (!$('#splitSegmentItem-' + id).hasClass("splitSegmentItemSelected")) {
+	$('#splitSegmentItem-' + id).addClass('hover hoverOpacity');
+    }
 }
 
 /**
@@ -441,171 +440,182 @@ function splitHoverIn(evt) {
  *          the corresponding event
  */
 function splitHoverOut(evt) {
-  id = $(this).prop('id');
-  id = id.replace('splitItem-', '');
-  id = id.replace('splitItemDiv-', '');
-  id = id.replace('splitSegmentItem-', '');
+    id = $(this).prop('id');
+    id = id.replace('splitItem-', '');
+    id = id.replace('splitItemDiv-', '');
+    id = id.replace('splitSegmentItem-', '');
 
-  $('#splitItem-' + id).removeClass('hover');
-  $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+    $('#splitItem-' + id).removeClass('hover');
+    $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
 }
 
 /**
  * init the playbuttons in the editing box
  */
 function initPlayButtons() {
-  $('#clipBeginSet, #clipEndSet').button({
-    text : false,
-    icons : {
-      primary : "ui-icon-arrowthickstop-1-s"
-    }
-  });
-
-  $('#clipBeginSet').click(setCurrentTimeAsNewInpoint);
-  $('#clipEndSet').click(setCurrentTimeAsNewOutpoint);
-
-  $('#shortcuts').button();
-
-  $('#shortcuts').click(function() {
-    $('#shortcutsDialog').dialog({
-      title : "shortcuts for video editing",
-      resizable : false,
-      buttons : {
-        Close : function() {
-          $(this).dialog("close");
-        }
-      }
-    })
-  });
-
-  $('#clearList').button();
-
-  $('#clearList').click(function() {
-    editor.splitData.splits = [];
-    // create standard split point
-    editor.splitData.splits.push({
-      clipBegin : '0s',
-      clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
-      enabled : true,
-      description : ""
+    $('#clipBeginSet, #clipEndSet').button({
+	text : false,
+	icons : {
+	    primary : "ui-icon-arrowthickstop-1-s"
+	}
     });
-    editor.updateSplitList();
-  });
+
+    $('#clipBeginSet').click(setCurrentTimeAsNewInpoint);
+    $('#clipEndSet').click(setCurrentTimeAsNewOutpoint);
+
+    $('#shortcuts').button();
+
+    $('#shortcuts').click(function() {
+	$('#shortcutsDialog').dialog({
+	    title : "shortcuts for video editing",
+	    resizable : false,
+	    buttons : {
+		Close : function() {
+		    $(this).dialog("close");
+		}
+	    }
+	})
+    });
+
+    $('#clearList').button();
+
+    $('#clearList').click(function() {
+	editor.splitData.splits = [];
+	// create standard split point
+	editor.splitData.splits.push({
+	    clipBegin : '0s',
+	    clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
+	    enabled : true,
+	    description : ""
+	});
+	editor.updateSplitList();
+    });
 
 }
 
 function checkClipBegin()
 {
-    if(isNaN(parseInt($('#clipBegin').timefield('option', 'value').replace("s", ""))))
+    var clipBegin = parseFloat($('#clipBegin').timefield('option', 'value').replace("s", ""));
+    if(isNaN(clipBegin))
     {
-	$('#clipBegin').timefield('option', 'value', formatTime('0s'));
+	$('#clipBegin').timefield('option', 'value', '0s');
     }
     else
     {
-	$('#clipBegin').timefield('option', 'value', $('#clipBegin').timefield('option', 'value'));
+	$('#clipBegin').timefield('option', 'value', clipBegin + 's');
     }
 }
 
 function checkClipEnd()
 {
-    if(isNaN(parseInt($('#clipEnd').timefield('option', 'value').replace("s", ""))))
+    var duration = editor.player.prop("duration");
+    var clipEnd = parseFloat($('#clipEnd').timefield('option', 'value').replace("s", ""));
+    if(clipEnd > duration) {
+	clipEnd = duration;
+    }
+    if(isNaN(clipEnd))
     {
-	$('#clipEnd').timefield('option', 'value', formatTime('0s'));
+	$('#clipEnd').timefield('option', 'value', '0s');
     }
     else
     {
-	$('#clipEnd').timefield('option', 'value', $('#clipEnd').timefield('option', 'value'));
+	$('#clipEnd').timefield('option', 'value', clipEnd + 's');
     }
+    getCurrentSplitItem().clipEnd = clipEnd + 's';
+    editor.updateSplitList(true);
 }
 
 /**
  * click handler for saving data in editing box
  */
 function okButtonClick() {
-  id = $('#splitUUID').val();
-  if (id != "") {
-    id = parseInt(id);
-    if (parseFloat($('#clipBegin').timefield('option', 'value').replace("s", "")) > parseFloat($('#clipEnd').timefield(
-        'option', 'value').replace("s", ""))) {
-      $('<div />').html("The inpoint is bigger than the outpoint. Please check.").dialog({
-        title : "Check in and outpoint",
-        resizable : false,
-        buttons : {
-          OK : function() {
-            $(this).dialog("close");
-          }
-        }
-      });
-      return;
+    checkClipBegin();
+    checkClipEnd();
+    id = $('#splitUUID').val();
+    if (id != "") {
+	id = parseInt(id);
+	if (parseFloat($('#clipBegin').timefield('option', 'value').replace("s", "")) > parseFloat($('#clipEnd').timefield(
+	    'option', 'value').replace("s", ""))) {
+	    $('<div />').html("The inpoint is bigger than the outpoint. Please check.").dialog({
+		title : "Check in and outpoint",
+		resizable : false,
+		buttons : {
+		    OK : function() {
+			$(this).dialog("close");
+		    }
+		}
+	    });
+	    return;
+	}
+
+	splitItem = editor.splitData.splits[id];
+	splitItem.description = $('#splitDescription').val();
+	splitItem.clipBegin = $('#clipBegin').timefield('option', 'value');
+	splitItem.clipEnd = $('#clipEnd').timefield('option', 'value');
+
+	checkPrevAndNext(id);
+
+	// cancelButtonClick();
+	editor.updateSplitList(true);
+	selectSegmentListElement(id);
     }
-    splitItem = editor.splitData.splits[id];
-    splitItem.description = $('#splitDescription').val();
-    splitItem.clipBegin = $('#clipBegin').timefield('option', 'value');
-    splitItem.clipEnd = $('#clipEnd').timefield('option', 'value');
-
-    checkPrevAndNext(id);
-
-    // cancelButtonClick();
-    editor.updateSplitList(true);
-    selectSegmentListElement(id);
-  }
 }
 
 function checkPrevAndNext(id) {
-  // it's the first check whether we need a new first item
-  if (id == 0) {
-    if (editor.splitData.splits.length > 1) {
-      var next = editor.splitData.splits[id + 1];
-      next.clipBegin = splitItem.clipEnd;
-    }
-    if ($('#clipBegin').timefield('option', 'seconds') != 0) {
-      var newSplitItem = {
-        description : "",
-        clipBegin : "0s",
-        enabled : true,
-        clipEnd : splitItem.clipBegin
-      };
+    // it's the first check whether we need a new first item
+    if (id == 0) {
+	if (editor.splitData.splits.length > 1) {
+	    var next = editor.splitData.splits[id + 1];
+	    next.clipBegin = splitItem.clipEnd;
+	}
+	if ($('#clipBegin').timefield('option', 'seconds') != 0) {
+	    var newSplitItem = {
+		description : "",
+		clipBegin : "0s",
+		enabled : true,
+		clipEnd : splitItem.clipBegin
+	    };
 
-      // add new item to front
-      editor.splitData.splits.splice(0, 0, newSplitItem);
-    }
-  } else if (id == editor.splitData.splits.length - 1) {
-    if ($('#clipEnd').timefield('option', 'seconds') != editor.player.prop("duration")) {
-      var newLastItem = {
-        description : "",
-        enabled : true,
-        clipBegin : splitItem.clipEnd,
-        clipEnd : editor.player.prop("duration") + "s"
-      };
+	    // add new item to front
+	    editor.splitData.splits.splice(0, 0, newSplitItem);
+	}
+    } else if (id == editor.splitData.splits.length - 1) {
+	if ($('#clipEnd').timefield('option', 'seconds') != editor.player.prop("duration")) {
+	    var newLastItem = {
+		description : "",
+		enabled : true,
+		clipBegin : splitItem.clipEnd,
+		clipEnd : editor.player.prop("duration") + "s"
+	    };
 
-      // add the new item to the end
-      editor.splitData.splits.push(newLastItem);
-    }
-    var prev = editor.splitData.splits[id - 1];
-    prev.clipEnd = splitItem.clipBegin
-  } else {
-    var next = editor.splitData.splits[id + 1];
-    var prev = editor.splitData.splits[id - 1];
+	    // add the new item to the end
+	    editor.splitData.splits.push(newLastItem);
+	}
+	var prev = editor.splitData.splits[id - 1];
+	prev.clipEnd = splitItem.clipBegin
+    } else {
+	var next = editor.splitData.splits[id + 1];
+	var prev = editor.splitData.splits[id - 1];
 
-    prev.clipEnd = splitItem.clipBegin;
-    next.clipBegin = splitItem.clipEnd;
-  }
+	prev.clipEnd = splitItem.clipBegin;
+	next.clipBegin = splitItem.clipEnd;
+    }
 }
 
 /**
  * click handler for canceling editing
  */
 function cancelButtonClick() {
-  $('#splitDescription').html('');
-  $('#splitUUID').val('');
-  $('#splitDescription').val("");
-  $('#clipBegin').timefield('option', 'value', 0);
-  $('#clipEnd').timefield('option', 'value', 0);
-  $('#splitIndex').html('#');
-  $('.splitItem').removeClass('splitItemSelected');
-  $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
-  editor.selectedSplit = null;
-  enabledRightBox(false);
+    $('#splitDescription').html('');
+    $('#splitUUID').val('');
+    $('#splitDescription').val("");
+    $('#clipBegin').timefield('option', 'value', '0s');
+    $('#clipEnd').timefield('option', 'value', '0s');
+    $('#splitIndex').html('#');
+    $('.splitItem').removeClass('splitItemSelected');
+    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
+    editor.selectedSplit = null;
+    enabledRightBox(false);
 }
 
 /**
@@ -615,61 +625,61 @@ function cancelButtonClick() {
  *          whether enabled or not
  */
 function enabledRightBox(enabled) {
-  if (enabled) {
-    $('#rightBox :input').removeProp('disabled');
-    $('.frameButton').button("enable");
-    $('#descriptionCurrentTimeDiv').show();
-  } else {
-    $('#rightBox :input').prop('disabled', 'disabled');
-    $('.frameButton').button("disable");
-    $('#descriptionCurrentTimeDiv').hide();
-  }
+    if (enabled) {
+	$('#rightBox :input').removeProp('disabled');
+	$('.frameButton').button("enable");
+	$('#descriptionCurrentTimeDiv').show();
+    } else {
+	$('#rightBox :input').prop('disabled', 'disabled');
+	$('.frameButton').button("disable");
+	$('#descriptionCurrentTimeDiv').hide();
+    }
 }
 
 /**
  * select the split at the current time
  */
 function selectCurrentSplitItem() {
-  var splitItem = getCurrentSplitItem();
-  $('#splitSegmentItem-' + splitItem.id).click();
+    var splitItem = getCurrentSplitItem();
+    $('#splitSegmentItem-' + splitItem.id).click();
 }
 
 /**
  * set current time as the new inpoint of selected item
  */
 function setCurrentTimeAsNewInpoint() {
-  if (editor.selectedSplit != null) {
-    $('#clipBegin').timefield('option', 'value', editor.player.prop("currentTime") + "s");
-  }
+    if (editor.selectedSplit != null) {
+	$('#clipBegin').timefield('option', 'value', editor.player.prop("currentTime") + "s");
+    }
 }
 
 /**
  * set current time as the new outpoint of selected item
  */
 function setCurrentTimeAsNewOutpoint() {
-  if (editor.selectedSplit != null) {
-    $('#clipEnd').timefield('option', 'value', editor.player.prop("currentTime") + "s");
-  }
+    if (editor.selectedSplit != null) {
+	$('#clipEnd').timefield('option', 'value', editor.player.prop("currentTime") + "s");
+    }
 }
 
 /**
  * plays the current split item from it's beginning
  */
 function playCurrentSplitItem() {
-  var splitItem = getCurrentSplitItem();
+    var splitItem = getCurrentSplitItem();
     var currentTime = editor.player.prop("currentTime");
-  if (splitItem != null) {
-    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-    var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-    var duration = (clipEnd - clipBegin) * 1000;
-    editor.player.prop("currentTime", clipBegin);
+    if (splitItem != null) {
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var duration = (clipEnd - clipBegin) * 1000;
+	editor.player.prop("currentTime", clipBegin);
 
-    editor.player.on("play", {
-	duration : duration,
-	endTime : clipEnd
-    }, onPlay);
-    editor.player[0].play();
-  }
+	editor.player.on("play", {
+	    duration : duration,
+	    endTime : clipEnd
+	}, onPlay);
+	editor.player[0].play();
+    }
 }
 
 /**
@@ -679,12 +689,12 @@ function playCurrentSplitItem() {
  *          the event
  */
 function onPlay(evt) {
-  timeout1 = window.setTimeout(onTimeout, evt.data.duration);
-  // editor.player.off("play");
-  endTime = evt.data.endTime;
-  jumpBackTime = evt.data.jumpBackTime;
-  jumpBackBool = ((evt.data.jumpBackBool === undefined) || (evt.data.jumpBackBool != true)) ? null : evt.data.jumpBackBool;
-  currEvt = evt;
+    timeout1 = window.setTimeout(onTimeout, evt.data.duration);
+    // editor.player.off("play");
+    endTime = evt.data.endTime;
+    jumpBackTime = evt.data.jumpBackTime;
+    jumpBackBool = ((evt.data.jumpBackBool === undefined) || (evt.data.jumpBackBool != true)) ? null : evt.data.jumpBackBool;
+    currEvt = evt;
 }
 
 /**
@@ -718,47 +728,49 @@ function onTimeout() {
  * @returns the current split item
  */
 function getCurrentSplitItem() {
-  var currentTime = editor.player.prop("currentTime");
-  for (var i = 0; i < editor.splitData.splits.length; ++i) {
-    var splitItem = editor.splitData.splits[i];
-    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-    var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-    if (clipBegin <= currentTime && currentTime < clipEnd) {
-      splitItem.id = i;
-      return splitItem;
+    var currentTime = editor.player.prop("currentTime");
+    for (var i = 0; i < editor.splitData.splits.length; ++i) {
+	var splitItem = editor.splitData.splits[i];
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	if (clipBegin <= currentTime && currentTime < clipEnd) {
+	    splitItem.id = i;
+	    return splitItem;
+	}
     }
-  }
-  return null;
+    return null;
 }
 
 /**
  * click/shortcut handler for adding a split item at current time
  */
 function splitButtonClick() {
-  var currentTime = editor.player.prop('currentTime');
-  for ( var i = 0; i < editor.splitData.splits.length; i++) {
-    var splitItem = editor.splitData.splits[i];
-    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-    var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-    if (clipBegin < currentTime && currentTime < clipEnd) {
-      newEnd = "0s";
-      if (editor.splitData.splits.length == i + 1) {
-        newEnd = splitItem.clipEnd;
-      } else {
-        newEnd = editor.splitData.splits[i + 1].clipBegin;
-      }
-      var newItem = {
-        clipBegin : currentTime + 's',
-        clipEnd : newEnd,
-        enabled : true,
-        description : ""
-      }
-      splitItem.clipEnd = currentTime + 's';
-      editor.splitData.splits.splice(i + 1, 0, newItem);
-      editor.updateSplitList();
-      return;
+    var currentTime = editor.player.prop('currentTime');
+    for ( var i = 0; i < editor.splitData.splits.length; i++) {
+	var splitItem = editor.splitData.splits[i];
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	if (clipBegin < currentTime && currentTime < clipEnd) {
+	    newEnd = "0s";
+	    if (editor.splitData.splits.length == i + 1) {
+		newEnd = splitItem.clipEnd;
+	    } else {
+		newEnd = editor.splitData.splits[i + 1].clipBegin;
+	    }
+	    var newItem = {
+		clipBegin : currentTime + 's',
+		clipEnd : newEnd,
+		enabled : true,
+		description : ""
+	    }
+	    splitItem.clipEnd = currentTime + 's';
+	    editor.splitData.splits.splice(i + 1, 0, newItem);
+	    editor.updateSplitList();
+	    selectSegmentListElement(i + 1);
+	    return;
+	}
     }
-  }
+    selectCurrentSplitItem();
 }
 
 function selectSegmentListElement(number)
@@ -773,170 +785,170 @@ function selectSegmentListElement(number)
  * when player is ready set all neccassary stuff
  */
 function playerReady() {
-  if (!editor.ready) {
-    editor.ready = true;
-    // create additional data output
-    $('#videoHolder').append('<div id="segmentsWaveform"></div>');
-    $('#segmentsWaveform').append('<div id="splitSegments"></div>')
-    $('#segmentsWaveform').append('<div id="imageDiv"><img id="waveformImage" alt="waveform"/></div>');
-    $('#segmentsWaveform').append('<div id="currentTimeDiv"></div>');
+    if (!editor.ready) {
+	editor.ready = true;
+	// create additional data output
+	$('#videoHolder').append('<div id="segmentsWaveform"></div>');
+	$('#segmentsWaveform').append('<div id="splitSegments"></div>')
+	$('#segmentsWaveform').append('<div id="imageDiv"><img id="waveformImage" alt="waveform"/></div>');
+	$('#segmentsWaveform').append('<div id="currentTimeDiv"></div>');
 
-    // paint a green line for current time
-    editor.player.bind("timeupdate", function() {
-      var duration = workflowInstance.mediapackage.duration / 1000;
-      var perc = editor.player.prop("currentTime") / duration * 100;
-      $('#currentTimeDiv').css("left", perc + "%");
-    });
+	// paint a green line for current time
+	editor.player.bind("timeupdate", function() {
+	    var duration = workflowInstance.mediapackage.duration / 1000;
+	    var perc = editor.player.prop("currentTime") / duration * 100;
+	    $('#currentTimeDiv').css("left", perc + "%");
+	});
 
-    // create standard split point
-    editor.splitData.splits.push({
-      clipBegin : '0s',
-      clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
-      enabled : true,
-      description : ""
-    });
+	// create standard split point
+	editor.splitData.splits.push({
+	    clipBegin : '0s',
+	    clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
+	    enabled : true,
+	    description : ""
+	});
 
-    // load smil if there is already one
-    smil = null;
-    $.each(workflowInstance.mediapackage.metadata.catalog, function(key, value) {
-      if (value.type == SMIL_FLAVOR) {
-        // download smil
-        smil = editor.downloadSMIL();
-        // check whether SMIL has already cutting points
-        if (smil.smil.body.seq.par) {
-          $('<div/>').html(
-              "Found existing SMIL from silence detection. Do you want to transfer the data into the list?").dialog({
-            buttons : {
-              Yes : function() {
-                editor.splitData.splits = [];
-                smil.smil.body.seq.par = ocUtils.ensureArray(smil.smil.body.seq.par);
-                $.each(smil.smil.body.seq.par, function(key, value) {
-                  value.ref = ocUtils.ensureArray(value.ref);
-                  editor.splitData.splits.push({
-                    clipBegin : value.ref[0].clipBegin,
-                    clipEnd : value.ref[0].clipEnd,
-                    enabled : true,
-                    description : value.ref[0].description ? value.ref[0].description : "",
-                  });
-                });
-                $(this).dialog('close');
-                editor.updateSplitList();
-		selectSegmentListElement(0);
-              },
-              No : function() {
-                $(this).dialog('close');
-              }
-            },
-            title : "Apply existent SMIL"
-          });
-        }
-      }
-    });
-    // create smil if it doesn't exist
-    if (smil == null) {
-      editor.createSMIL();
+	// load smil if there is already one
+	smil = null;
+	$.each(workflowInstance.mediapackage.metadata.catalog, function(key, value) {
+	    if (value.type == SMIL_FLAVOR) {
+		// download smil
+		smil = editor.downloadSMIL();
+		// check whether SMIL has already cutting points
+		if (smil.smil.body.seq.par) {
+		    $('<div/>').html(
+			"Found existing SMIL from silence detection. Do you want to transfer the data into the list?").dialog({
+			    buttons : {
+				Yes : function() {
+				    editor.splitData.splits = [];
+				    smil.smil.body.seq.par = ocUtils.ensureArray(smil.smil.body.seq.par);
+				    $.each(smil.smil.body.seq.par, function(key, value) {
+					value.ref = ocUtils.ensureArray(value.ref);
+					editor.splitData.splits.push({
+					    clipBegin : value.ref[0].clipBegin,
+					    clipEnd : value.ref[0].clipEnd,
+					    enabled : true,
+					    description : value.ref[0].description ? value.ref[0].description : "",
+					});
+				    });
+				    $(this).dialog('close');
+				    editor.updateSplitList();
+				    selectSegmentListElement(0);
+				},
+				No : function() {
+				    $(this).dialog('close');
+				}
+			    },
+			    title : "Apply existent SMIL"
+			});
+		}
+	    }
+	});
+	// create smil if it doesn't exist
+	if (smil == null) {
+	    editor.createSMIL();
+	}
+	// update split list and enable the editor
+	editor.updateSplitList();
+	$('#editor').removeClass('disabled');
+
+	// load waveform image
+	$.each(ocUtils.ensureArray(workflowInstance.mediapackage.attachments.attachment), function(key, value) {
+	    if (value.type == WAVEFORM_FLAVOR) {
+		$('#waveformImage').prop("src", value.url);
+		$('#waveformImage').load(function() {
+		    $('#segmentsWaveform').height($('#waveformImage').height());
+		});
+		$(window).resize(function(evt) {
+		    $('#segmentsWaveform').height($('#waveformImage').height());
+		    $('.holdStateUI').height($('#segmentsWaveform').height() + $('#videoPlayer').height() + 70);
+		});
+		// $('#waveformImage').addimagezoom();
+		// $('#splitSegments').mouseover(function(evt) {
+		// $('#waveformImage').trigger("mouseover");
+		// }).mouseout(function(evt) {
+		// $('#waveformImage').trigger("mouseout");
+		// }).mousemove(function(evt) {
+		// $('#waveformImage').trigger("mousemove");
+		// })
+	    }
+	});
+
+	// adjust size of the holdState UI
+	var height = parseInt($('.holdStateUI').css('height').replace("px", ""));
+	var heightVideo = parseInt($('#videoHolder').css('height').replace("px", ""));
+	$('.holdStateUI').css('height', (height + heightVideo) + "px");
+	parent.ocRecordings.adjustHoldActionPanelHeight();
+
+	// grab the focus in the Iframe so one can use
+	// the keyboard shortcuts
+	$(window).focus();
+
+	// add click handler for btns in control bar
+	$('.video-previous-marker').click(previousSegment);
+	$('.video-next-marker').click(nextSegment);
+	$('.video-play-pre-post').click(playWithoutDeleted);
+
+	// add timelistener for current time in description div
+	editor.player.on("timeupdate", function() {
+	    $('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
+	});
+
+	$('#clipBegin input').blur(function(evt) {
+	    checkClipBegin();
+	});
+	$('#clipEnd input').blur(function(evt) {
+	    checkClipEnd();
+	});
+
+	// add evtl handler for enter in editing fields
+	$('#clipBegin input').keyup(function(evt) {
+	    if (evt.keyCode == 13) {
+		// editor.selectedSplit.clipBegin = $('#clipBegin').timefield('option', 'value');
+		// checkPrevAndNext(editor.selectedSplit.id);
+		// editor.updateSplitList();
+		okButtonClick();
+	    }
+	});
+	$('#clipEnd input').keyup(function(evt) {
+	    if (evt.keyCode == 13) {
+		// editor.selectedSplit.clipEnd = $('#clipEnd').timefield('option', 'value');
+		// checkPrevAndNext(editor.selectedSplit.id);
+		// editor.updateSplitList();
+		okButtonClick();
+	    }
+	});
     }
-    // update split list and enable the editor
-    editor.updateSplitList();
-    $('#editor').removeClass('disabled');
-
-    // load waveform image
-    $.each(ocUtils.ensureArray(workflowInstance.mediapackage.attachments.attachment), function(key, value) {
-      if (value.type == WAVEFORM_FLAVOR) {
-        $('#waveformImage').prop("src", value.url);
-        $('#waveformImage').load(function() {
-          $('#segmentsWaveform').height($('#waveformImage').height());
-        });
-        $(window).resize(function(evt) {
-          $('#segmentsWaveform').height($('#waveformImage').height());
-          $('.holdStateUI').height($('#segmentsWaveform').height() + $('#videoPlayer').height() + 70);
-        });
-        // $('#waveformImage').addimagezoom();
-        // $('#splitSegments').mouseover(function(evt) {
-        // $('#waveformImage').trigger("mouseover");
-        // }).mouseout(function(evt) {
-        // $('#waveformImage').trigger("mouseout");
-        // }).mousemove(function(evt) {
-        // $('#waveformImage').trigger("mousemove");
-        // })
-      }
-    });
-
-    // adjust size of the holdState UI
-    var height = parseInt($('.holdStateUI').css('height').replace("px", ""));
-    var heightVideo = parseInt($('#videoHolder').css('height').replace("px", ""));
-    $('.holdStateUI').css('height', (height + heightVideo) + "px");
-    parent.ocRecordings.adjustHoldActionPanelHeight();
-
-    // grab the focus in the Iframe so one can use
-    // the keyboard shortcuts
-    $(window).focus();
-
-    // add click handler for btns in control bar
-    $('.video-previous-marker').click(previousSegment);
-    $('.video-next-marker').click(nextSegment);
-    $('.video-play-pre-post').click(playWithoutDeleted);
-
-    // add timelistener for current time in description div
-    editor.player.on("timeupdate", function() {
-      $('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
-    });
-
-      $('#clipBegin input').blur(function(evt) {
-	  checkClipBegin();
-      });
-      $('#clipEnd input').blur(function(evt) {
-	  checkClipEnd();
-      });
-
-    // add evtl handler for enter in editing fields
-    $('#clipBegin input').keyup(function(evt) {
-      if (evt.keyCode == 13) {
-        // editor.selectedSplit.clipBegin = $('#clipBegin').timefield('option', 'value');
-        // checkPrevAndNext(editor.selectedSplit.id);
-        // editor.updateSplitList();
-	  okButtonClick();
-      }
-    });
-    $('#clipEnd input').keyup(function(evt) {
-      if (evt.keyCode == 13) {
-        // editor.selectedSplit.clipEnd = $('#clipEnd').timefield('option', 'value');
-        // checkPrevAndNext(editor.selectedSplit.id);
-        // editor.updateSplitList();
-	  okButtonClick();
-      }
-    });
-  }
-  selectSegmentListElement(0);
+    selectSegmentListElement(0);
 }
 
 /**
  * clearing events
  */
 function clearEvents(evt) {
-  window.clearTimeout(timeout1);
-  timeout1 = null;
-  timeout2 = null;
-  window.clearTimeout(timeout2);
-  // editor.player.off("play");
-  // editor.player.off("seeking");
-  // editor.player.off("pause");
+    window.clearTimeout(timeout1);
+    window.clearTimeout(timeout2);
+    timeout1 = null;
+    timeout2 = null;
+    // editor.player.off("play");
+    // editor.player.off("seeking");
+    // editor.player.off("pause");
 }
 
 /**
  * pause the video
  */
 function pauseVideo() {
-  if (!editor.player.prop("paused")) {
-    editor.player[0].pause();
-  }
+    if (!editor.player.prop("paused")) {
+	editor.player[0].pause();
+    }
 }
 
 /**
  * updates the currentTime div
  */
 function updateCurrentTime() {
-  $('#current_time').html(formatTime(editor.player.prop("currentTime")));
+    $('#current_time').html(formatTime(editor.player.prop("currentTime")));
 }
 
 /**
@@ -947,56 +959,56 @@ function updateCurrentTime() {
  * @returns the formated time string
  */
 function formatTime(time) {
-  if (typeof time == "string") {
-    time = time.replace("s", "");
-    time = parseFloat(time);
-  }
-  seconds = parseInt(time);
-  millis = parseInt((time - seconds) * 100);
-  formatted = ocUtils.formatSeconds(time) + "." + millis;
-  return formatted;
+    if (typeof time == "string") {
+	time = time.replace("s", "");
+	time = parseFloat(time);
+    }
+    seconds = parseInt(time);
+    millis = parseInt((time - seconds) * 100);
+    formatted = ocUtils.formatSeconds(time) + "." + millis;
+    return formatted;
 }
 
 /**
  * click/shortcut handler for removing current split item
  */
 function splitRemoverClick() {
-  item = $(this);
-  id = item.prop('id');
-  if (id != undefined) {
-    id = id.replace("splitItem-", "");
-    id = id.replace("splitRemover-", "");
-    id = id.replace("splitAdder-", "");
-  } else {
-    id = "";
-  }
-  if (id == "" || id == "deleteButton") {
-    id = $('#splitUUID').val();
-  }
-  if (editor.splitData.splits[id].enabled) {
-    $('#deleteDialog').dialog({
-      buttons : {
-        "Yes" : function() {
-          $('#splitItemDiv-' + id).addClass('disabled');
-          $('#splitRemover-' + id).hide();
-          $('#splitAdder-' + id).show();
-          $('.splitItem').removeClass('splitItemSelected');
-          $(this).dialog('close');
-          setEnabled(id, false);
-        },
-        "No" : function() {
-          $(this).dialog('close')
-        }
-      },
-      title : "Remove Item?"
-    });
-  } else {
-    $('#splitItemDiv-' + id).removeClass('disabled');
-    $('#splitRemover-' + id).show();
-    $('#splitAdder-' + id).hide();
-    setEnabled(id, true);
-  }
-  cancelButtonClick();
+    item = $(this);
+    id = item.prop('id');
+    if (id != undefined) {
+	id = id.replace("splitItem-", "");
+	id = id.replace("splitRemover-", "");
+	id = id.replace("splitAdder-", "");
+    } else {
+	id = "";
+    }
+    if (id == "" || id == "deleteButton") {
+	id = $('#splitUUID').val();
+    }
+    if (editor.splitData.splits[id].enabled) {
+	$('#deleteDialog').dialog({
+	    buttons : {
+		"Yes" : function() {
+		    $('#splitItemDiv-' + id).addClass('disabled');
+		    $('#splitRemover-' + id).hide();
+		    $('#splitAdder-' + id).show();
+		    $('.splitItem').removeClass('splitItemSelected');
+		    $(this).dialog('close');
+		    setEnabled(id, false);
+		},
+		"No" : function() {
+		    $(this).dialog('close')
+		}
+	    },
+	    title : "Remove Item?"
+	});
+    } else {
+	$('#splitItemDiv-' + id).removeClass('disabled');
+	$('#splitRemover-' + id).show();
+	$('#splitAdder-' + id).hide();
+	setEnabled(id, true);
+    }
+    cancelButtonClick();
 }
 
 /**
@@ -1008,57 +1020,62 @@ function splitRemoverClick() {
  *          whether enabled or not
  */
 function setEnabled(uuid, enabled) {
-  editor.splitData.splits[uuid].enabled = enabled;
-  editor.updateSplitList();
+    editor.splitData.splits[uuid].enabled = enabled;
+    editor.updateSplitList();
 }
 
 /**
  * click handler for selecting a split item in segment bar or list
  */
 function splitItemClick() {
-  // if it's not already disabled
-  if (!$(this).hasClass('disabled')) {
+    // if it's not already disabled
+    if (!$(this).hasClass('disabled')) {
 
-    // remove all selected classes
-    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
-    $('.splitItem').removeClass('splitItemSelected');
+	// remove all selected classes
+	$('.splitSegmentItem').removeClass('splitSegmentItemSelected');
+	$('.splitItem').removeClass('splitItemSelected');
 
-    // get the id of the split item
-    id = $(this).prop('id');
-    id = id.replace('splitItem-', '');
-    id = id.replace('splitItemDiv-', '');
-    id = id.replace('splitSegmentItem-', '');
+	// get the id of the split item
+	id = $(this).prop('id');
+	id = id.replace('splitItem-', '');
+	id = id.replace('splitItemDiv-', '');
+	id = id.replace('splitSegmentItem-', '');
 
-    // add the selected class to the corresponding items
-    $('#splitItem-' + id).addClass('splitItemSelected');
-    $('#splitSegmentItem-' + id).addClass('splitSegmentItemSelected');
+	// add the selected class to the corresponding items
+	$('#splitItem-' + id).addClass('splitItemSelected');
+	$('#splitSegmentItem-' + id).addClass('splitSegmentItemSelected');
 
-    $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+	$('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
 
-    // load data into right box
-    splitItem = editor.splitData.splits[id];
-    editor.selectedSplit = splitItem;
-    editor.selectedSplit.id = parseInt(id);
-    $('#splitDescription').val(splitItem.description);
-    $('#splitUUID').val(id);
-    $('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
-    $('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
-    $('#splitIndex').html(parseInt(id) + 1);
-    enabledRightBox(true);
-  }
+	// load data into right box
+	splitItem = editor.splitData.splits[id];
+	editor.selectedSplit = splitItem;
+	editor.selectedSplit.id = parseInt(id);
+	$('#splitDescription').val(splitItem.description);
+	$('#splitUUID').val(id);
+	$('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
+	$('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
+	$('#splitIndex').html(parseInt(id) + 1);
+	enabledRightBox(true);
+    }
 }
 
 $(document).ready(function() {
-  // waitForPlayerReady();
-  editor.player = $('#videoPlayer');
-  editor.player.on("canplay", playerReady);
-  $('.clipItem').timefield();
-  $('.video-split-button').click(splitButtonClick);
-  $('#okButton').click(okButtonClick);
-  $('#cancelButton').click(cancelButtonClick);
-  $('#deleteButton').click(splitRemoverClick);
+    // waitForPlayerReady();
+    editor.player = $('#videoPlayer');
+    editor.player.on("canplay", playerReady);
+    $('.clipItem').timefield();
+    $('.video-split-button').click(splitButtonClick);
+    $('#okButton').click(okButtonClick);
+    $('#cancelButton').click(cancelButtonClick);
+    $('#deleteButton').click(splitRemoverClick);
 
-  enabledRightBox(false);
-  initPlayButtons();
-  addShortcuts();
+    enabledRightBox(false);
+    initPlayButtons();
+    addShortcuts();
+
+    checkClipBegin();
+    checkClipEnd();
+    
+    selectSegmentListElement(0);
 })
