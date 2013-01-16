@@ -54,6 +54,11 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
    */
   private static final Logger logger = LoggerFactory
       .getLogger(WaveformWorkflowOperationHandler.class);
+  
+  /**
+   * Amplitude factor (1.0 := 100%).
+   */
+  private static final float AMPLITUDE_FACTOR = 1.0f;
 
   /**
    * the workspace
@@ -185,7 +190,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
         }
 
         // draw waveform pixel by pixel
-        for (int i = 0; i < scaledNegAmplitudes.length; i++) {
+        for (int i = 0; i < scaledNegAmplitudes.length && xPos < width; i++) {
           for (int j = scaledNegAmplitudes[i]; j < scaledPosAmplitudes[i]; j++) {
             int y = height - j; // j from -ve to +ve, i.e. draw from top to bottom
             if (y < 0) {
@@ -196,9 +201,6 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
             bufferedImage.setRGB(xPos, y, 0);
           }
           xPos++;
-          if (xPos >= width) {
-            break;
-          }
         }
 
         bytes = getPart(in, chunkSize);
@@ -258,6 +260,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       short[] amplitudes = getSampleAmplitudes(data, waveHeader);
       int numSamples = amplitudes.length;
       int maxAmplitude = 1 << (waveHeader.getBitsPerSample() - 1);
+      maxAmplitude /= AMPLITUDE_FACTOR;
 
       if (!signed) { // one more bit for unsigned value
         maxAmplitude <<= 1;
