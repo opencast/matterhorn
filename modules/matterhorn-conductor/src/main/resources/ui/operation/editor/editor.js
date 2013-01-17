@@ -58,6 +58,7 @@ var jumpBackTime = 0;
 var jumpBackBool = false;
 var currEvt = null;
 var timeoutUsed = false;
+var lastTimeSplitItemClick = 0;
 
 editor.splitData = {};
 editor.splitData.splits = [];
@@ -1029,35 +1030,41 @@ function setEnabled(uuid, enabled) {
  * click handler for selecting a split item in segment bar or list
  */
 function splitItemClick() {
-    // if it's not already disabled
-    if (!$(this).hasClass('disabled')) {
+    var now = new Date();
 
-	// remove all selected classes
-	$('.splitSegmentItem').removeClass('splitSegmentItemSelected');
-	$('.splitItem').removeClass('splitItemSelected');
+    if((now - lastTimeSplitItemClick) > 50) {
+	lastTimeSplitItemClick = now;
 
-	// get the id of the split item
-	id = $(this).prop('id');
-	id = id.replace('splitItem-', '');
-	id = id.replace('splitItemDiv-', '');
-	id = id.replace('splitSegmentItem-', '');
+	// if it's not already disabled
+	if (!$(this).hasClass('disabled')) {
 
-	// add the selected class to the corresponding items
-	$('#splitItem-' + id).addClass('splitItemSelected');
-	$('#splitSegmentItem-' + id).addClass('splitSegmentItemSelected');
+	    // remove all selected classes
+	    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
+	    $('.splitItem').removeClass('splitItemSelected');
 
-	$('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+	    // get the id of the split item
+	    id = $(this).prop('id');
+	    id = id.replace('splitItem-', '');
+	    id = id.replace('splitItemDiv-', '');
+	    id = id.replace('splitSegmentItem-', '');
 
-	// load data into right box
-	splitItem = editor.splitData.splits[id];
-	editor.selectedSplit = splitItem;
-	editor.selectedSplit.id = parseInt(id);
-	$('#splitDescription').val(splitItem.description);
-	$('#splitUUID').val(id);
-	$('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
-	$('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
-	$('#splitIndex').html(parseInt(id) + 1);
-	enabledRightBox(true);
+	    // add the selected class to the corresponding items
+	    $('#splitItem-' + id).addClass('splitItemSelected');
+	    $('#splitSegmentItem-' + id).addClass('splitSegmentItemSelected');
+
+	    $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+
+	    // load data into right box
+	    splitItem = editor.splitData.splits[id];
+	    editor.selectedSplit = splitItem;
+	    editor.selectedSplit.id = parseInt(id);
+	    $('#splitDescription').val(splitItem.description);
+	    $('#splitUUID').val(id);
+	    $('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
+	    $('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
+	    $('#splitIndex').html(parseInt(id) + 1);
+	    enabledRightBox(true);
+	}
     }
 }
 
