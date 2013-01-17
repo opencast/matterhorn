@@ -892,6 +892,7 @@ function playerReady() {
 	// add timelistener for current time in description div
 	editor.player.on("timeupdate", function() {
 	    $('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
+	    selectCurrentSplitItem();
 	});
 
 	$('#clipBegin input').blur(function(evt) {
