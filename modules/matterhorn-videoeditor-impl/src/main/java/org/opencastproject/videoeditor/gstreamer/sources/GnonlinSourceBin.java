@@ -68,7 +68,6 @@ public class GnonlinSourceBin {
     
     bin = new Bin();
     gnlComposition = (Bin) ElementFactory.make(GstreamerElements.GNL_COMPOSITION, null);
-    final Element decodebin = ElementFactory.make(GstreamerElements.DECODEBIN, null);
     final Element identity = ElementFactory.make(GstreamerElements.IDENTITY, null);
     final Element queue = ElementFactory.make(GstreamerElements.QUEUE, null);
     final Element converter;
@@ -76,7 +75,7 @@ public class GnonlinSourceBin {
     switch(type) {
       case Audio: 
         converter = ElementFactory.make(GstreamerElements.AUDIOCONVERT, null);
-        rate = ElementFactory.make(GstreamerElements.AUDIORATE, null);
+        rate = ElementFactory.make(GstreamerElements.AUDIORESAMPLE, null);
         if (sourceCaps != null)
           caps = sourceCaps;
         else 
@@ -95,7 +94,7 @@ public class GnonlinSourceBin {
         throw new UnknownSourceTypeException(type);
     }
     
-    bin.addMany(gnlComposition, decodebin, identity, converter, rate, queue);
+    bin.addMany(gnlComposition, identity, converter, rate, queue);
     if (!Element.linkMany(identity, converter, rate, queue)) {
       throw new PipelineBuildException();
     }
@@ -120,9 +119,9 @@ public class GnonlinSourceBin {
         logger.debug("link {}.{} -> {}.{} with result {}", new String[] {
           source.getName(),
           pad.getName(),
-          decodebin.getName(),
-          decodebin.getSinkPads().get(0).getName(),
-          pad.link(decodebin.getSinkPads().get(0)).toString()
+          identity.getName(),
+          identity.getSinkPads().get(0).getName(),
+          pad.link(identity.getSinkPads().get(0)).toString()
         });
       }
     });
@@ -131,27 +130,12 @@ public class GnonlinSourceBin {
 
       @Override
       public void noMorePads(Element element) {
-        if (!decodebin.getSinkPads().get(0).isLinked()) {
-          logger.error(decodebin.getName() + " has no peer!");
+        if (!identity.getSinkPads().get(0).isLinked()) {
+          logger.error(identity.getName() + " has no peer!");
           // TODO doesn't working?!
           getBin().sendEvent(new EOSEvent());
           
         }
-      }
-    });
-    
-    decodebin.connect(new Element.PAD_ADDED() {
-
-      @Override
-      public void padAdded(Element element, Pad pad) {
-        logger.debug("link {}.{} -> {}.{} with result {}, {}", new String[] {
-          element.getName(),
-          pad.getName(),
-          identity.getName(),
-          identity.getSinkPads().get(0).getName(),
-          pad.link(identity.getSinkPads().get(0)).toString(),
-          pad.getCaps().toString()
-        });
       }
     });
   }

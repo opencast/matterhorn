@@ -111,8 +111,6 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * Temp storage directory
      */
     private String storageDir;
-    
-    private boolean processingTrack = false;
 
     public VideoEditorServiceImpl() {
         super(JOB_TYPE);
@@ -129,7 +127,6 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * @throws ProcessFailedException if an error occured
      */
     protected synchronized Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
-        processingTrack = true;
 		logger.info("Start processing track {}", track.getIdentifier());
 		
         // get output file extension
@@ -227,7 +224,6 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
                 runningPipeline.stop();
                 FileUtils.deleteQuietly(outputPath.getParentFile());
             }
-            processingTrack = false;
         }
     }
 
@@ -300,11 +296,6 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     @Override
     protected OrganizationDirectoryService getOrganizationDirectoryService() {
         return organizationDirectoryService;
-    }
-    
-    @Override
-    public boolean isReadyToAccept(Job job) throws ServiceRegistryException {
-        return !processingTrack;
     }
 
     protected void activate(ComponentContext context) {

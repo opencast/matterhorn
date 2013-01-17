@@ -32,12 +32,15 @@ public interface GstreamerElements {
   // gstreamer-plugins-base
   String AUDIOCONVERT = "audioconvert";
   String AUDIORATE = "audiorate";
+  String AUDIORESAMPLE = "audioresample";
   String DECODEBIN = "decodebin";
   String DECODEBIN2 = "decodebin2";
   String FFMPEGCOLORSPACE = "ffmpegcolorspace";
   String VIDEORATE = "videorate";
   
   // gstreamer-plugins-good
+  String AUTOAUDIOSINK = "autoaudiosink";
+  String AUTOVIDEOSINK = "autovideosink";
   String CUTTER = "cutter";
   String MP4MUX = "mp4mux";
   

@@ -54,14 +54,14 @@ public class SourceBinsFactory {
 
     if (typeFinder.isAudioFile()) {
       if (audioSourceBin == null) {
-        audioSourceBin = new GnonlinSourceBin(GnonlinSourceBin.SourceType.Audio, typeFinder.getAudioCaps());
+        audioSourceBin = new GnonlinSourceBin(GnonlinSourceBin.SourceType.Audio, typeFinder.getRawAudioCaps());
       }
       audioSourceBin.addFileSource(inputFilePath, mediaStartMillis, durationMillis);
     }
     
     if (typeFinder.isVideoFile()) {
       if (videoSourceBin == null) {
-        videoSourceBin = new GnonlinSourceBin(GnonlinSourceBin.SourceType.Video, typeFinder.getVideoCaps());
+        videoSourceBin = new GnonlinSourceBin(GnonlinSourceBin.SourceType.Video, typeFinder.getRawVideoCaps());
       }
       videoSourceBin.addFileSource(inputFilePath, mediaStartMillis, durationMillis);
     }
