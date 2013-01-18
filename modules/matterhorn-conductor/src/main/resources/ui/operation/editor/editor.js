@@ -59,6 +59,8 @@ var jumpBackBool = false;
 var currEvt = null;
 var timeoutUsed = false;
 var lastTimeSplitItemClick = 0;
+var now = 0;
+var isSeeking = false;
 
 editor.splitData = {};
 editor.splitData.splits = [];
@@ -496,34 +498,38 @@ function initPlayButtons() {
 
 function checkClipBegin()
 {
-    var clipBegin = parseFloat($('#clipBegin').timefield('option', 'value').replace("s", ""));
-    if(isNaN(clipBegin))
-    {
-	$('#clipBegin').timefield('option', 'value', '0s');
-    }
-    else
-    {
-	$('#clipBegin').timefield('option', 'value', clipBegin + 's');
+    if($('#clipBegin').timefield('option', 'value').replace) {
+	var clipBegin = parseFloat($('#clipBegin').timefield('option', 'value').replace("s", ""));
+	if(isNaN(clipBegin))
+	{
+	    $('#clipBegin').timefield('option', 'value', '0s');
+	}
+	else
+	{
+	    $('#clipBegin').timefield('option', 'value', clipBegin + 's');
+	}
     }
 }
 
 function checkClipEnd()
 {
-    var duration = editor.player.prop("duration");
-    var clipEnd = parseFloat($('#clipEnd').timefield('option', 'value').replace("s", ""));
-    if(clipEnd > duration) {
-	clipEnd = duration;
+    if($('#clipEnd').timefield('option', 'value').replace) {
+	var duration = editor.player.prop("duration");
+	var clipEnd = parseFloat($('#clipEnd').timefield('option', 'value').replace("s", ""));
+	if(clipEnd > duration) {
+	    clipEnd = duration;
+	}
+	if(isNaN(clipEnd))
+	{
+	    $('#clipEnd').timefield('option', 'value', '0s');
+	}
+	else
+	{
+	    $('#clipEnd').timefield('option', 'value', clipEnd + 's');
+	}
+	getCurrentSplitItem().clipEnd = clipEnd + 's';
+	editor.updateSplitList(true);
     }
-    if(isNaN(clipEnd))
-    {
-	$('#clipEnd').timefield('option', 'value', '0s');
-    }
-    else
-    {
-	$('#clipEnd').timefield('option', 'value', clipEnd + 's');
-    }
-    getCurrentSplitItem().clipEnd = clipEnd + 's';
-    editor.updateSplitList(true);
 }
 
 /**
@@ -642,7 +648,9 @@ function enabledRightBox(enabled) {
  */
 function selectCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
-    $('#splitSegmentItem-' + splitItem.id).click();
+    if(splitItem != null) {
+	$('#splitSegmentItem-' + splitItem.id).click();
+    }
 }
 
 /**
@@ -1030,13 +1038,15 @@ function setEnabled(uuid, enabled) {
  * click handler for selecting a split item in segment bar or list
  */
 function splitItemClick() {
-    var now = new Date();
+    if((isSeeking && ($(this).prop('id').indexOf('Div-') == -1)) || !isSeeking) {
+	now = new Date();
+    }
 
-    if((now - lastTimeSplitItemClick) > 50) {
+    if((now - lastTimeSplitItemClick) > 80) {
 	lastTimeSplitItemClick = now;
 
 	// if it's not already disabled
-	if (!$(this).hasClass('disabled')) {
+	if (!$(this).hasClass('disabled') && ((isSeeking && ($(this).prop('id').indexOf('Div-') == -1)) || !isSeeking)) {
 
 	    // remove all selected classes
 	    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
@@ -1068,10 +1078,18 @@ function splitItemClick() {
     }
 }
 
+function isSeeking() {
+}
+
+function hasSeeked() {
+}
+
 $(document).ready(function() {
     // waitForPlayerReady();
     editor.player = $('#videoPlayer');
     editor.player.on("canplay", playerReady);
+    editor.player.on("seeking", isSeeking);
+    editor.player.on("seeked", hasSeeked);
     $('.clipItem').timefield();
     $('.video-split-button').click(splitButtonClick);
     $('#okButton').click(okButtonClick);
@@ -1086,4 +1104,18 @@ $(document).ready(function() {
     checkClipEnd();
     
     selectSegmentListElement(0);
+
+    // 37 - left, 38 - up, 39 - right, 40 - down
+    $(document).keydown(function(e){
+	if ((e.keyCode == 37) || (e.keyCode == 38) || (e.keyCode == 39) || (e.keyCode == 40)) {
+	    isSeeking=true;
+	    return false;
+	}
+    }).keyup(function(e){
+	if ((e.keyCode == 37) || (e.keyCode == 38) || (e.keyCode == 39) || (e.keyCode == 40)) {
+	    isSeeking=false;
+	    lastTimeSplitItemClick = new Date();
+	    return false;
+	}
+    });
 })
