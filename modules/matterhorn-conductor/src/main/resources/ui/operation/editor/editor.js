@@ -1107,12 +1107,14 @@ $(document).ready(function() {
 
     // 37 - left, 38 - up, 39 - right, 40 - down
     $(document).keydown(function(e){
-	if ((e.keyCode == 37) || (e.keyCode == 38) || (e.keyCode == 39) || (e.keyCode == 40)) {
+	var keyCode = e.keyCode || e.which();
+	if ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40)) {
 	    isSeeking=true;
 	    return false;
 	}
     }).keyup(function(e){
-	if ((e.keyCode == 37) || (e.keyCode == 38) || (e.keyCode == 39) || (e.keyCode == 40)) {
+	var keyCode = e.keyCode || e.which();
+	if ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40)) {
 	    isSeeking=false;
 	    lastTimeSplitItemClick = new Date();
 	    return false;
