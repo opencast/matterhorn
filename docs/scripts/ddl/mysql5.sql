@@ -163,11 +163,11 @@ CREATE TABLE user_action (
 	outpoint INTEGER,
 	inpoint INTEGER,
 	mediapackage_id varchar(255),
-	session_id varchar(255),
+	session_id varchar(50),
 	created DATETIME,
 	user_id varchar(255),
 	length INTEGER,
-	type varchar(255),
+	type varchar(50),
 	is_playing TINYINT(1) default 0,
 	PRIMARY KEY (id)
 );
