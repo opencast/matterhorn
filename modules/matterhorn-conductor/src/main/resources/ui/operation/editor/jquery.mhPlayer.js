@@ -1,5 +1,5 @@
 /*
- * jQuery mhPlayer
+ * jQuery mhPlayer by Denis Meyer
  *
  * Copyright 2009-2011 The Regents of the University of California
  * Licensed under the Educational Community License, Version 2.0

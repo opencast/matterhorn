@@ -58,8 +58,8 @@ var jumpBackTime = 0;
 var jumpBackBool = false;
 var currEvt = null;
 var timeoutUsed = false;
+var now = 100;
 var lastTimeSplitItemClick = 0;
-var now = 0;
 var isSeeking = false;
 
 editor.splitData = {};
@@ -825,34 +825,51 @@ function playerReady() {
 		smil = editor.downloadSMIL();
 		// check whether SMIL has already cutting points
 		if (smil.smil.body.seq.par) {
-		    $('<div/>').html(
-			"Found existing SMIL from silence detection. Do you want to transfer the data into the list?").dialog({
-			    buttons : {
-				Yes : function() {
-				    editor.splitData.splits = [];
-				    smil.smil.body.seq.par = ocUtils.ensureArray(smil.smil.body.seq.par);
-				    $.each(smil.smil.body.seq.par, function(key, value) {
-					value.ref = ocUtils.ensureArray(value.ref);
-					editor.splitData.splits.push({
-					    clipBegin : value.ref[0].clipBegin,
-					    clipEnd : value.ref[0].clipEnd,
-					    enabled : true,
-					    description : value.ref[0].description ? value.ref[0].description : "",
-					});
-				    });
-				    $(this).dialog('close');
-				    editor.updateSplitList();
-				    selectSegmentListElement(0);
-				},
-				No : function() {
-				    $(this).dialog('close');
-				}
-			    },
-			    title : "Apply existent SMIL"
+
+		    editor.splitData.splits = [];
+		    smil.smil.body.seq.par = ocUtils.ensureArray(smil.smil.body.seq.par);
+		    $.each(smil.smil.body.seq.par, function(key, value) {
+			value.ref = ocUtils.ensureArray(value.ref);
+			editor.splitData.splits.push({
+			    clipBegin : value.ref[0].clipBegin,
+			    clipEnd : value.ref[0].clipEnd,
+			    enabled : true,
+			    description : value.ref[0].description ? value.ref[0].description : "",
 			});
+		    });	
+    
+		    window.setTimeout(function() { selectCurrentSplitItem(); }, 200);	    
+		    /*
+		      $('<div/>').html(
+		      "Found existing SMIL from silence detection. Do you want to transfer the data into the list?").dialog({
+		      buttons : {
+		      Yes : function() {
+		      editor.splitData.splits = [];
+		      smil.smil.body.seq.par = ocUtils.ensureArray(smil.smil.body.seq.par);
+		      $.each(smil.smil.body.seq.par, function(key, value) {
+		      value.ref = ocUtils.ensureArray(value.ref);
+		      editor.splitData.splits.push({
+		      clipBegin : value.ref[0].clipBegin,
+		      clipEnd : value.ref[0].clipEnd,
+		      enabled : true,
+		      description : value.ref[0].description ? value.ref[0].description : "",
+		      });
+		      });
+		      $(this).dialog('close');
+		      editor.updateSplitList();
+		      selectSegmentListElement(0);
+		      },
+		      No : function() {
+		      $(this).dialog('close');
+		      }
+		      },
+		      title : "Apply existent SMIL"
+		      });
+		    */
 		}
 	    }
 	});
+
 	// create smil if it doesn't exist
 	if (smil == null) {
 	    editor.createSMIL();
@@ -929,7 +946,8 @@ function playerReady() {
 	    }
 	});
     }
-    selectSegmentListElement(0);
+
+    selectCurrentSplitItem();
 }
 
 /**
@@ -1038,7 +1056,7 @@ function setEnabled(uuid, enabled) {
  * click handler for selecting a split item in segment bar or list
  */
 function splitItemClick() {
-    if((isSeeking && ($(this).prop('id').indexOf('Div-') == -1)) || !isSeeking) {
+    if(!isSeeking || (isSeeking && ($(this).prop('id').indexOf('Div-') == -1))) {
 	now = new Date();
     }
 
@@ -1102,8 +1120,6 @@ $(document).ready(function() {
 
     checkClipBegin();
     checkClipEnd();
-    
-    selectSegmentListElement(0);
 
     // 37 - left, 38 - up, 39 - right, 40 - down
     $(document).keydown(function(e){
