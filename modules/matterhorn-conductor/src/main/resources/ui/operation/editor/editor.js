@@ -53,6 +53,7 @@ default_config[PLAY_ENDING_OF_CURRENT_SEGMENT] = "n";
 
 var timeout_playEndingOfCurrSegment = null;
 
+var currSplitItem = null;
 var timeout1 = null;
 var timeout2 = null;
 var endTime = 0;
@@ -423,8 +424,6 @@ function playWithoutDeleted() {
 
 	ocUtils.log("Play Times: " + clipStartFrom + " - " + clipStartTo + " | " + segmentStart + " - " + segmentEnd + " | " + clipEndFrom + " - " + clipEndTo);
 	
-	// TODO
-	
 	editor.player.prop("currentTime", clipStartFrom);
 
 	clearEvents(currEvt);
@@ -650,8 +649,11 @@ function checkClipEnd()
 	{
 	    $('#clipEnd').timefield('option', 'value', clipEnd + 's');
 	}
-	getCurrentSplitItem().clipEnd = clipEnd + 's';
-	editor.updateSplitList(true);
+	var currSplitItem_ = getCurrentSplitItem();
+	if(currSplitItem_) {
+	    getCurrentSplitItem().clipEnd = clipEnd + 's';
+	    editor.updateSplitList(true);
+	}
     }
 }
 
@@ -810,7 +812,8 @@ function getCurrentSplitItem() {
 	    return splitItem;
 	}
     }
-    return null;
+    // return null;
+    return currSplitItem;
 }
 
 /**
@@ -901,7 +904,7 @@ function playerReady() {
 			});
 		    });	
 		    
-		    window.setTimeout(function() { selectCurrentSplitItem(); }, 200);	    
+		    window.setTimeout(function() { $('#splitSegmentItem-0').click(); }, 200);	    
 		    /*
 		      $('<div/>').html(
 		      "Found existing SMIL from silence detection. Do you want to transfer the data into the list?").dialog({
@@ -1141,6 +1144,16 @@ function splitItemClick() {
 	    $('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
 	    $('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
 	    $('#splitIndex').html(parseInt(id) + 1);
+
+	    currSplitItem = splitItem;
+	    
+	    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	    var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	    var currTime = editor.player.prop("currentTime");
+	    if(!isInInterval(currTime, clipBegin + 0.1, clipEnd - 0.1) && (timeout1 == null)) {
+		editor.player.prop("currentTime", clipBegin);
+	    }
+
 	    enabledRightBox(true);
 	}
     }
