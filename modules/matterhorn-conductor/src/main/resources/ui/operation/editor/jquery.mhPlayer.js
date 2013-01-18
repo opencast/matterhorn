@@ -458,7 +458,7 @@
         updateTime();
         currenttime = mhVideo.prop('currentTime');
           // if (!seeksliding) {
-          video_seek.slider('value', currenttime);
+              video_seek.slider('value', currenttime);
           // }
       };
 

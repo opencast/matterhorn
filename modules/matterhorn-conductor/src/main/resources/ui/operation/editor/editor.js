@@ -51,11 +51,12 @@ default_config[PREVIOUS_MARKER] = "Up";
 default_config[NEXT_MARKER] = "Down";
 default_config[PLAY_ENDING_OF_CURRENT_SEGMENT] = "n";
 
+var timeout_playEndingOfCurrSegment = null;
+
 var timeout1 = null;
 var timeout2 = null;
 var endTime = 0;
-var jumpBackTime = 0;
-var jumpBackBool = false;
+var jumpBackTime = null;
 var currEvt = null;
 var timeoutUsed = false;
 var now = 100;
@@ -276,13 +277,90 @@ function addShortcuts() {
 }
 
 /**
+ * function executed when play event was thrown
+ * 
+ * @param evt
+ *          the event
+ */
+function onPlay(evt) {
+    if(timeout1 == null) {
+	currEvt = evt;
+	timeout1 = window.setTimeout(onTimeout, evt.data.duration);
+    }
+}
+
+/**
+ * clearing events
+ */
+function clearEvents(evt) {
+    window.clearTimeout(timeout1);
+    window.clearTimeout(timeout2);
+    timeout1 = null;
+    timeout2 = null;
+    timeoutUsed = false;
+}
+
+/**
+ * the timeout function pausing the video again
+ */
+function onTimeout() {
+    if(!timeoutUsed) {
+	editor.player[0].pause();
+	var check = function() {
+	    endTime = currEvt.data.endTime;
+	    if (endTime > editor.player.prop("currentTime")) {
+		editor.player[0].play();
+		timeout2 = window.setTimeout(check, 10);
+		timeoutUsed = true;
+	    } else {
+		editor.player[0].pause();
+		clearEvents(currEvt);
+		
+		jumpBackTime = currEvt.data.jumpBackTime;
+		jumpBackTime = ((jumpBackTime == null) || (jumpBackTime == undefined)) ? null : jumpBackTime;
+		if(jumpBackTime != null) {
+		    editor.player.prop("currentTime", jumpBackTime);
+		    jumpBackTime = null;
+		}
+	    }
+	}
+	check();
+    }
+}
+
+/**
+ * plays the current split item from it's beginning
+ */
+function playCurrentSplitItem() {
+    var splitItem = getCurrentSplitItem();
+    var currentTime = editor.player.prop("currentTime");
+    if (splitItem != null) {
+	editor.player[0].pause();
+	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var duration = (clipEnd - clipBegin) * 1000;
+	editor.player.prop("currentTime", clipBegin);
+
+	clearEvents(currEvt);
+	editor.player.on("play", {
+	    duration : duration,
+	    endTime : clipEnd
+	}, onPlay);
+	editor.player[0].play();
+    }
+}
+
+/**
  * play last 2 seconds of the current segment
  */
 function playEnding() {
-    var split = getCurrentSplitItem();
-    if (split != null) {
-	clipEnd = split.clipEnd;
+    var splitItem = getCurrentSplitItem();
+    if (splitItem != null) {
+	editor.player[0].pause();
+	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
 	editor.player.prop("currentTime", clipEnd - 2);
+
+	clearEvents(currEvt);
 	editor.player.on("play", {
 	    duration : 2000,
 	    endTime : clipEnd
@@ -292,47 +370,92 @@ function playEnding() {
 }
 
 /**
- * play from current playhead -2s exclude the removed segments
+ * play current segment -2s exclude the removed segments
  */
 function playWithoutDeleted() {
-    editor.player[0].pause();
-    currentTime = editor.player.prop("currentTime");
-    currentSplit = getCurrentSplitItem();
-    if(!currentSplit.enabled) {
-	currentSplit = editor.splitData.splits[currentSplit.id - 1];
-    }
-    startTime = currentTime - 2;
-    nextSplit = editor.splitData.splits[currentSplit.id + 1]
-    nextStart = parseFloat(nextSplit.clipBegin.replace("s", ""));
+    var splitItem = getCurrentSplitItem();
+    var currentTime = editor.player.prop("currentTime");
+    
+    if (splitItem != null) {
+	editor.player[0].pause();
 
-    // set current time -2s for pre roll
-    editor.player.prop("currentTime", startTime);
+	var clipStartFrom = -1;
+	var clipStartTo = -1;
+	var segmentStart = parseFloat(splitItem.clipBegin.replace("s", ""));
+	var segmentEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipEndFrom = -1;
+	var clipEndTo = -1;
 
-    // if next split is disabled jump over it
-    if (!nextSplit.enabled) {
-	ocUtils.log("starting jump over");
+	if((splitItem.id - 1) > 0) {
+	    var prevSplitItem = editor.splitData.splits[splitItem.id - 1];
+	    while(!prevSplitItem.enabled) {
+		if((prevSplitItem.id - 1) <= 0) {
+		    break;
+		}
+		prevSplitItem = editor.splitData.splits[prevSplitItem.id - 1];
+	    }
+	    clipStartTo = parseFloat(prevSplitItem.clipEnd.replace("s", ""));
+	    clipStartFrom = clipStartTo - 2;
+	}
+	if(clipStartTo == -1) {
+	    clipStartTo = segmentStart;
+	    clipStartFrom = clipStartTo - 2;
+	}
+	clipStartFrom = (clipStartFrom < 0) ? 0 : clipStartFrom;
+
+	if((splitItem.id + 1) < editor.splitData.splits.length) {
+	    var nextSplitItem = editor.splitData.splits[splitItem.id + 1];
+	    while(!nextSplitItem.enabled) {
+		if((nextSplitItem.id + 1) >= editor.splitData.splits.length) {
+		    break;
+		}
+		nextSplitItem = editor.splitData.splits[nextSplitItem.id + 1];
+	    }
+	    clipEndFrom = parseFloat(nextSplitItem.clipBegin.replace("s", ""));
+	    clipEndTo = clipEndFrom + 2;
+	}
+	if(clipEndFrom == -1) {
+	    clipEndFrom = segmentEnd;
+	    clipEndTo = clipEndFrom + 2;
+	}
+	var duration = editor.player.prop("duration");
+	clipEndTo = (clipEndTo > duration) ? duration : clipEndTo;
+
+	ocUtils.log("Play Times: " + clipStartFrom + " - " + clipStartTo + " | " + segmentStart + " - " + segmentEnd + " | " + clipEndFrom + " - " + clipEndTo);
+	
+	// TODO
+	
+	editor.player.prop("currentTime", clipStartFrom);
+
+	clearEvents(currEvt);
 	editor.player.on("play", {
-	    duration : (nextStart - startTime) * 1000,
-	    endTime : nextStart
+	    duration : (clipStartTo - clipStartFrom) * 1000,
+	    endTime : clipStartTo
 	}, onPlay);
-	editor.player.on("pause", function(evt) {
-	    editor.player.off("pause");
-	    editor.player.prop("currentTime", nextSplit.clipEnd.replace("s", ""));
+	
+	editor.player[0].play();
+	
+	window.setTimeout(function(){
+	    editor.player[0].pause();
+	    editor.player.prop("currentTime", segmentStart);
+	    clearEvents(currEvt);
 	    editor.player.on("play", {
-		duration : 2000,
-		endTime : parseFloat(nextSplit.clipEnd.replace("s", "")) + 2
+		duration : (segmentEnd - segmentStart) * 1000,
+		endTime : segmentEnd
 	    }, onPlay);
-	});
-	editor.player[0].play();
-    } else {
-	timeoutUsed = false;
-	editor.player.on("play", {
-	    duration : 4000,
-	    endTime : currentTime + 2,
-	    jumpBackTime : currentTime,
-	    jumpBackBool : true
-	}, onPlay);
-	editor.player[0].play();
+	    editor.player[0].play();
+	}, (clipStartTo - clipStartFrom) * 1000);
+	
+	window.setTimeout(function(){
+	    editor.player[0].pause();
+	    editor.player.prop("currentTime", clipEndFrom);
+	    clearEvents(currEvt);
+	    editor.player.on("play", {
+		duration : (clipEndTo - clipEndFrom) * 1000,
+		endTime : clipEndTo
+	    }, onPlay);
+	    editor.player[0].play();
+	}, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
     }
 }
 
@@ -672,66 +795,6 @@ function setCurrentTimeAsNewOutpoint() {
 }
 
 /**
- * plays the current split item from it's beginning
- */
-function playCurrentSplitItem() {
-    var splitItem = getCurrentSplitItem();
-    var currentTime = editor.player.prop("currentTime");
-    if (splitItem != null) {
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-	var duration = (clipEnd - clipBegin) * 1000;
-	editor.player.prop("currentTime", clipBegin);
-
-	editor.player.on("play", {
-	    duration : duration,
-	    endTime : clipEnd
-	}, onPlay);
-	editor.player[0].play();
-    }
-}
-
-/**
- * function executed when play event was thrown
- * 
- * @param evt
- *          the event
- */
-function onPlay(evt) {
-    timeout1 = window.setTimeout(onTimeout, evt.data.duration);
-    // editor.player.off("play");
-    endTime = evt.data.endTime;
-    jumpBackTime = evt.data.jumpBackTime;
-    jumpBackBool = ((evt.data.jumpBackBool === undefined) || (evt.data.jumpBackBool != true)) ? null : evt.data.jumpBackBool;
-    currEvt = evt;
-}
-
-/**
- * the timeout function pausing the video again
- */
-function onTimeout() {
-    if(!timeoutUsed) {
-	editor.player[0].pause();
-	var check = function() {
-	    if ((timeout1 != null) && endTime > editor.player.prop("currentTime")) {
-		editor.player[0].play();
-		timeout2 = window.setTimeout(check, 10);
-	    } else {
-		if((jumpBackBool != null) && (jumpBackTime != null)) {
-		    clearEvents(currEvt);
-		    editor.player[0].pause();
-		    timeoutUsed = true;
-		    jumpBackBool = null;
-		    editor.player.prop("currentTime", jumpBackTime);
-		    jumpBackTime = null;
-		}
-	    }
-	}
-	check();
-    }
-}
-
-/**
  * retrieves the current split item by time
  * 
  * @returns the current split item
@@ -837,7 +900,7 @@ function playerReady() {
 			    description : value.ref[0].description ? value.ref[0].description : "",
 			});
 		    });	
-    
+		    
 		    window.setTimeout(function() { selectCurrentSplitItem(); }, 200);	    
 		    /*
 		      $('<div/>').html(
@@ -948,19 +1011,6 @@ function playerReady() {
     }
 
     selectCurrentSplitItem();
-}
-
-/**
- * clearing events
- */
-function clearEvents(evt) {
-    window.clearTimeout(timeout1);
-    window.clearTimeout(timeout2);
-    timeout1 = null;
-    timeout2 = null;
-    // editor.player.off("play");
-    // editor.player.off("seeking");
-    // editor.player.off("pause");
 }
 
 /**
