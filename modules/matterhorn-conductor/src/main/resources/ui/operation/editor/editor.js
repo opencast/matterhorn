@@ -570,6 +570,7 @@ function selectCurrentSplitItem() {
     if(splitItem != null) {
 	currSplitItemClickedViaJQ = true;
 	$('#splitSegmentItem-' + splitItem.id).click();
+	$('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
     }
 }
 
@@ -1198,7 +1199,6 @@ function playerReady() {
 
 	// add timelistener for current time in description div
 	editor.player.on("timeupdate", function() {
-	    $('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
 	    selectCurrentSplitItem();
 	});
 
