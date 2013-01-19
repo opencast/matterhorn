@@ -56,6 +56,8 @@ var timeout_playEndingOfCurrSegment = null;
 var currSplitItem = null;
 var timeout1 = null;
 var timeout2 = null;
+var timeout3 = null;
+var timeout4 = null;
 var endTime = 0;
 var jumpBackTime = null;
 var currEvt = null;
@@ -63,6 +65,7 @@ var timeoutUsed = false;
 var now = 100;
 var lastTimeSplitItemClick = 0;
 var isSeeking = false;
+var currSplitItemClickedViaJQ = false;
 
 editor.splitData = {};
 editor.splitData.splits = [];
@@ -241,9 +244,9 @@ function addShortcuts() {
     });
     shortcut.add(default_config[PLAY_PAUSE], function() {
 	if (editor.player.prop("paused")) {
-	    editor.player[0].play();
+	    playVideo();
 	} else {
-	    editor.player[0].pause();
+	    pauseVideo();
 	}
     }, {
 	disable_in_input : true,
@@ -293,11 +296,15 @@ function onPlay(evt) {
 /**
  * clearing events
  */
-function clearEvents(evt) {
-    window.clearTimeout(timeout1);
-    window.clearTimeout(timeout2);
-    timeout1 = null;
-    timeout2 = null;
+function clearEvents() {
+    if(timeout1 != null) {
+	window.clearTimeout(timeout1);
+	timeout1 = null;
+    }
+    if(timeout2 != null) {
+	window.clearTimeout(timeout2);
+	timeout2 = null;
+    }
     timeoutUsed = false;
 }
 
@@ -306,16 +313,16 @@ function clearEvents(evt) {
  */
 function onTimeout() {
     if(!timeoutUsed) {
-	editor.player[0].pause();
+	pauseVideo();
 	var check = function() {
 	    endTime = currEvt.data.endTime;
 	    if (endTime > editor.player.prop("currentTime")) {
-		editor.player[0].play();
+		playVideo();
 		timeout2 = window.setTimeout(check, 10);
 		timeoutUsed = true;
 	    } else {
-		editor.player[0].pause();
-		clearEvents(currEvt);
+		pauseVideo();
+		clearEvents();
 		
 		jumpBackTime = currEvt.data.jumpBackTime;
 		jumpBackTime = ((jumpBackTime == null) || (jumpBackTime == undefined)) ? null : jumpBackTime;
@@ -336,18 +343,18 @@ function playCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
     var currentTime = editor.player.prop("currentTime");
     if (splitItem != null) {
-	editor.player[0].pause();
+	pauseVideo();
 	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
 	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
 	var duration = (clipEnd - clipBegin) * 1000;
 	editor.player.prop("currentTime", clipBegin);
 
-	clearEvents(currEvt);
+	clearEvents();
 	editor.player.on("play", {
 	    duration : duration,
 	    endTime : clipEnd
 	}, onPlay);
-	editor.player[0].play();
+	playVideo();
     }
 }
 
@@ -357,16 +364,16 @@ function playCurrentSplitItem() {
 function playEnding() {
     var splitItem = getCurrentSplitItem();
     if (splitItem != null) {
-	editor.player[0].pause();
+	pauseVideo();
 	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
 	editor.player.prop("currentTime", clipEnd - 2);
 
-	clearEvents(currEvt);
+	clearEvents();
 	editor.player.on("play", {
 	    duration : 2000,
 	    endTime : clipEnd
 	}, onPlay);
-	editor.player[0].play();
+	playVideo();
     }
 }
 
@@ -378,7 +385,7 @@ function playWithoutDeleted() {
     var currentTime = editor.player.prop("currentTime");
     
     if (splitItem != null) {
-	editor.player[0].pause();
+	pauseVideo();
 
 	var clipStartFrom = -1;
 	var clipStartTo = -1;
@@ -387,10 +394,10 @@ function playWithoutDeleted() {
 	var clipEndFrom = -1;
 	var clipEndTo = -1;
 
-	if((splitItem.id - 1) > 0) {
+	if((splitItem.id - 1) >= 0) {
 	    var prevSplitItem = editor.splitData.splits[splitItem.id - 1];
 	    while(!prevSplitItem.enabled) {
-		if((prevSplitItem.id - 1) <= 0) {
+		if((prevSplitItem.id - 1) < 0) {
 		    break;
 		}
 		prevSplitItem = editor.splitData.splits[prevSplitItem.id - 1];
@@ -426,34 +433,44 @@ function playWithoutDeleted() {
 	
 	editor.player.prop("currentTime", clipStartFrom);
 
-	clearEvents(currEvt);
+	clearEvents();
 	editor.player.on("play", {
 	    duration : (clipStartTo - clipStartFrom) * 1000,
 	    endTime : clipStartTo
 	}, onPlay);
 	
-	editor.player[0].play();
+	playVideo();
 	
-	window.setTimeout(function(){
-	    editor.player[0].pause();
+	timeout3 = window.setTimeout(function(){
+	    pauseVideo();
 	    editor.player.prop("currentTime", segmentStart);
-	    clearEvents(currEvt);
+	    clearEvents();
+	    currSplitItemClickedViaJQ = true;
 	    editor.player.on("play", {
 		duration : (segmentEnd - segmentStart) * 1000,
 		endTime : segmentEnd
 	    }, onPlay);
-	    editor.player[0].play();
+	    playVideo();
 	}, (clipStartTo - clipStartFrom) * 1000);
 	
-	window.setTimeout(function(){
-	    editor.player[0].pause();
+	timeout4 = window.setTimeout(function(){
+	    pauseVideo();
+	    if(timeout3 != null) {
+		window.clearTimeout(timeout3);
+		timeout3 = null;
+	    }
 	    editor.player.prop("currentTime", clipEndFrom);
-	    clearEvents(currEvt);
+	    clearEvents();
+	    currSplitItemClickedViaJQ = true;
 	    editor.player.on("play", {
 		duration : (clipEndTo - clipEndFrom) * 1000,
 		endTime : clipEndTo
 	    }, onPlay);
-	    editor.player[0].play();
+	    playVideo();
+	    if(timeout4 != null) {
+		window.clearTimeout(timeout4);
+		timeout4 = null;
+	    }
 	}, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
     }
 }
@@ -480,7 +497,7 @@ function isInInterval(toCheck, lower, upper) {
 function nextSegment() {
     var playerPaused = editor.player.prop("paused");
     if(!playerPaused) {
-	editor.player[0].pause();
+	pauseVideo();
     }
     var currentTime = editor.player.prop("currentTime");
     var new_id = -1;
@@ -503,7 +520,7 @@ function nextSegment() {
 	}
     }
     // if(!playerPaused) {
-    // editor.player[0].play();
+    // playVideo();
     // }
 }
 
@@ -513,7 +530,7 @@ function nextSegment() {
 function previousSegment() {
     var playerPaused = editor.player.prop("paused");
     if(!playerPaused) {
-	editor.player[0].pause();
+	pauseVideo();
     }
     var currentTime = editor.player.prop("currentTime");
     var new_id = -1;
@@ -536,7 +553,7 @@ function previousSegment() {
 	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
     }
     // if(!playerPaused) {
-    // editor.player[0].play();
+    // playVideo();
     // }
 }
 
@@ -774,6 +791,7 @@ function enabledRightBox(enabled) {
 function selectCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
     if(splitItem != null) {
+	currSplitItemClickedViaJQ = true;
 	$('#splitSegmentItem-' + splitItem.id).click();
     }
 }
@@ -1017,6 +1035,15 @@ function playerReady() {
 }
 
 /**
+ * play the video
+ */
+function playVideo() {
+    // if (!editor.player.prop("playing")) {
+    editor.player[0].play();
+    // }
+}
+
+/**
  * pause the video
  */
 function pauseVideo() {
@@ -1148,10 +1175,10 @@ function splitItemClick() {
 	    currSplitItem = splitItem;
 	    
 	    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	    var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-	    var currTime = editor.player.prop("currentTime");
-	    if(!isInInterval(currTime, clipBegin + 0.1, clipEnd - 0.1) && (timeout1 == null)) {
-		editor.player.prop("currentTime", clipBegin);
+	    if(!timeoutUsed) {
+		if(!currSplitItemClickedViaJQ) {
+		    editor.player.prop("currentTime", clipBegin);
+		}
 	    }
 
 	    enabledRightBox(true);
@@ -1198,5 +1225,20 @@ $(document).ready(function() {
 	    lastTimeSplitItemClick = new Date();
 	    return false;
 	}
+    });
+
+    $(document).click(function() {
+	if(!currSplitItemClickedViaJQ) {
+	    clearEvents();
+	    if(timeout3 != null) {
+		window.clearTimeout(timeout3);
+		timeout3 = null;
+	    }
+	    if(timeout4 != null) {
+		window.clearTimeout(timeout4);
+		timeout4 = null;
+	    }
+	}
+	currSplitItemClickedViaJQ = false;
     });
 })
