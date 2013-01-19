@@ -52,11 +52,9 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.URI;
 
 import javax.activation.MimetypesFileTypeMap;
@@ -88,8 +86,9 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
   private static final Logger logger = LoggerFactory
       .getLogger(WorkingFileRepositoryRestEndpoint.class);
 
-  private final MimetypesFileTypeMap mimeMap = new MimetypesFileTypeMap();
-
+  private final MimetypesFileTypeMap mimeMap = new MimetypesFileTypeMap(getClass().getClassLoader()
+          .getResourceAsStream("mimetypes"));
+  
   /** The Apache Tika parser */
   private Parser tikaParser;
 
@@ -100,17 +99,6 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
    */
   public void activate(ComponentContext cc) throws IOException {
     super.activate(cc);
-
-    InputStream is = this.getClass().getResourceAsStream("/META-INF/mime.types");
-    BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-    try {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        mimeMap.addMimeTypes(line);
-      }
-    } catch (IOException ex) {
-      logger.error(ex.getMessage(), ex);
-    }
   }
 
   /**
