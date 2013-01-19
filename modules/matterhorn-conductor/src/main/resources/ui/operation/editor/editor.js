@@ -519,9 +519,6 @@ function nextSegment() {
 	    editor.player.prop("currentTime", editor.player.prop("duration"));
 	}
     }
-    // if(!playerPaused) {
-    // playVideo();
-    // }
 }
 
 /**
@@ -552,9 +549,6 @@ function previousSegment() {
     if (new_id >= 0) {
 	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
     }
-    // if(!playerPaused) {
-    // playVideo();
-    // }
 }
 
 /**
@@ -704,7 +698,6 @@ function okButtonClick() {
 
 	checkPrevAndNext(id);
 
-	// cancelButtonClick();
 	editor.updateSplitList(true);
 	selectSegmentListElement(id);
     }
@@ -990,8 +983,7 @@ function playerReady() {
 	$('.holdStateUI').css('height', (height + heightVideo) + "px");
 	parent.ocRecordings.adjustHoldActionPanelHeight();
 
-	// grab the focus in the Iframe so one can use
-	// the keyboard shortcuts
+	// grab the focus in the Iframe so one can use the keyboard shortcuts
 	$(window).focus();
 
 	// add click handler for btns in control bar
@@ -1015,17 +1007,11 @@ function playerReady() {
 	// add evtl handler for enter in editing fields
 	$('#clipBegin input').keyup(function(evt) {
 	    if (evt.keyCode == 13) {
-		// editor.selectedSplit.clipBegin = $('#clipBegin').timefield('option', 'value');
-		// checkPrevAndNext(editor.selectedSplit.id);
-		// editor.updateSplitList();
 		okButtonClick();
 	    }
 	});
 	$('#clipEnd input').keyup(function(evt) {
 	    if (evt.keyCode == 13) {
-		// editor.selectedSplit.clipEnd = $('#clipEnd').timefield('option', 'value');
-		// checkPrevAndNext(editor.selectedSplit.id);
-		// editor.updateSplitList();
 		okButtonClick();
 	    }
 	});
@@ -1193,7 +1179,6 @@ function hasSeeked() {
 }
 
 $(document).ready(function() {
-    // waitForPlayerReady();
     editor.player = $('#videoPlayer');
     editor.player.on("canplay", playerReady);
     editor.player.on("seeking", isSeeking);
