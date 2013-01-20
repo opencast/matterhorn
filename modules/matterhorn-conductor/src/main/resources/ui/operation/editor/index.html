@@ -76,8 +76,10 @@
             }
             perc = parseFloat(percStr);
             if(data[j].splits.length < 5) {
-              if(perc > 0.04) {
-                perc -= 0.04;
+              if(perc > 0.08) {
+                perc -= 0.08;
+              } else if(perc > 0.02) {
+                perc -= 0.02;
               }
             } else if(data[j].splits.length < 10) {
               if(perc > 0.008) {

@@ -1273,4 +1273,19 @@ $(document).ready(function() {
 	}
 	currSplitItemClickedViaJQ = false;
     });
+
+    $(window).resize(function() {
+	if(this.resizeTO) {
+	    clearTimeout(this.resizeTO);
+	}
+	this.resizeTO = setTimeout(function() {
+            $(this).trigger('resizeEnd');
+	}, 500);
+    });
+
+    $(window).bind('resizeEnd', function() {
+	// window hasn't changed size in 500ms
+	ocUtils.log("Resize done. Updating split list view.");
+	editor.updateSplitList();
+    });
 })

@@ -1,3 +1,8 @@
+body {
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
 .holdStateUI {
   min-width: 785px;
 }
@@ -91,7 +96,7 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   padding-top: 20px;
   width: 90%;
   float: left;
-  min-width: 780px;
+  min-width: 785px;
 }
 
 #leftBoxDescription {
