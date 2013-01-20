@@ -410,7 +410,10 @@ function okButtonClick() {
 	checkPrevAndNext(id);
 
 	editor.updateSplitList(true);
+
+	$('#videoPlayer').focus();
 	selectSegmentListElement(id);
+
     }
 }
 
