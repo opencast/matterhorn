@@ -28,6 +28,7 @@ import org.opencastproject.security.api.AccessControlEntry;
 import org.opencastproject.security.api.AccessControlList;
 import org.opencastproject.security.api.AuthorizationService;
 import org.opencastproject.security.api.DefaultOrganization;
+import org.opencastproject.security.api.JaxbOrganization;
 import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.security.api.SecurityConstants;
@@ -72,6 +73,7 @@ public class WorkflowServiceImplAuthzTest {
   private Responder<Organization> organizationResponder;
 
   private WorkflowServiceImpl service = null;
+  private WorkflowDefinitionScanner scanner = null;
   private WorkflowServiceSolrIndex dao = null;
   private Workspace workspace = null;
   private ServiceRegistryInMemoryImpl serviceRegistry = null;
@@ -102,9 +104,11 @@ public class WorkflowServiceImplAuthzTest {
 
   @Before
   public void setUp() throws Exception {
+    Map<String, Integer> servers = new HashMap<String, Integer>();
+    servers.put("http://somewhere", 8080);
     defaultOrganization = new DefaultOrganization();
-    otherOrganization = new Organization("other_org", "Another organization", "htp://somewhere",
-            defaultOrganization.getAdminRole(), defaultOrganization.getAnonymousRole());
+    otherOrganization = new JaxbOrganization("other_org", "Another organization", servers,
+            defaultOrganization.getAdminRole(), defaultOrganization.getAnonymousRole(), null);
 
     instructor1 = new User("instructor1", defaultOrganization.getId(), new String[] { "ROLE_INSTRUCTOR" });
     instructor2 = new User("instructor2", defaultOrganization.getId(), new String[] { "ROLE_INSTRUCTOR" });
@@ -124,6 +128,9 @@ public class WorkflowServiceImplAuthzTest {
       }
     };
 
+    scanner = new WorkflowDefinitionScanner();
+    service.addWorkflowDefinitionScanner(scanner);
+
     // Organization Service
     List<Organization> organizationList = Arrays.asList(new Organization[] { defaultOrganization });
     OrganizationDirectoryService organizationDirectoryService = EasyMock.createMock(OrganizationDirectoryService.class);
@@ -132,7 +139,10 @@ public class WorkflowServiceImplAuthzTest {
               @Override
               public Organization answer() throws Throwable {
                 String orgId = (String) EasyMock.getCurrentArguments()[0];
-                return new Organization(orgId, orgId, "http://" + orgId, "ROLE_ADMIN", "ROLE_ANONYMOUS");
+                Map<String, Integer> servers = new HashMap<String, Integer>();
+                servers.put("http://" + orgId, 8080);
+                defaultOrganization = new DefaultOrganization();
+                return new JaxbOrganization(orgId, orgId, servers, "ROLE_ADMIN", "ROLE_ANONYMOUS", null);
               }
             }).anyTimes();
     EasyMock.expect(organizationDirectoryService.getOrganizations()).andReturn(organizationList).anyTimes();
@@ -188,6 +198,7 @@ public class WorkflowServiceImplAuthzTest {
     dao.setServiceRegistry(serviceRegistry);
     dao.setAuthorizationService(authzService);
     dao.setSecurityService(securityService);
+    dao.setOrgDirectory(organizationDirectoryService);
     dao.solrRoot = sRoot + File.separator + "solr." + System.currentTimeMillis();
     dao.activate();
     service.setDao(dao);

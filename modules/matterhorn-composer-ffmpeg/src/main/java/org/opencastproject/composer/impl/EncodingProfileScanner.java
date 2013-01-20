@@ -15,29 +15,35 @@
  */
 package org.opencastproject.composer.impl;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.felix.fileinstall.ArtifactInstaller;
 import org.opencastproject.composer.api.EncodingProfile;
 import org.opencastproject.composer.api.EncodingProfile.MediaType;
 import org.opencastproject.composer.api.EncodingProfileImpl;
 import org.opencastproject.util.ConfigurationException;
 import org.opencastproject.util.MimeType;
 import org.opencastproject.util.MimeTypes;
-
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
-import org.apache.felix.fileinstall.ArtifactInstaller;
+import org.opencastproject.util.ReadinessIndicator;
+import org.osgi.framework.BundleContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Dictionary;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+
+import static org.opencastproject.util.ReadinessIndicator.ARTIFACT;
 
 /**
  * This manager class tries to read encoding profiles from the classpath.
@@ -54,6 +60,12 @@ public class EncodingProfileScanner implements ArtifactInstaller {
   private static final String PROP_SUFFIX = ".suffix";
   private static final String PROP_MIMETYPE = ".mimetype";
 
+  /** OSGi bundle context */
+  private BundleContext bundleCtx = null;
+
+  /** Sum of profiles files currently installed */
+  private int sumInstalledFiles = 0;
+
   /** The profiles map */
   private Map<String, EncodingProfile> profiles = new HashMap<String, EncodingProfile>();
 
@@ -67,6 +79,16 @@ public class EncodingProfileScanner implements ArtifactInstaller {
    */
   public Map<String, EncodingProfile> getProfiles() {
     return profiles;
+  }
+
+  /**
+   * OSGi callback on component activation.
+   * 
+   * @param ctx
+   *          the bundle context
+   */
+  void activate(BundleContext ctx) {
+    this.bundleCtx = ctx;
   }
 
   /**
@@ -99,8 +121,8 @@ public class EncodingProfileScanner implements ArtifactInstaller {
   /**
    * Reads the profiles from the given set of properties.
    * 
-   * @param properties
-   *          the properties
+   * @param artifact
+   *          the properties file
    * @return the profiles found in the properties
    */
   Map<String, EncodingProfile> loadFromProperties(File artifact) throws IOException {
@@ -164,11 +186,11 @@ public class EncodingProfileScanner implements ArtifactInstaller {
     // Output Type
     Object type = getDefaultProperty(profile, PROP_OUTPUT, properties, defaultProperties);
     if (StringUtils.isBlank(type.toString()))
-      throw new ConfigurationException("Type of profile '" + profile + "' is missing");
+      throw new ConfigurationException("Output type of profile '" + profile + "' is missing");
     try {
       df.setOutputType(MediaType.parseString(StringUtils.trimToEmpty(type.toString())));
     } catch (IllegalArgumentException e) {
-      throw new ConfigurationException("Type '" + type + "' of profile '" + profile + "' is unknwon");
+      throw new ConfigurationException("Output type '" + type + "' of profile '" + profile + "' is unknwon");
     }
 
     // Suffix
@@ -257,8 +279,27 @@ public class EncodingProfileScanner implements ArtifactInstaller {
         logger.info("Installed profile {}", entry.getValue().getIdentifier());
         profiles.put(entry.getKey(), entry.getValue());
       }
+      sumInstalledFiles++;
     } catch (Exception e) {
       logger.error("Encoding profiles could not be read from " + artifact, e);
+    }
+
+    // Determine the number of available profiles
+    String[] filesInDirectory = artifact.getParentFile().list(new FilenameFilter() {
+      public boolean accept(File arg0, String name) {
+        return name.endsWith(".properties");
+      }
+    });
+
+    // Once all profiles have been loaded, announce readiness
+    if (filesInDirectory.length == sumInstalledFiles) {
+      Dictionary<String, String> properties = new Hashtable<String, String>();
+      properties.put(ARTIFACT, "encodingprofile");
+      logger.debug("Indicating readiness of encoding profiles");
+      bundleCtx.registerService(ReadinessIndicator.class.getName(), new ReadinessIndicator(), properties);
+      logger.info("All {} encoding profiles installed", filesInDirectory.length);
+    } else {
+      logger.debug("{} of {} encoding profiles installed", sumInstalledFiles, filesInDirectory.length);
     }
   }
 

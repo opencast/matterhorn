@@ -15,9 +15,6 @@
  */
 package org.opencastproject.distribution.youtube;
 
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ANONYMOUS;
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ID;
-
 import org.opencastproject.deliver.youtube.YoutubeConfiguration;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.Job.Status;
@@ -34,10 +31,6 @@ import org.opencastproject.security.api.User;
 import org.opencastproject.security.api.UserDirectoryService;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryInMemoryImpl;
-import org.opencastproject.workflow.api.WorkflowInstanceImpl;
-import org.opencastproject.workflow.api.WorkflowQuery;
-import org.opencastproject.workflow.api.WorkflowService;
-import org.opencastproject.workflow.api.WorkflowSetImpl;
 import org.opencastproject.workspace.api.Workspace;
 
 import junit.framework.Assert;
@@ -75,7 +68,8 @@ public class YoutubeDistributionServiceTest {
 
     service = new YoutubeDistributionService();
 
-    User anonymous = new User("anonymous", DEFAULT_ORGANIZATION_ID, new String[] { DEFAULT_ORGANIZATION_ANONYMOUS });
+    User anonymous = new User("anonymous", DefaultOrganization.DEFAULT_ORGANIZATION_ID,
+            new String[] { DefaultOrganization.DEFAULT_ORGANIZATION_ANONYMOUS });
     UserDirectoryService userDirectoryService = EasyMock.createMock(UserDirectoryService.class);
     EasyMock.expect(userDirectoryService.loadUser((String) EasyMock.anyObject())).andReturn(anonymous).anyTimes();
     EasyMock.replay(userDirectoryService);
@@ -87,17 +81,6 @@ public class YoutubeDistributionServiceTest {
             .andReturn(organization).anyTimes();
     EasyMock.replay(organizationDirectoryService);
     service.setOrganizationDirectoryService(organizationDirectoryService);
-
-    WorkflowInstanceImpl workflow = new WorkflowInstanceImpl();
-    workflow.setMediaPackage(MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew());
-    WorkflowSetImpl workflowSet = new WorkflowSetImpl();
-    workflowSet.addItem(workflow);
-
-    WorkflowService workflowService = EasyMock.createNiceMock(WorkflowService.class);
-    EasyMock.expect(workflowService.getWorkflowInstances((WorkflowQuery) EasyMock.anyObject())).andReturn(workflowSet)
-            .anyTimes();
-    EasyMock.replay(workflowService);
-    service.setWorkflowService(workflowService);
 
     SecurityService securityService = EasyMock.createNiceMock(SecurityService.class);
     EasyMock.expect(securityService.getUser()).andReturn(anonymous).anyTimes();

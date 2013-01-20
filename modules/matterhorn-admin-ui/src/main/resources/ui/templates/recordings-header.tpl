@@ -7,7 +7,7 @@
   </div>
   <div id="uploadContainer">
     <button id="uploadButton" type="button">Upload Recording</button>
-    <button id="scheduleButton" type="button">Schedule Recordings</button>
+    <button id="scheduleButton" type="button">Schedule Recording</button>
   </div>
   <div id="controlsTop" class="ui-helper-clearfix">
     <div class="IE_buffer"></div>
@@ -28,6 +28,24 @@
     <div class="clear"></div>
     <div id="search-result"><span id="filterRecordingCount"></span></div>
 
+	<div id="dateFilterControls">
+	  <select id="dateFilter">
+	  	<option value="all">All Dates</option>
+	  	<option value="today">Today</option>
+	  	<option value="tomorrow">Tomorrow</option>
+	  	<option value="yesterday">Yesterday</option>
+	  	<option value="this_week">This Week</option>
+	  	<option value="past_week">Past Week</option>
+	  	<option value="next_week">Next Week</option>
+	  	<option value="range">Custom Range</option>
+	  </select>
+	  <span>
+	    <label for="fromdate" style="margin-left: 20px;">From: </label><input type="text" size="10" name="fromdate" id="fromdate" style="margin-right: 5px;" />
+        <label for="todate" style="margin-left: 20px;">To: </label><input type="text" size="10" name="todate" id="todate" style="margin-right: 5px;" />
+        <button id="setRange" type="button" style="margin:0 10px;">Set Range</button>
+      </span>
+	</div>
+	
     <div class="layout-page-header recordings-bulk-action ui-corner-all layout-centered" id="bulkActionPanel">
       <div class="ui-widget layout-centered">
         <select id="bulkActionSelect">
@@ -99,11 +117,11 @@
         <div class="form-box-content ui-widget-content ui-corner-all">
           <ul class="oc-ui-form-list">
             <li>
-              <label>&nbsp;</label>
+              <label>&#160;</label>
               <span id="bulkActionApplyMessage"></span>
             </li>
             <li>
-              <label>&nbsp;</label>
+              <label>&#160;</label>
               <button type="button" id="applyBulkAction">
                 <span id="i18n_button_apply_bulk_action">Apply Changes</span>
               </button>
@@ -130,13 +148,13 @@
   <div id="controlsFoot" class="ui-helper-clearfix">
     <div id="refreshControlsContainer" class="ui-widget ui-state-hover ui-corner-all">
       <input type="checkbox" id="refreshEnabled" /><label for="refreshEnabled"></label>
-      <span class="refresh-text">Update table every&nbsp;</span>
+      <span class="refresh-text">Update table every&#160;</span>
       <select id="refreshInterval">
         <option value="5">5</option>
         <option value="7">7</option>
         <option value="10">10</option>
       </select>
-      <span class="refresh-text">&nbsp;seconds.</span>
+      <span class="refresh-text">&#160;seconds.</span>
     </div>
 
     <div id="perPageContainer" class="ui-widget ui-state-hover ui-corner-all">

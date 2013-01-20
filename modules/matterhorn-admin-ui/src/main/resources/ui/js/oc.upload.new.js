@@ -30,6 +30,10 @@ var ocUpload = (function() {
   this.init = function() {
     ocUtils.log('Initializing UI');
     $('#addHeader').jqotesubtpl('templates/upload.tpl', {});
+    $('#processingRecording').jqotesubtpl('templates/processing-instructions.tpl', {});	
+    $('#common-data').jqotesubtpl('templates/common-data.tpl', {});
+    $('#additional-description').jqotesubtpl('templates/additional-description.tpl', {});
+
     $('.unfoldable-header').click(ocUpload.UI.toggleUnfoldable);
     $('.dc-metadata-field').change(ocUpload.UI.formFieldChanged);
     $('.uploadtype-select').click(ocUpload.UI.selectUploadType);
@@ -53,7 +57,8 @@ var ocUpload = (function() {
     });
     $('#recordDate').datepicker('setDate', initializerDate);
 
-    ocUpload.UI.loadWorkflowDefinitions();
+    ocWorkflow.init($('#workflowSelector'), $('.workflowConfigContainer'), ['upload']);
+    
     initSeriesAutocomplete();
     
     $.ajax({
@@ -71,10 +76,10 @@ var ocUpload = (function() {
 
   function initSeriesAutocomplete() {
     ocUtils.log('Initializing autocomplete for series field')
-    $('#series').autocomplete({
+    $('#seriesSelect').autocomplete({
       source: function(request, response) {
         $.ajax({
-          url: ocUpload.SERIES_SEARCH_URL + '?q=' + request.term + '&edit=true',
+          url: ocUpload.SERIES_SEARCH_URL + '?seriesTitle=' + request.term + '&edit=true',
           dataType: 'json',
           type: 'GET',
           success: function(data) {
@@ -111,33 +116,37 @@ var ocUpload = (function() {
         });
       },
       select: function(event, ui){
-        $('#ispartof').val(ui.item.id);
+        $('#isPartOf').val(ui.item.id);
       },
       change: function(event, ui){
-        if($('#ispartof').val() === '' && $('#series').val() !== ''){
+        if($('#isPartOf').val() === '' && $('#seriesSelect').val() !== ''){
           ocUtils.log("Searching for series in series endpoint");
           $.ajax({
-            url : ocUpload.SERIES_SEARCH_URL + '?seriesTitle=' + $('#series').val(),
+            url : ocUpload.SERIES_SEARCH_URL,
             type : 'get',
             dataType : 'json',
             success : function(data) {
               var DUBLIN_CORE_NS_URI  = 'http://purl.org/dc/terms/',
-              series_input = $('#series').val(),
+              series_input = $('#seriesSelect').val(),
               series_list = data["catalogs"],
               series_title,
               series_id;
-
-              if(series_list.length !== 0){
-                series_title = series_list[0][DUBLIN_CORE_NS_URI]["title"] ? series_list[0][DUBLIN_CORE_NS_URI]["title"][0].value : "";
-                series_id = series_list[0][DUBLIN_CORE_NS_URI]["identifier"] ? series_list[0][DUBLIN_CORE_NS_URI]["identifier"][0].value : "";
-                $('#ispartof').val(series_id);
+              $('#isPartOf').val('');
+              for (i in series_list) {
+                var series_title, series_id;
+                series_title = series_list[i][DUBLIN_CORE_NS_URI]["title"] ? series_list[i][DUBLIN_CORE_NS_URI]["title"][0].value : "";
+                series_id = series_list[i][DUBLIN_CORE_NS_URI]["identifier"] ? series_list[i][DUBLIN_CORE_NS_URI]["identifier"][0].value : "";
+                if (series_title === series_input){
+                  $('#isPartOf').val(series_id);
+                  break;
+                }
               }
             }
           });
         }
       },
       search: function(){
-        $('#ispartof').val('');
+        $('#isPartOf').val('');
       }
     });
   }
@@ -146,7 +155,7 @@ var ocUpload = (function() {
     ocUtils.log('Checking for missing inputs');
     var missing = [];
 
-    if ($.trim($('#titleField').val()) == '') {
+    if ($.trim($('#title').val()) == '') {
       ocUtils.log('Missing input: title');
       missing.push('title');
     }
@@ -206,9 +215,12 @@ ocUpload.UI = (function() {
   }
 
   this.updateMissingFieldNotification = function(missingFields) {
+    var errorContainer = $('.scheduler-info-container');
+
     ocUtils.log('Updating missing fields notification');
     if (missingFields == false) {
       $('#missingFieldsContainer').hide();
+      $('.label-error').removeClass('label-error');
     } else {
       $('#missingFieldsContainer').find('.missing-fields-item').each(function() {
         var fieldname = $(this).attr('id').substr(5);
@@ -218,37 +230,14 @@ ocUpload.UI = (function() {
           $(this).hide();
         }
       });
-    }
-  }
 
-  this.loadWorkflowDefinitions = function() {
-    ocUtils.log('Loading workflow definitions');
-    $.ajax({
-      method: 'GET',
-      url: ocUpload.WORKFLOW_DEFINITION_URL,
-      dataType: 'json',
-      success: function(data) {
-        var defs = [];
-        for (i in data.workflow_definitions) {
-          var $selector = $('#workflowSelector');
-          var workflow = data.workflow_definitions[i];
-          if ( workflow.id != 'error' &&
-                workflow.title != null &&
-                workflow.title != "") {
-            defs.push(workflow.id);
-            var $newOption = $('<option></option>')
-            .attr('value', workflow.id)
-            .text(workflow.title);
-            if (workflow.id == ocUpload.DEFAULT_WORKFLOW_DEFINITION) {
-              $newOption.attr('selected', 'true');
-            }
-            $selector.append($newOption);
-          }
-        }
-        ocUtils.log('Loaded workflow definitions: ' + defs.join(', '));
+      for(var i in missingFields ) {
+        $('#' + missingFields[i] +"Label").addClass('label-error');
       }
-    });
-    $('.workflowConfigContainer').load(ocUpload.WORKFLOW_PANEL_URL + ocUpload.DEFAULT_WORKFLOW_DEFINITION);
+
+      $(window).scrollTop(errorContainer.offset().top)
+             .scrollLeft(errorContainer.offset().left);
+    }
   }
 
   this.toggleUnfoldable = function() {
@@ -332,17 +321,26 @@ ocUpload.UI = (function() {
       message = message.uploadjob;
       var filename = message.payload.filename;
       var total = message.payload.totalsize;
-      var received = message['current-chunk']['bytes-recieved'] + message['current-chunk'].number * message.chunksize;
-      var percentage = ((received / total) * 100).toFixed(1) + '%';
+      var received;
+      var percentage;
       
-      total = (total / ocUpload.MEGABYTE).toFixed(2) + ' MB';
-      received = (received / ocUpload.MEGABYTE).toFixed(2) + ' MB';
-
       $progress.find('.progress-label-top').text('Uploading ' + filename.replace("C:\\fakepath\\", ""));
-      $progress.find('.progressbar-indicator').css('width', percentage);
-      $progress.find('.progressbar-label > span').text(percentage);
-      $progress.find('.progress-label-left').text(received + ' received');
-      $progress.find('.progress-label-right').text(total + ' total');
+      
+      if(message.payload.totalsize !== -1) {
+        received = message['current-chunk']['bytes-recieved'] + message['current-chunk'].number * message.chunksize;
+        percentage = ((received / total) * 100).toFixed(1) + '%';
+        total = (total / ocUpload.MEGABYTE).toFixed(2) + ' MB';
+        received = (received / ocUpload.MEGABYTE).toFixed(2) + ' MB';
+        $progress.find('.progressbar-indicator').css('width', percentage);
+        $progress.find('.progressbar-label > span').text(percentage);
+        $progress.find('.progress-label-left').text(received + ' received');
+        $progress.find('.progress-label-right').text(total + ' total');        
+      } else {
+        received = message['current-chunk']['bytes-recieved'];
+        received = (received / ocUpload.MEGABYTE).toFixed(2) + ' MB';
+        $progress.find('.progressbar-label > span').text('');
+        $progress.find('.progress-label-left').text(received + ' received');
+      }
       
       if (message.payload.currentsize == message.payload.totalsize) {
         if(message.state == ocUpload.UPLOAD_COMPLETE) {
@@ -371,7 +369,7 @@ ocUpload.UI = (function() {
     //ocUpload.backToRecordings();
     window.location = '/admin/index.html#/recordings?' + window.location.hash.split('?')[1];;
   }
-
+  
   /**
    * collects metadata to show in sucess screen
    *
@@ -391,7 +389,6 @@ ocUpload.UI = (function() {
       if(file != undefined) {
         metadata['files'].push(file);
       }
-
     });
     this.metadata = metadata;
   }
@@ -470,10 +467,10 @@ ocUpload.Ingest = (function() {
     ocUtils.log("Added Dublin Core catalog for episode");
 
     // enqueue Series Dublin Core
-    var series = $('#series').val();
-    //var seriesId = $('#ispartof').val();
+    var series = $('#seriesSelect').val();
+    //var seriesId = $('#isPartOf').val();
     if (series !== '') {
-      var seriesId = $('#ispartof').val();
+      var seriesId = $('#isPartOf').val();
       if (seriesId === '') {
         seriesId = createSeries(series);
       }
@@ -664,6 +661,7 @@ ocUpload.Ingest = (function() {
       chunksize = CHUNKSIZE;
     }
     $.ajax({
+      type: 'POST',
       url: ocUpload.CREATE_NEW_JOB_URL,
       async: false,
       data: {

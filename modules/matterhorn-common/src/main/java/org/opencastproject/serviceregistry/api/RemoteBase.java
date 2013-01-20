@@ -15,7 +15,11 @@
  */
 package org.opencastproject.serviceregistry.api;
 
+import org.opencastproject.security.api.Organization;
+import org.opencastproject.security.api.SecurityConstants;
+import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.TrustedHttpClient;
+import org.opencastproject.security.api.User;
 import org.opencastproject.util.UrlSupport;
 
 import org.apache.commons.lang.StringUtils;
@@ -50,8 +54,13 @@ public class RemoteBase {
   /** The http client to use when connecting to remote servers */
   protected TrustedHttpClient client = null;
 
-  /** the http client */
+  /** The http client */
   protected ServiceRegistry remoteServiceManager = null;
+  
+  /** The security service */
+  protected SecurityService securityService = null;
+
+  private static final List<Integer> knownHttpStatuses = Arrays.asList(HttpStatus.SC_SERVICE_UNAVAILABLE);
 
   /**
    * Creates a remote implementation for the given type of service.
@@ -84,6 +93,15 @@ public class RemoteBase {
   }
 
   /**
+   * Sets the remote service manager.
+   * 
+   * @param remoteServiceManager
+   */
+  public void setSecurityService(SecurityService securityService) {
+    this.securityService = securityService;
+  }
+
+  /**
    * Makes a request to all available remote services and returns the response as soon as the first of them returns the
    * {@link HttpStatus.SC_OK} as the status code.
    * 
@@ -110,6 +128,18 @@ public class RemoteBase {
    * @return the response object, or null if we can not connect to any services
    */
   protected HttpResponse getResponse(HttpRequestBase httpRequest, Integer... expectedHttpStatus) {
+
+    // If a security service has been set, use it to pass the current security context on
+    if (securityService != null) {
+      logger.debug("Adding security context to request");
+      Organization organization = securityService.getOrganization();
+      if (organization != null)
+        httpRequest.addHeader(SecurityConstants.ORGANIZATION_HEADER, organization.getId());
+      User user = securityService.getUser();
+      if (user != null)
+        httpRequest.addHeader(SecurityConstants.USER_HEADER, user.getUserName());
+    }
+
     // Try forever
     while (true) {
 
@@ -119,6 +149,15 @@ public class RemoteBase {
       while (remoteServices == null || remoteServices.size() == 0) {
         try {
           remoteServices = remoteServiceManager.getServiceRegistrationsByLoad(serviceType);
+          if (remoteServices == null || remoteServices.size() == 0) {
+            logger.debug("No services of type '{}' found, waiting...", serviceType);
+            try {
+              Thread.sleep(TIMEOUT);
+            } catch (InterruptedException e) {
+              logger.warn("Interrupted while waiting for remote service of type '{}'", serviceType);
+              return null;
+            }
+          }
         } catch (ServiceRegistryException e) {
           logger.warn("Unable to obtain a list of remote services", e);
           return null;
@@ -142,6 +181,9 @@ public class RemoteBase {
           } else {
             fullUrl = UrlSupport.concat(new String[] { remoteService.getHost(), remoteService.getPath(), uriSuffix });
           }
+
+          logger.debug("Connecting to remote service of type '{}' at {}", serviceType, fullUrl);
+
           URI uri = new URI(fullUrl);
           httpRequest.setURI(uri);
           response = client.execute(httpRequest);
@@ -149,6 +191,9 @@ public class RemoteBase {
           if (Arrays.asList(expectedHttpStatus).contains(status.getStatusCode())) {
             return response;
           } else {
+            if (!knownHttpStatuses.contains(status.getStatusCode())) {
+              logger.warn("Service at {} returned unexpected response code {}", fullUrl, status.getStatusCode());
+            }
             hostErrors.put(httpRequest.getMethod() + " " + uri.toString(), status.toString());
             closeConnection(response);
           }

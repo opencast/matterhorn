@@ -375,24 +375,72 @@ public class SchedulerServiceImplTest {
             new Date(start.getTime() + (48 * 60 * 60 * 1000)), new Long(36000), "America/Chicago").getCatalogList();
     Assert.assertEquals(2, events.size());
   }
-  
+
   @Test
   public void testCalendarCutoff() throws Exception {
     long currentTime = System.currentTimeMillis();
-    DublinCoreCatalog eventA = generateEvent("Device A", new Date(currentTime + 10 * 1000), new Date(
-            currentTime + (60 * 60 * 1000)));
+    DublinCoreCatalog eventA = generateEvent("Device A", new Date(currentTime + 10 * 1000), new Date(currentTime
+            + (60 * 60 * 1000)));
     DublinCoreCatalog eventB = generateEvent("Device A", new Date(currentTime + (20 * 24 * 60 * 60 * 1000)), new Date(
             currentTime + (20 * 25 * 60 * 60 * 1000)));
-    
+
     schedulerService.addEvent(eventA);
     schedulerService.addEvent(eventB);
-    
+
     Date start = new Date(currentTime);
     Date end = new Date(currentTime + 60 * 60 * 1000);
 
     SchedulerQuery filter = new SchedulerQuery().setSpatial("Device A").setEndsFrom(start).setStartsTo(end);
     List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
     Assert.assertEquals(1, events.size());
+  }
+
+  /**
+   * Create an event with a start date 1 minute in the past and an end date 60 minutes in to the future. Make sure the
+   * event is listed when asking for the schedule of the capture agent.
+   */
+  @Test
+  public void testCalendarCutoffWithStartedEvent() throws Exception {
+    long currentTime = System.currentTimeMillis();
+    Date startDate = new Date(currentTime - 10 * 1000);
+    Date endDate = new Date(currentTime + (60 * 60 * 1000));
+    DublinCoreCatalog eventA = generateEvent("Device A", startDate, endDate);
+    schedulerService.addEvent(eventA);
+
+    Date start = new Date(currentTime);
+    Date end = new Date(currentTime + 60 * 60 * 1000);
+
+    SchedulerQuery filter = new SchedulerQuery().setSpatial("Device A").setEndsFrom(start).setStartsTo(end);
+    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(1, events.size());
+  }
+
+  @Test
+  public void testSpatial() throws Exception {
+    long currentTime = System.currentTimeMillis();
+    DublinCoreCatalog eventA = generateEvent("Device A", new Date(currentTime + 10 * 1000), new Date(currentTime
+            + (60 * 60 * 1000)));
+    DublinCoreCatalog eventB = generateEvent("Device B", new Date(currentTime + 10 * 1000), new Date(currentTime
+            + (60 * 60 * 1000)));
+
+    schedulerService.addEvent(eventA);
+    schedulerService.addEvent(eventB);
+
+    SchedulerQuery filter = new SchedulerQuery().setSpatial("Device");
+    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(0, events.size());
+
+    filter = new SchedulerQuery().setSpatial("Device A");
+    events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(1, events.size());
+
+    filter = new SchedulerQuery().setSpatial("Device B");
+    events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(1, events.size());
+
+    filter = new SchedulerQuery().setText("Device");
+    events = schedulerService.search(filter).getCatalogList();
+    Assert.assertEquals(2, events.size());
   }
 
   @Test

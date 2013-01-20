@@ -36,6 +36,14 @@
         }
         return fullAscii;
     }
+
+    /**
+     * @description Returns whether n is numeric or not
+     * @return true if n is numeric, false else
+     */
+    $.isNumber = function(n) {
+	return !isNaN(parseFloat(n)) && isFinite(n);
+    }
     
     /**
      * @description Returns the ascii alphabet lower case
@@ -435,6 +443,9 @@
      *                                              - medium
      *                                              - high
      *                                              - hd
+     *                  - displayOneVideo   don't display two videos simultaneously when two videos are available
+     *                                          Valid Parameter:
+     *                                              - true
      * @return the value of URL-Parameter 'name' or null if not defined
      */
     $.getURLParameter = function(name)

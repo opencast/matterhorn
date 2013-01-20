@@ -43,6 +43,7 @@ ocSeriesList.SortColumns = [
 ];
 
 ocSeriesList.init = function(){
+  ocSeriesList.askForSeries();
   $('#addHeader').jqotesubtpl('templates/series_list-header.tpl', {});
   if ($.cookie('series_count') != null) {
     $('#pageSize').children()
@@ -75,8 +76,8 @@ ocSeriesList.askForSeries = function()
     success: function(data)
     {
       ocSeriesList.buildSeriesView(data);
-      ocSeriesList.Configuration.total = data.totalCount;
-      ocSeriesList.Configuration.lastPage = Math.ceil(ocSeriesList.Configuration.total / ocSeriesList.Configuration.count)
+      ocSeriesList.Configuration.total = parseInt(data.totalCount);
+      ocSeriesList.Configuration.lastPage = Math.ceil(ocSeriesList.Configuration.total / ocSeriesList.Configuration.count);
       if(ocSeriesList.Configuration.total <= ocSeriesList.Configuration.count){
         $('#prevText').show();
         $('#prevButtons').hide();
@@ -104,8 +105,30 @@ ocSeriesList.askForSeries = function()
       }
       $('#curPage').text(ocSeriesList.Configuration.startPage + 1);
       $('#numPage').text(ocSeriesList.Configuration.lastPage);
+      //
+      updateSortIcons();
     }
   });
+
+  function updateSortIcons() {
+    // find the index of the sort column
+    var sortColumn = _.chain(ocSeriesList.SortColumns).map(function (a) {
+      return _.chain(a).values().find(function (v) {
+        return v == ocSeriesList.Configuration.sort;
+      }).value() != undefined
+    }).indexOf(true).value();
+    // find the sort icon and remove all triangle related styles
+    var sortIcon = $("#seriesTable th:eq(" + sortColumn + ")").find(".sort-icon")
+            .removeClass("ui-icon-triangle-2-n-s")
+            .removeClass("ui-icon-circle-triangle-n")
+            .removeClass("ui-icon-circle-triangle-s");
+    // set the correct triangle style
+    if (ocSeriesList.Configuration.sort.indexOf("_DESC") > 0) {
+      sortIcon.addClass("ui-icon-circle-triangle-s")
+    } else {
+      sortIcon.addClass("ui-icon-circle-triangle-n")
+    }
+  }
 }
 
 ocSeriesList.previousPage = function(){

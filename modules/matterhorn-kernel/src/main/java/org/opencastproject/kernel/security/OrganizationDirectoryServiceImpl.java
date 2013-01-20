@@ -15,34 +15,28 @@
  */
 package org.opencastproject.kernel.security;
 
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ID;
-
+import org.opencastproject.kernel.security.persistence.JpaOrganization;
+import org.opencastproject.kernel.security.persistence.OrganizationDatabase;
+import org.opencastproject.kernel.security.persistence.OrganizationDatabaseException;
 import org.opencastproject.security.api.DefaultOrganization;
 import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.util.NotFoundException;
 
 import org.apache.commons.lang.StringUtils;
-import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.cm.ManagedServiceFactory;
-import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implements the organizational directory. As long as no organizations are published in the service registry, the
@@ -80,46 +74,37 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
   /** The configuration admin service */
   protected ConfigurationAdmin configAdmin = null;
 
-  /** The registered organizations */
-  protected Map<String, Organization> organizations = new ConcurrentHashMap<String, Organization>();
+  protected OrganizationDatabase persistence;
 
-  /** The default configuration */
-  protected Configuration defaultConfiguration = null;
+  /** The default organization */
+  private final Organization defaultOrganization = new DefaultOrganization();
+
+  /** The list of organizations to handle later */
+  private final Map<String, Dictionary> unhandledOrganizations = new HashMap<String, Dictionary>();
 
   /**
-   * Sets the default organization to return when no organization directory is registered.
+   * OSGi callback to set the security service.
    * 
-   * @param cc
-   *          the OSGI componentContext
+   * @param securityService
+   *          the securityService to set
    */
-  protected void activate(ComponentContext cc) throws Exception {
-    String configuredServerName = cc.getBundleContext().getProperty("org.opencastproject.server.url");
-    Organization defaultOrganization = null;
-    if (configuredServerName == null) {
-      defaultOrganization = new DefaultOrganization();
-    } else {
-      URL url = new URL(configuredServerName);
-      defaultOrganization = new DefaultOrganization(url.getHost(), url.getPort());
+  public void setOrgPersistence(OrganizationDatabase setOrgPersistence) {
+    this.persistence = setOrgPersistence;
+    for (Entry<String, Dictionary> entry : unhandledOrganizations.entrySet()) {
+      try {
+        updated(entry.getKey(), entry.getValue());
+      } catch (ConfigurationException e) {
+        logger.error(e.getMessage());
+      }
     }
+  }
 
-    // Make sure there is a default organization
-    StringBuilder filter = new StringBuilder("(").append(ORG_ID_KEY).append("=").append(DEFAULT_ORGANIZATION_ID)
-            .append(")");
-    Configuration[] orgConfigurations = configAdmin.listConfigurations(filter.toString());
-    if (orgConfigurations != null) {
-      defaultConfiguration = orgConfigurations[0];
-    } else {
-      defaultConfiguration = configAdmin.createFactoryConfiguration(PID);
-      logger.info("Registering organization '{}'", defaultOrganization.getId());
-      Dictionary<String, String> props = new Hashtable<String, String>();
-      props.put(ORG_ID_KEY, defaultOrganization.getId());
-      props.put(ORG_NAME_KEY, defaultOrganization.getName());
-      props.put(ORG_SERVER_KEY, defaultOrganization.getServerName());
-      props.put(ORG_PORT_KEY, Integer.toString(defaultOrganization.getServerPort()));
-      props.put(ORG_ADMIN_ROLE_KEY, defaultOrganization.getAdminRole());
-      props.put(ORG_ANONYMOUS_ROLE_KEY, defaultOrganization.getAnonymousRole());
-      defaultConfiguration.update(props);
-    }
+  /**
+   * @param configAdmin
+   *          the configAdmin to set
+   */
+  public void setConfigurationAdmin(ConfigurationAdmin configAdmin) {
+    this.configAdmin = configAdmin;
   }
 
   /**
@@ -129,12 +114,11 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    */
   @Override
   public Organization getOrganization(String id) throws NotFoundException {
-    for (Organization o : organizations.values()) {
-      if (o.getId().equals(id)) {
-        return o;
-      }
+    if (persistence == null) {
+      logger.debug("No persistence available: Returning default organization for id {}", id);
+      return defaultOrganization;
     }
-    throw new NotFoundException(id);
+    return persistence.getOrganization(id);
   }
 
   /**
@@ -144,16 +128,11 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    */
   @Override
   public Organization getOrganization(URL url) throws NotFoundException {
-    String requestUrl = StringUtils.strip(url.getHost(), "/");
-    int requestPort = url.getPort();
-    for (Organization o : organizations.values()) {
-      if (!o.getServerName().equals(requestUrl))
-        continue;
-      if (requestPort != -1 && !(requestPort == o.getServerPort()))
-        continue;
-      return o;
+    if (persistence == null) {
+      logger.debug("No persistence available: Returning default organization for url {}", url);
+      return defaultOrganization;
     }
-    throw new NotFoundException(url.toExternalForm());
+    return persistence.getOrganizationByUrl(url);
   }
 
   /**
@@ -163,9 +142,7 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    */
   @Override
   public List<Organization> getOrganizations() {
-    List<Organization> result = new ArrayList<Organization>(organizations.size());
-    result.addAll(organizations.values());
-    return result;
+    return persistence.getOrganizations();
   }
 
   /**
@@ -175,29 +152,11 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    *          the organization
    */
   public void addOrganization(Organization organization) {
-    for (Organization o : organizations.values()) {
-      if (o.getId().equals(organization.getId())) {
-        throw new IllegalStateException("Can not register an organization with id '" + organization.getId()
-                + "' since an organization with that identifier has already been registered");
-      }
-    }
-    organizations.put(organization.getId(), organization);
-  }
-
-  /**
-   * Removes the organization from the list of organizations.
-   * 
-   * @param organization
-   *          the organization
-   */
-  public void removeOrganization(Organization organization) {
-    for (Iterator<Entry<String, Organization>> entryIter = organizations.entrySet().iterator(); entryIter.hasNext();) {
-      Entry<String, Organization> entry = entryIter.next();
-      if (entry.getValue().equals(organization)) {
-        entryIter.remove();
-        return;
-      }
-    }
+    boolean contains = persistence.containsOrganization(organization.getId());
+    if (contains)
+      throw new IllegalStateException("Can not add an organization with id '" + organization.getId()
+              + "' since an organization with that identifier has already been registered");
+    persistence.storeOrganization(organization);
   }
 
   /**
@@ -218,6 +177,11 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
   @Override
   @SuppressWarnings("rawtypes")
   public void updated(String pid, Dictionary properties) throws ConfigurationException {
+    if (persistence == null) {
+      logger.debug("No persistence available: Ignoring organization update for pid='{}'", pid);
+      unhandledOrganizations.put(pid, properties);
+      return;
+    }
     logger.debug("Updating organization pid='{}'", pid);
 
     // Gather the properties
@@ -225,7 +189,7 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
     String name = (String) properties.get(ORG_NAME_KEY);
     String server = (String) properties.get(ORG_SERVER_KEY);
 
-    // Make sure the configuration meets the minimum requirments
+    // Make sure the configuration meets the minimum requirements
     if (StringUtils.isBlank(id))
       throw new ConfigurationException(ORG_ID_KEY, ORG_ID_KEY + " must be set");
     if (StringUtils.isBlank(server))
@@ -249,23 +213,22 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
       orgProperties.put(key.substring(ORG_PROPERTY_PREFIX.length()), (String) properties.get(key));
     }
 
-    // If this is a replacement for the default configuration, make sure it is unregistered
-    if (DEFAULT_ORGANIZATION_ID.equals(id) && !pid.equals(defaultConfiguration.getPid())) {
-      try {
-        organizations.remove(defaultConfiguration.getPid());
-        defaultConfiguration.delete();
-        logger.info("Updating organization '{}'", id);
-      } catch (IOException e) {
-        logger.warn("Error unregistering default organization", e);
-      }
-    } else if (!organizations.containsKey(pid)) {
-      logger.info("Registering organization '{}'", id);
-    } else if (!pid.equals(defaultConfiguration.getPid())) {
-      logger.info("Updating organization '{}'", id);
-    }
+    JpaOrganization org = null;
 
-    // Replace the old immutable organization with a new one
-    organizations.put(pid, new Organization(id, name, server, port, adminRole, anonRole, orgProperties));
+    // Load the existing organization or create a new one
+    try {
+      try {
+        org = (JpaOrganization) persistence.getOrganization(id);
+        org.addServer(server, port);
+        logger.info("Registering organization '{}'", id);
+      } catch (NotFoundException e) {
+        org = new JpaOrganization(id, name, server, port, adminRole, anonRole, orgProperties);
+        logger.info("Updating organization '{}'", id);
+      }
+      persistence.storeOrganization(org);
+    } catch (OrganizationDatabaseException e) {
+      logger.error("Unable to register organization '{}': {}", id, e);
+    }
   }
 
   /**
@@ -275,15 +238,11 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    */
   @Override
   public void deleted(String pid) {
-    organizations.remove(pid);
-  }
-
-  /**
-   * @param configAdmin
-   *          the configAdmin to set
-   */
-  public void setConfigurationAdmin(ConfigurationAdmin configAdmin) {
-    this.configAdmin = configAdmin;
+    try {
+      persistence.deleteOrganization(pid);
+    } catch (NotFoundException e) {
+      logger.warn("Can't delete organization with id {}, organization not found.", pid);
+    }
   }
 
 }

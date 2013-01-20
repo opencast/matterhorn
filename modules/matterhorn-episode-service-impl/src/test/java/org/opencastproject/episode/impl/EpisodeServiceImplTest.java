@@ -16,21 +16,23 @@
 
 package org.opencastproject.episode.impl;
 
-import junit.framework.Assert;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.solr.client.solrj.SolrServer;
-import org.easymock.EasyMock;
-import org.easymock.IAnswer;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertNotNull;
+import static junit.framework.Assert.fail;
+import static org.junit.Assert.assertTrue;
+import static org.opencastproject.episode.api.EpisodeQuery.systemQuery;
+import static org.opencastproject.mediapackage.MediaPackageSupport.loadMediaPackageFromClassPath;
+import static org.opencastproject.util.UrlSupport.DEFAULT_BASE_URL;
+import static org.opencastproject.util.data.Monadics.mlist;
+import static org.opencastproject.util.data.VCell.cell;
+import static org.opencastproject.util.data.functions.Misc.chuck;
+
 import org.opencastproject.episode.api.EpisodeQuery;
 import org.opencastproject.episode.api.EpisodeService;
 import org.opencastproject.episode.api.EpisodeServiceException;
 import org.opencastproject.episode.api.SearchResult;
 import org.opencastproject.episode.api.SearchResultItem;
+import org.opencastproject.episode.api.UriRewriter;
 import org.opencastproject.episode.api.Version;
 import org.opencastproject.episode.impl.elementstore.DeletionSelector;
 import org.opencastproject.episode.impl.elementstore.ElementStore;
@@ -45,8 +47,9 @@ import org.opencastproject.mediapackage.DefaultMediaPackageSerializerImpl;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilder;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
+import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageException;
-import org.opencastproject.mediapackage.MediaPackageParser;
+import org.opencastproject.mediapackage.MediaPackageSupport;
 import org.opencastproject.mediapackage.identifier.IdBuilderFactory;
 import org.opencastproject.metadata.api.StaticMetadataService;
 import org.opencastproject.metadata.dublincore.StaticMetadataServiceDublinCoreImpl;
@@ -55,6 +58,7 @@ import org.opencastproject.security.api.AccessControlEntry;
 import org.opencastproject.security.api.AccessControlList;
 import org.opencastproject.security.api.AuthorizationService;
 import org.opencastproject.security.api.DefaultOrganization;
+import org.opencastproject.security.api.JaxbOrganization;
 import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.security.api.SecurityService;
@@ -71,33 +75,34 @@ import org.opencastproject.util.persistence.PersistenceEnv;
 import org.opencastproject.util.persistence.PersistenceUtil;
 import org.opencastproject.workspace.api.Workspace;
 
+import junit.framework.Assert;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.solr.client.solrj.SolrServer;
+import org.easymock.EasyMock;
+import org.easymock.IAnswer;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+
 import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertNotNull;
-import static junit.framework.Assert.fail;
-import static org.junit.Assert.assertTrue;
-import static org.opencastproject.episode.api.EpisodeQuery.systemQuery;
-import static org.opencastproject.mediapackage.MediaPackageSupport.loadMediaPackageFromClassPath;
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ADMIN;
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ANONYMOUS;
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ID;
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_NAME;
-import static org.opencastproject.util.UrlSupport.DEFAULT_BASE_URL;
-import static org.opencastproject.util.data.Monadics.mlist;
-import static org.opencastproject.util.data.VCell.cell;
 
 /**
  * Tests the functionality of the search service.
- *
+ * 
  * todo setup scenario where gathering metadata from both the media package and the dublin core is required
  * (StaticMetadataServiceMediaPackageImpl, StaticMetadataServiceDublinCoreImpl)
  */
@@ -113,11 +118,11 @@ public class EpisodeServiceImplTest {
   private AccessControlList acl = null;
 
   /** A user with permissions. */
-  private final User userWithPermissions = new User("sample", "opencastproject.org", new String[]{"ROLE_STUDENT",
-          "ROLE_OTHERSTUDENT", new DefaultOrganization().getAnonymousRole()});
+  private final User userWithPermissions = new User("sample", "opencastproject.org", new String[] { "ROLE_STUDENT",
+          "ROLE_OTHERSTUDENT", new DefaultOrganization().getAnonymousRole() });
 
   /** A user without permissions. */
-  private final User userWithoutPermissions = new User("sample", "opencastproject.org", new String[]{"ROLE_NOTHING"});
+  private final User userWithoutPermissions = new User("sample", "opencastproject.org", new String[] { "ROLE_NOTHING" });
 
   private final Organization defaultOrganization = new DefaultOrganization();
   private final User defaultUser = userWithPermissions;
@@ -151,13 +156,20 @@ public class EpisodeServiceImplTest {
   public void setUp() throws Exception {
     final File dcFile = new File(getClass().getResource("/dublincore.xml").toURI());
     final File dcSeriesFile = new File(getClass().getResource("/series-dublincore.xml").toURI());
+    final File mpeg7 = new File(getClass().getResource("/mpeg7.xml").toURI());
     Assert.assertNotNull(dcFile);
 
     // workspace
     Workspace workspace = EasyMock.createNiceMock(Workspace.class);
     EasyMock.expect(workspace.get((URI) EasyMock.anyObject())).andAnswer(new IAnswer<File>() {
+      @Override
       public File answer() throws Throwable {
-        return EasyMock.getCurrentArguments()[0].toString().contains("series") ? dcSeriesFile : dcFile;
+        final String arg = EasyMock.getCurrentArguments()[0].toString();
+        if (arg.contains("series"))
+          return dcSeriesFile;
+        if (arg.contains("mpeg"))
+          return mpeg7;
+        return dcFile;
       }
     }).anyTimes();
     EasyMock.replay(workspace);
@@ -166,7 +178,7 @@ public class EpisodeServiceImplTest {
     ServiceRegistry serviceRegistry = EasyMock.createNiceMock(ServiceRegistry.class);
     EasyMock.expect(
             serviceRegistry.createJob((String) EasyMock.anyObject(), (String) EasyMock.anyObject(),
-                                      (List<String>) EasyMock.anyObject(), (String) EasyMock.anyObject(), EasyMock.anyBoolean()))
+                    (List<String>) EasyMock.anyObject(), (String) EasyMock.anyObject(), EasyMock.anyBoolean()))
             .andReturn(new JaxbJob()).anyTimes();
     EasyMock.expect(serviceRegistry.updateJob((Job) EasyMock.anyObject())).andReturn(new JaxbJob()).anyTimes();
     EasyMock.expect(serviceRegistry.getJobs((String) EasyMock.anyObject(), (Status) EasyMock.anyObject()))
@@ -174,9 +186,8 @@ public class EpisodeServiceImplTest {
     EasyMock.replay(serviceRegistry);
 
     ElementStore elementStore = EasyMock.createNiceMock(ElementStore.class);
-    EasyMock.expect(elementStore.delete(EasyMock.<DeletionSelector>anyObject()))
-            .andReturn(true).once();
-    EasyMock.expect(elementStore.copy(EasyMock.<StoragePath>anyObject(), EasyMock.<StoragePath>anyObject()))
+    EasyMock.expect(elementStore.delete(EasyMock.<DeletionSelector> anyObject())).andReturn(true).once();
+    EasyMock.expect(elementStore.copy(EasyMock.<StoragePath> anyObject(), EasyMock.<StoragePath> anyObject()))
             .andReturn(true).anyTimes();
     EasyMock.replay(elementStore);
 
@@ -197,11 +208,13 @@ public class EpisodeServiceImplTest {
     // Persistence storage
     penv = PersistenceUtil.newTestPersistenceEnv("org.opencastproject.episode.impl.persistence");
     episodeDatabase = new AbstractEpisodeServiceDatabase() {
-      @Override protected PersistenceEnv getPenv() {
+      @Override
+      protected PersistenceEnv getPenv() {
         return penv;
       }
 
-      @Override protected SecurityService getSecurityService() {
+      @Override
+      protected SecurityService getSecurityService() {
         return securityService;
       }
     };
@@ -217,18 +230,18 @@ public class EpisodeServiceImplTest {
             authorizationService.hasPermission((MediaPackage) EasyMock.anyObject(), (String) EasyMock.anyObject()))
             .andReturn(true).anyTimes();
 
-//    ServiceRegistry serviceRegistry = EasyMock.createNiceMock(ServiceRegistry.class);
-//
-//    EasyMock.expect(
-//            serviceRegistry.createJob((String) EasyMock.anyObject(), (String) EasyMock.anyObject(),
-//                                      (List<String>) EasyMock.anyObject(), (String) EasyMock.anyObject(), EasyMock.anyBoolean()))
-//            .andReturn(new JaxbJob()).anyTimes();
-//    EasyMock.expect(serviceRegistry.updateJob((Job) EasyMock.anyObject())).andReturn(new JaxbJob()).anyTimes();
-//    EasyMock.expect(serviceRegistry.getJobs((String) EasyMock.anyObject(), (Status) EasyMock.anyObject()))
-//            .andReturn(jobs).anyTimes();
-//    EasyMock.replay(serviceRegistry);
-//
-//    service.setServiceRegistry(serviceRegistry);
+    // ServiceRegistry serviceRegistry = EasyMock.createNiceMock(ServiceRegistry.class);
+    //
+    // EasyMock.expect(
+    // serviceRegistry.createJob((String) EasyMock.anyObject(), (String) EasyMock.anyObject(),
+    // (List<String>) EasyMock.anyObject(), (String) EasyMock.anyObject(), EasyMock.anyBoolean()))
+    // .andReturn(new JaxbJob()).anyTimes();
+    // EasyMock.expect(serviceRegistry.updateJob((Job) EasyMock.anyObject())).andReturn(new JaxbJob()).anyTimes();
+    // EasyMock.expect(serviceRegistry.getJobs((String) EasyMock.anyObject(), (Status) EasyMock.anyObject()))
+    // .andReturn(jobs).anyTimes();
+    // EasyMock.replay(serviceRegistry);
+    //
+    // service.setServiceRegistry(serviceRegistry);
 
     OrganizationDirectoryService orgDirectory = EasyMock.createNiceMock(OrganizationDirectoryService.class);
     EasyMock.expect(orgDirectory.getOrganization((String) EasyMock.anyObject())).andReturn(new DefaultOrganization())
@@ -239,21 +252,9 @@ public class EpisodeServiceImplTest {
     solrServer = EpisodeServicePublisher.setupSolr(new File(solrRoot));
     StaticMetadataService mdService = newStaticMetadataService(workspace);
     SeriesService seriesService = newSeriesService();
-    service = new EpisodeServiceImpl(new SolrRequester(solrServer),
-                                     new SolrIndexManager(solrServer,
-                                                          workspace,
-                                                          cell(Arrays.asList(mdService)),
-                                                          seriesService,
-                                                          mpeg7CatalogService,
-                                                          securityService),
-                                     securityService,
-                                     authorizationService,
-                                     orgDirectory,
-                                     serviceRegistry,
-                                     null,
-                                     null,
-                                     episodeDatabase,
-                                     elementStore);
+    service = new EpisodeServiceImpl(new SolrRequester(solrServer), new SolrIndexManager(solrServer, workspace,
+            cell(Arrays.asList(mdService)), seriesService, mpeg7CatalogService, securityService), securityService,
+            authorizationService, orgDirectory, serviceRegistry, null, null, episodeDatabase, elementStore);
     EasyMock.replay(authorizationService);
   }
 
@@ -345,14 +346,16 @@ public class EpisodeServiceImplTest {
       final SearchResult r = service.find(systemQuery().id("10.0000/1"));
       assertEquals(4, r.size());
       // check that each added media package has a unique version
-      assertEquals(r.size(),
-                   mlist(service.find(systemQuery().id("10.0000/1")).getItems())
-                           .foldl(Collections.<Version>set(), new Function2<Set<Version>, SearchResultItem, Set<Version>>() {
-                             @Override public Set<Version> apply(Set<Version> sum, SearchResultItem item) {
-                               sum.add(item.getOcVersion());
-                               return sum;
-                             }
-                           }).size());
+      assertEquals(
+              r.size(),
+              mlist(service.find(systemQuery().id("10.0000/1")).getItems()).foldl(Collections.<Version> set(),
+                      new Function2<Set<Version>, SearchResultItem, Set<Version>>() {
+                        @Override
+                        public Set<Version> apply(Set<Version> sum, SearchResultItem item) {
+                          sum.add(item.getOcVersion());
+                          return sum;
+                        }
+                      }).size());
     }
     {
       final SearchResult r = service.find(systemQuery().id("10.0000/1").onlyLastVersion());
@@ -470,8 +473,12 @@ public class EpisodeServiceImplTest {
 
     // Now take the role away from the user
     userResponder.setResponse(userWithoutPermissions);
-    organizationResponder.setResponse(new Organization(DEFAULT_ORGANIZATION_ID, DEFAULT_ORGANIZATION_NAME,
-                                                       DEFAULT_BASE_URL, DEFAULT_ORGANIZATION_ADMIN, DEFAULT_ORGANIZATION_ANONYMOUS));
+
+    Map<String, Integer> servers = new HashMap<String, Integer>();
+    servers.put(DEFAULT_BASE_URL, 8080);
+    organizationResponder.setResponse(new JaxbOrganization(DefaultOrganization.DEFAULT_ORGANIZATION_ID,
+            DefaultOrganization.DEFAULT_ORGANIZATION_NAME, servers, DefaultOrganization.DEFAULT_ORGANIZATION_ADMIN,
+            DefaultOrganization.DEFAULT_ORGANIZATION_ANONYMOUS, null));
 
     // Try to delete it
     try {
@@ -482,7 +489,7 @@ public class EpisodeServiceImplTest {
     }
 
     // Second try with a "fixed" roleset
-    User adminUser = new User("admin", "opencastproject.org", new String[]{new DefaultOrganization().getAdminRole()});
+    User adminUser = new User("admin", "opencastproject.org", new String[] { new DefaultOrganization().getAdminRole() });
     userResponder.setResponse(adminUser);
     Date deletedDate = new Date();
     assertTrue(service.delete(mediaPackage.getIdentifier().toString()));
@@ -498,7 +505,7 @@ public class EpisodeServiceImplTest {
 
   /**
    * Ads a media package with one dublin core for the episode and one for the series.
-   *
+   * 
    * todo media package needs to return a series id for this test to work
    */
   @Test
@@ -542,27 +549,35 @@ public class EpisodeServiceImplTest {
     List<String> args = new ArrayList<String>();
     args.add(new DefaultOrganization().getId());
 
-    List<Job> jobs = new ArrayList<Job>();
+    // create 10 empty media packages, no need to rewrite for archival
     for (long i = 0; i < 10; i++) {
-      MediaPackage mediaPackage = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
+      final MediaPackage mediaPackage = MediaPackageBuilderFactory.newInstance().newMediaPackageBuilder().createNew();
       mediaPackage.setIdentifier(IdBuilderFactory.newInstance().newIdBuilder().createNew());
-      episodeDatabase.storeEpisode(mediaPackage, acl, new Date(), Version.version(i + 1));
-      String payload = MediaPackageParser.getAsXml(mediaPackage);
-      JaxbJob job = new JaxbJob();
-      job.setId(i);
-      job.setArguments(args);
-      job.setPayload(payload);
-      job.setStatus(Status.FINISHED);
-      jobs.add(job);
+      episodeDatabase.storeEpisode(mediaPackage, acl, new Date(), Version.FIRST);
     }
+    // load one with an mpeg7 catalog attached
+    final MediaPackage mpWithMpeg7 = EpisodeServiceImpl.rewriteForArchival(Version.FIRST).apply(
+            MediaPackageSupport.loadMediaPackageFromClassPath("/manifest-full.xml"));
+    episodeDatabase.storeEpisode(mpWithMpeg7, acl, new Date(), Version.FIRST);
 
     // We should have nothing in the search index
     assertEquals(0, service.find(systemQuery()).size());
 
-    service.populateIndex();
+    // todo
+    service.populateIndex(new UriRewriter() {
+      @Override
+      public URI apply(Version version, MediaPackageElement mediaPackageElement) {
+        // only the URI of the mpeg7 file needs to be rewritten so it is safe to return a static URL
+        try {
+          return getClass().getResource("/mpeg7.xml").toURI();
+        } catch (URISyntaxException e) {
+          return chuck(e);
+        }
+      }
+    });
 
-    // This time we should have 10 results
-    assertEquals(10, service.find(systemQuery()).size());
+    // This time we should have 11 results
+    assertEquals(11, service.find(systemQuery()).size());
   }
 
   @Test

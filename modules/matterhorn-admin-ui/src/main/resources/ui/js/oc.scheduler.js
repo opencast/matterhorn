@@ -32,6 +32,9 @@ var ocScheduler = (function() {
   var SINGLE_EVENT      = 3;
   var MULTIPLE_EVENTS   = 4;
   var SUBMIT_MODE       = 5;
+  
+  // Define dcterms namespace
+  $.xmlns["dcterms"] = "http://purl.org/dc/terms/";
 
   sched.mode              = CREATE_MODE;
   sched.type              = SINGLE_EVENT;
@@ -57,6 +60,9 @@ var ocScheduler = (function() {
   sched.init = function init(){
 
     $('#addHeader').jqotesubtpl('templates/scheduler.tpl', {});
+    $('#common-data').jqotesubtpl('templates/common-data.tpl', {});
+    $('#processingScheduler').jqotesubtpl('templates/processing-instructions.tpl', {});
+    $('#additional-description').jqotesubtpl('templates/additional-description.tpl', {});
 
     this.internationalize();
     this.registerCatalogs();
@@ -132,8 +138,9 @@ var ocScheduler = (function() {
 
     $('.oc-ui-collapsible-widget .form-box-head').click(
     function() {
-      $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-e');
-      $(this).children('.ui-icon').toggleClass('ui-icon-triangle-1-s');
+      $(this).children('.ui-icon')
+        .toggleClass('ui-icon-triangle-1-e')
+        .toggleClass('ui-icon-triangle-1-s');
       $(this).next().toggle();
       return false;
     });
@@ -171,7 +178,7 @@ var ocScheduler = (function() {
         if($('#series').val() === '' && $('#seriesSelect').val() !== ''){
           ocUtils.log("Searching for series in series endpoint");
           $.ajax({
-            url : SERIES_SEARCH_URL + '?seriesTitle=' + $('#seriesSelect').val(),
+            url : SERIES_SEARCH_URL,// + '?seriesTitle=' + $('#seriesSelect').val(),
             type : 'get',
             dataType : 'json',
             success : function(data) {
@@ -179,11 +186,15 @@ var ocScheduler = (function() {
               series_list = data["catalogs"],
               series_title,
               series_id;
-
-              if(series_list.length !== 0){
-                series_title = series_list[0][DUBLIN_CORE_NS_URI]["title"] ? series_list[0][DUBLIN_CORE_NS_URI]["title"][0].value : "";
-                series_id = series_list[0][DUBLIN_CORE_NS_URI]["identifier"] ? series_list[0][DUBLIN_CORE_NS_URI]["identifier"][0].value : "";
-                $('#series').val(series_id);
+              $('#series').val('');
+              for (i in series_list) {
+                var series_title, series_id;
+                series_title = series_list[i][DUBLIN_CORE_NS_URI]["title"] ? series_list[i][DUBLIN_CORE_NS_URI]["title"][0].value : "";
+                series_id = series_list[i][DUBLIN_CORE_NS_URI]["identifier"] ? series_list[i][DUBLIN_CORE_NS_URI]["identifier"][0].value : "";
+                if (series_title === series_input){
+                  $('#series').val(series_id);
+                  break;
+                }
               }
             }
           });
@@ -303,67 +314,74 @@ var ocScheduler = (function() {
     this.loadKnownAgents();
   };
 
-  sched.submitForm = function(){
-    var payload = {};
-    var error = false;
+  sched.submitForm = function() {
+    function submit() {
+      var payload = {};
+      var error = false;
 
-    hideUserMessages();
-    sched.checkForConflictingEvents();
-    if(ocScheduler.conflictingEvents) {
-      $('#missingFieldsContainer').show();
-      $('#errorConflict').show();
-      $('#errorConflict li').show();
+      hideUserMessages();
+      sched.checkForConflictingEvents();
+      if (ocScheduler.conflictingEvents) {
+        $('#missingFieldsContainer').show();
+        $('#errorConflict').show();
+        $('#errorConflict li').show();
+        return false;
+      }
+
+      $.extend(true, sched.capture.components, ocScheduler.workflowComponents);
+
+      var errors = [];
+      for (var i in sched.catalogs) {
+        var serializedCatalog = sched.catalogs[i].serialize();
+        if (!serializedCatalog) {
+          errors = errors.concat(sched.catalogs[i].getErrors());
+        } else {
+          payload[sched.catalogs[i].name] = serializedCatalog;
+        }
+      }
+
+      if (errors.length > 0) {
+        showUserMessages(errors);
+      } else {
+        $('#submitButton').attr('disabled', 'disabled');
+        if (sched.type !== SINGLE_EVENT) {
+          $('#submitModal').dialog(
+                  {
+                    modal: true,
+                    resizable: false,
+                    draggable: false,
+                    create: function (event, ui) {
+                      $('.ui-dialog-titlebar-close').hide();
+                    }
+                  });
+        }
+        if (ocUtils.getURLParam('edit')) {
+          $.ajax({
+            type: 'PUT',
+            url: SCHEDULER_URL + '/' + $('#eventId').val(),
+            data: payload,
+            dataType: 'text',
+            complete: ocScheduler.eventSubmitComplete
+          });
+        } else {
+          $.ajax({
+            type: 'POST',
+            url: SCHEDULER_URL + '/',
+            data: payload,
+            dataType: 'text',
+            complete: ocScheduler.eventSubmitComplete
+          });
+        }
+      }
+      return true;
+    }
+
+    try {
+      return submit();
+    } catch (e) {
+      alert("Error submitting form: " + e);
       return false;
     }
-
-    $.extend(true, sched.capture.components, ocScheduler.workflowComponents);
-
-    var errors = [];
-    for (var i in sched.catalogs) {
-      var serializedCatalog = sched.catalogs[i].serialize();
-      if (!serializedCatalog) {
-        errors = errors.concat(sched.catalogs[i].getErrors());
-      } else {
-        payload[sched.catalogs[i].name] = serializedCatalog;
-      }
-    }
-
-    if(errors.length > 0) {
-      showUserMessages(errors);
-    } else {
-      $('#submitButton').attr('disabled', 'disabled');
-      if(sched.type !== SINGLE_EVENT)
-      {
-        $('#submitModal').dialog(
-        {
-          modal: true,
-          resizable: false,
-          draggable: false,
-          create: function (event, ui)
-          {
-            $('.ui-dialog-titlebar-close').hide();
-          }
-        });
-      }
-      if(ocUtils.getURLParam('edit')) {
-        $.ajax({
-          type: 'PUT',
-          url: SCHEDULER_URL + '/' + $('#eventId').val(),
-          data: payload,
-          dataType: 'text',
-          complete: ocScheduler.eventSubmitComplete
-        });
-      } else {
-        $.ajax({
-          type: 'POST',
-          url: SCHEDULER_URL + '/',
-          data: payload,
-          dataType: 'text',
-          complete: ocScheduler.eventSubmitComplete
-        });
-      }
-    }
-    return true;
   };
 
   sched.cancelForm = function() {
@@ -554,10 +572,14 @@ var ocScheduler = (function() {
         for (var i in sched.catalogs) {
           data = sched.catalogs[i].components;
           for (var key in data) {
+          
             if (data[key] != "" && key != 'files') { //print text, not file names
               $('#field-'+key).css('display','block');
               $('#field-'+key).children('.fieldValue').text(data[key].value);
             }
+            if (key == "temporal" || key == "recurrence") {			
+              $('#field-'+key).children('.fieldValue').text(data[key].asFriendlyString());
+              }
           }
         }
       });
@@ -624,11 +646,12 @@ var ocScheduler = (function() {
       url: SCHEDULER_URL + "/conflicts.json",
       async: false,
       data: data,
-      type: 'get',
+      type: 'GET',
+      dataType: 'json',
       success: function(data) {
         var events = [];
-        data = data.catalogs
-        if (data != '') {
+        if (data != null && data != '') {
+          data = data.catalogs;
           for (var i in data) {
             var event = data[i];
             curId = $('#eventId').val();
@@ -763,7 +786,7 @@ var ocScheduler = (function() {
             success: function(data){
               window.debug = data;
               creationSucceeded = true;
-              seriesId = $(data).find('dcterms\\:identifier').text();
+              seriesId = $(data).find('dcterms|identifier').text();
               $('#series').val(seriesId);
               seriesComponent.fields.series.val(seriesId);
             },
@@ -845,33 +868,6 @@ var ocScheduler = (function() {
     });
 
     if(sched.type === MULTIPLE_EVENTS){
-
-      dcComps.temporal = new ocAdmin.Component(['recurDurationHour', 'recurDurationMin', 'recurStart', 'recurStartTimeHour', 'recurStartTimeMin'],
-      {
-        key: 'temporal'
-      },
-
-      {
-        getValue: function() {
-          var date = this.fields.recurStart.datepicker('getDate');
-          if(date && date.constructor == Date) {
-            var start = date / 1000; // Get date in milliseconds, convert to seconds.
-            start += this.fields.recurStartTimeHour.val() * 3600; // convert hour to seconds, add to date.
-            start += this.fields.recurStartTimeMin.val() * 60; //convert minutes to seconds, add to date.
-            start -= sched.tzDiff * 60; //Agent TZ offset
-            start = start * 1000; //back to milliseconds
-          }
-          var duration = this.fields.recurDurationHour.val() * 3600; // seconds per hour
-          duration += this.fields.recurDurationMin.val() * 60; // seconds per min
-          duration = duration * 1000;
-        },
-        setValue: function(val) {
-          var temporal = parseDublinCoreTemporal(val);
-          ocScheduler.components.recurrenceStart.setValue(temporal.start);
-          ocScheduler.components.recurrenceEnd.setValue(temporal.end);
-          ocScheduler.components.recurrenceDuration.setValue(temporal.dur);
-        }
-      });
 
       compositeComps.recurrenceStart = new ocAdmin.Component(['recurStart', 'recurStartTimeHour', 'recurStartTimeMin'],
       {
@@ -1075,7 +1071,7 @@ var ocScheduler = (function() {
         }
       });
 
-      dcComps.recurrence = new ocAdmin.Component(['scheduleRepeat', 'repeatSun', 'repeatMon', 'repeatTue', 'repeatWed', 'repeatThu', 'repeatFri', 'repeatSat'],
+      dcComps.recurrence = new ocAdmin.Component(['scheduleRepeat', 'repeatSun', 'repeatMon', 'repeatTue', 'repeatWed', 'repeatThu', 'repeatFri', 'repeatSat', 'recurrenceStart'],
       {
         required: true,
         key: 'recurrence',
@@ -1121,7 +1117,7 @@ var ocScheduler = (function() {
               if(this.fields.repeatSat[0].checked) {
                 days.push(dotw[(6 + dayOffset) % 7]);
               }
-              this.value = rrule + days.toString() + ";BYHOUR=" + hour + ";BYMINUTE=" + min;
+              this.value = rrule + this.getDays() + ";BYHOUR=" + hour + ";BYMINUTE=" + min;
             }
           }
           return this.value;
@@ -1194,6 +1190,45 @@ var ocScheduler = (function() {
             parent.appendChild(container);
           }
           return container;
+        },
+        getDays: function(ignoreOffset) {
+        	  var dotw, days, date, dayOffset;
+        	  dotw      = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+            days      = [];
+            date      = new Date(ocScheduler.components.recurrenceStart.getValue());
+            dayOffset = 0;
+            if(date.getDay() != date.getUTCDay()) {
+              dayOffset = date.getDay() < date.getUTCDay() ? 1 : -1;
+            }
+            if (ignoreOffset != undefined && ignoreOffset == true) {
+            	dayOffset = 0;
+            }
+            if(this.fields.repeatSun[0].checked) {
+              days.push(dotw[(0 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatMon[0].checked) {
+              days.push(dotw[(1 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatTue[0].checked) {
+              days.push(dotw[(2 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatWed[0].checked) {
+              days.push(dotw[(3 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatThu[0].checked) {
+              days.push(dotw[(4 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatFri[0].checked) {
+              days.push(dotw[(5 + dayOffset) % 7]);
+            }
+            if(this.fields.repeatSat[0].checked) {
+              days.push(dotw[(6 + dayOffset) % 7]);
+            }
+            return days.toString();
+            
+        },
+        asFriendlyString: function() {
+        		   return "Weekly on " + this.getDays(true) ;
         }
       });
 
@@ -1236,6 +1271,24 @@ var ocScheduler = (function() {
             error.push(endValid);
           }
           return error;
+        },
+        setValue: function(val) {
+	       var temporal = parseDublinCoreTemporal(val);
+	             ocScheduler.components.recurrenceStart.setValue(temporal.start);
+		           ocScheduler.components.recurrenceEnd.setValue(temporal.end);
+			         ocScheduler.components.recurrenceDuration.setValue(temporal.dur);
+				     },
+				         asString: function() {
+					       return "Starting: " + (new Date(this.getValue())).toLocaleString();
+					           },
+        asFriendlyString: function() {
+          var recurEnd, recurStart, recurStartTimeHour, recurStartTimeMin;
+          recurEnd = this.fields.recurEnd.val();
+          recurStart = this.fields.recurStart.val();
+          //recurStartTimeHour = this.fields.recurStartTimeHour.val();
+          //recurStartTimeMin  = this.fields.recurStartTimeMin.val();
+          return  "startDate= " + recurStart + " endDate= " + recurEnd ;
+          
         }
       });
 
@@ -1284,6 +1337,9 @@ var ocScheduler = (function() {
           var temporal = parseDublinCoreTemporal(val);
           ocScheduler.components.startDate.setValue(temporal.start);
           ocScheduler.components.duration.setValue(temporal.dur);
+        },
+        asFriendlyString: function() {
+        		   return "";
         },
         validate: function() {
           var startValid = ocScheduler.components.startDate.validate();
@@ -1472,11 +1528,15 @@ var ocScheduler = (function() {
   }
 
   function showUserMessages(errors, type) {
+    var errorContainer         = $('.scheduler-info-container'),
+        missingFieldsContainer = $('#missingFieldsContainer');
+    
     type = type || 'error';
-    if(type === 'error' && $('#missingFieldsContainer').css('display') === 'none') {
-      $('#missingFieldsContainer').show();
+
+    if(type === 'error' && missingFieldsContainer.css('display') === 'none') {
+      missingFieldsContainer.show();
     } else {
-      $('#missingFieldsContainer li').hide();
+      missingFieldsContainer.find('li').hide();
     }
     for(var i in errors) {
       $('#' + errors[i].name).show();
@@ -1485,6 +1545,8 @@ var ocScheduler = (function() {
         $('#' + label).addClass('label-error');
       }
     }
+    $(window).scrollTop(errorContainer.offset().top)
+             .scrollLeft(errorContainer.offset().left);
   }
 
   function hideUserMessages() {

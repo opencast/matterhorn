@@ -76,6 +76,13 @@ Opencast.WorkflowInspect = (function() {
     // Operations
     var ops = Opencast.RenderUtils.ensureArray(workflow.operations.operation);
     $.each(ops, function(index, op) {
+      // compute the duration (in ms) while we still have the timestamps
+      if(op.started && op.completed) {
+        op.duration = op.completed - op.started;
+      } else {
+        op.duration = 0;  
+      }
+      
       // replace time in milli to date strings
       $.each(op, function(ind, opItem) { 
     	  if ( typeof(opItem) == "number" && opItem > 1000000000000) {
@@ -149,7 +156,18 @@ Opencast.WorkflowInspect = (function() {
         mp.metadata = {};
         mp.metadata.catalog = [];
       }
-
+      
+      // Join tags to a comma seperated string
+      var joinTags = function(array) {
+    	  $.each(array, function(i, elem) {
+    		  var tags = Opencast.RenderUtils.ensureArray(elem.tags.tag);
+    		  elem.tags = tags.join(', ');
+    	  });
+      };
+      joinTags(mp.attachments);
+      joinTags(mp.media.track);
+      joinTags(mp.metadata.catalog);
+      
       // 'flatten' encoder and scantype properties
       try {
         $.each(mp.media.track, function(index, track) {
@@ -296,9 +314,7 @@ Opencast.WorkflowInspect = (function() {
     jQuery.each(data.workflow.operations, function(index, operationInstance) {
       var op = data.workflow.operations[index];
       if(op.state == 'SUCCEEDED') {
-        var ds = new Date (op.started);
-        var dc = new Date (op.completed);
-        var runtime = (dc.getTime() - ds.getTime()) / 1000;
+        var runtime = op.duration / 1000;
         if(runtime < 1) {
           return;
         }
@@ -314,7 +330,7 @@ Opencast.WorkflowInspect = (function() {
     	type: 'bar'
       },
   	  title: {
-        text: 'Processing times for ' + data.workflow.mediapackage.title
+        text: 'Processing times (>1s) for ' + data.workflow.mediapackage.title
       },
       xAxis: {
         categories: labels

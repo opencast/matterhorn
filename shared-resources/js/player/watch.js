@@ -465,13 +465,13 @@ Opencast.Watch = (function ()
         // Check for videoUrl and videoUrl2 URL Parameters
         var mediaUrlTmp = $.getURLParameter('videoUrl');
         mediaUrlOne = (mediaUrlTmp == null) ? mediaUrlOne : mediaUrlTmp;
-        if(mediaUrlTmp != null)
+        if(mediaUrlOne != null)
         {
             $.log('Set Video URL 1 manually');
         }
         mediaUrlTmp = $.getURLParameter('videoUrl2');
         mediaUrlTwo = (mediaUrlTmp == null) ? mediaUrlTwo : mediaUrlTmp;
-        if(mediaUrlTmp != null)
+        if(mediaUrlTwo != null)
         {
             $.log('Set Video URL 2 manually');
         }
@@ -496,6 +496,15 @@ Opencast.Watch = (function ()
             mediaResolutionTwo = tmpMediaResolution;
         }
 
+	var displayOneVideo = $.getURLParameter('displayOneVideo');
+        if ((displayOneVideo != null) && (displayOneVideo.toLowerCase() == 'true'))
+	{
+	    displayOneVideo = true;
+	} else
+	{
+	    displayOneVideo = false;
+	}
+	    
 	$.log("-----");
         $.log("Final Mediadata");
         $.log("Mediapackage ID: " + mediaPackageId);
@@ -552,9 +561,17 @@ Opencast.Watch = (function ()
             Opencast.Player.setMediaURL(coverUrlOne, coverUrlTwo, mediaUrlOne, mediaUrlTwo, mimetypeOne, mimetypeTwo, PLAYERSTYLE, slideLength);
             if (mediaUrlOne !== '' && mediaUrlTwo !== '')
             {
-                Opencast.Initialize.setMediaResolution(mediaResolutionOne, mediaResolutionTwo);
-                Opencast.Player.setVideoSizeList(SINGLEPLAYERWITHSLIDES);
-                Opencast.Player.videoSizeControlMultiOnlyLeftDisplay();
+		if(displayOneVideo)
+		{
+                    Opencast.Initialize.setMediaResolution(mediaResolutionOne, mediaResolutionTwo);
+		    Opencast.Player.setVideoSizeList(SINGLEPLAYERWITHSLIDES);
+		    Opencast.Player.videoSizeControlMultiOnlyLeftDisplay();
+		} else
+		{
+		    Opencast.Player.setVideoSizeList(SINGLEPLAYERWITHSLIDES);
+		    $('#oc_player_video-dropdown').append('<input id="oc_btn-centerDisplay" class="oc_btn-centerDisplay" type="image" src="../../img/misc/space.png" name="show_presenter_and_presentation_equal" alt="Show presenter and presentation equal" title="Show presenter and presentation equal"  onclick="Opencast.Player.videoSizeControlMultiDisplay();" onfocus="Opencast.Initialize.dropdownVideo_open();" onblur="Opencast.Initialize.dropdown_timer();" /><br/>');
+                    Opencast.Initialize.setMediaResolution(mediaResolutionOne, mediaResolutionTwo);
+		}
             }
             else if (mediaUrlOne !== '' && mediaUrlTwo === '')
             {
@@ -671,6 +688,13 @@ Opencast.Watch = (function ()
 
         // Opencast.ariaSpinbutton.initialize has to be called after #oc_video-player-controls is visible!
         Opencast.ariaSpinbutton.initialize('oc_volume-container', 'oc_volume-back', 'oc_volume-front', 8, 0, 100, true);
+
+	window.setTimeout(function(){
+	    $('#oc_btn-play-pause').click();
+	}, 100);
+	window.setTimeout(function(){
+	    $('#oc_btn-play-pause').click();
+	}, 500);
     }
 
     /**
@@ -820,21 +844,21 @@ Opencast.Watch = (function ()
         $('#oc_client_shortcuts').append("<span tabindex=\"0\">Control + Alt + C = Toggle between captions on or off.</span><br/>");
         $('#oc_client_shortcuts').append("<span tabindex=\"0\">Control + Alt + F = Forward the video.</span><br/>");
         $('#oc_client_shortcuts').append("<span tabindex=\"0\">Control + Alt + R = Rewind the video.</span><br/>");
-        $('#oc_client_shortcuts').append("<span tabindex=\"0\">Control + Alt + T = the current time for the screen reader</span><br/>");
-        $('#oc_client_shortcuts').append('<a href="javascript: " id="oc_btn-leave_shortcut" onclick="$(\'#oc_shortcut-button\').trigger(\'click\');" class="handcursor ui-helper-hidden-accessible" title="Leave shortcut dialog" role="button">Leave embed dialog</a>');
+        $('#oc_client_shortcuts').append("<span tabindex=\"0\">Control + Alt + T = Reads the current time aloud when using a screen reader</span><br/>");
         switch ($.client.os)
         {
         case "Windows":
-            $('#oc_client_shortcuts').append("Windows Control + = to zoom in the player<br/>");
-            $('#oc_client_shortcuts').append("Windows Control - = to minimize in the player<br/>");
+            $('#oc_client_shortcuts').append("<span tabindex=\"0\">Windows Control + = to zoom in the player</span><br/>");
+            $('#oc_client_shortcuts').append("<span tabindex=\"0\">Windows Control - = to minimize in the player</span><br/>");
             break;
         case "Mac":
-            $('#oc_client_shortcuts').append("cmd + = to zoom in the player<br/>");
-            $('#oc_client_shortcuts').append("cmd - = to minimize the player<br/>");
+            $('#oc_client_shortcuts').append("<span tabindex=\"0\">cmd + = Zoom into the player</span><br/>");
+            $('#oc_client_shortcuts').append("<span tabindex=\"0\">cmd - = Zoom out of the player</span><br/>");
             break;
         case "Linux":
             break;
         }
+		$('#oc_client_shortcuts').append('<a href="javascript: " id="oc_btn-leave_shortcut" onclick="$(\'#oc_shortcut-button\').trigger(\'click\');" class="handcursor" title="Leave shortcut dialog" role="button">Leave embed dialog</a>');
     }
 
     return {

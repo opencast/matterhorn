@@ -15,20 +15,21 @@
  */
 package org.opencastproject.workflow.handler;
 
+import org.apache.commons.lang.StringUtils;
+import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.MediaPackageReference;
+import org.opencastproject.search.api.SearchException;
 import org.opencastproject.search.api.SearchService;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workflow.api.WorkflowOperationResult.Action;
-
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+
+import static org.apache.commons.lang.StringUtils.isBlank;
 
 /**
  * Workflow operation for handling "publish" operations
@@ -147,6 +150,11 @@ public class PublishWorkflowOperationHandler extends AbstractWorkflowOperationHa
     return mp;
   }
 
+  /** Media package must meet these criteria in order to be published. */
+  private boolean isPublishable(MediaPackage mp) {
+    return !isBlank(mp.getTitle()) && mp.hasTracks();
+  }
+
   /**
    * {@inheritDoc}
    * 
@@ -166,16 +174,31 @@ public class PublishWorkflowOperationHandler extends AbstractWorkflowOperationHa
 
     try {
       MediaPackage mediaPackageForSearch = getMediaPackageForSearchIndex(mediaPackageFromWorkflow, tagSet);
-      if (mediaPackageForSearch == null) {
-        createResult(mediaPackageForSearch, Action.CONTINUE);
+      if (!isPublishable(mediaPackageForSearch)) {
+        throw new WorkflowOperationException("Media package does not meet criteria for publication");
       }
       logger.info("Publishing media package {} to search index", mediaPackageForSearch);
+      
       // adding media package to the search index
-      searchService.add(mediaPackageForSearch);
+      Job publishJob = null;
+      try {
+        publishJob = searchService.add(mediaPackageForSearch);
+        if (!waitForStatus(publishJob).isSuccess()) {
+          throw new WorkflowOperationException("Mediapackage " + mediaPackageForSearch.getIdentifier() + " could not be published");
+        }
+      } catch (SearchException e) {
+        throw new WorkflowOperationException("Error publishing media package", e);
+      } catch (MediaPackageException e) {
+        throw new WorkflowOperationException("Error parsing media package", e);
+      }
+
       logger.debug("Publish operation complete");
       return createResult(mediaPackageFromWorkflow, Action.CONTINUE);
     } catch (Throwable t) {
-      throw new WorkflowOperationException(t);
+      if (t instanceof WorkflowOperationException)
+        throw (WorkflowOperationException) t;
+      else
+        throw new WorkflowOperationException(t);
     }
   }
 

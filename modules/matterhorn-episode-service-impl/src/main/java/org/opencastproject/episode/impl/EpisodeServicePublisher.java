@@ -16,13 +16,14 @@
 package org.opencastproject.episode.impl;
 
 import static org.opencastproject.util.data.Collections.cons;
-import static org.opencastproject.util.data.Collections.list;
 import static org.opencastproject.util.data.Monadics.mlist;
-import static org.opencastproject.util.data.Tuple.tuple;
+import static org.opencastproject.util.data.Collections.list;
 import static org.opencastproject.util.data.functions.Booleans.ne;
 
 import org.opencastproject.episode.api.EpisodeService;
+import org.opencastproject.episode.api.HttpMediaPackageElementProvider;
 import org.opencastproject.episode.impl.elementstore.ElementStore;
+import org.opencastproject.episode.impl.jmx.ElementStoreBean;
 import org.opencastproject.episode.impl.persistence.EpisodeServiceDatabase;
 import org.opencastproject.episode.impl.solr.SolrIndexManager;
 import org.opencastproject.episode.impl.solr.SolrRequester;
@@ -40,6 +41,7 @@ import org.opencastproject.util.data.Effect0;
 import org.opencastproject.util.data.Function0;
 import org.opencastproject.util.data.Tuple;
 import org.opencastproject.util.data.VCell;
+import org.opencastproject.util.jmx.JmxUtil;
 import org.opencastproject.util.osgi.SimpleServicePublisher;
 import org.opencastproject.workflow.api.WorkflowService;
 import org.opencastproject.workspace.api.Workspace;
@@ -65,6 +67,10 @@ import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.List;
 
+import javax.management.ObjectInstance;
+
+import static org.opencastproject.util.data.Tuple.tuple;
+
 public class EpisodeServicePublisher extends SimpleServicePublisher {
 
   /** Log facility */
@@ -82,6 +88,15 @@ public class EpisodeServicePublisher extends SimpleServicePublisher {
   /** The delete operation */
   public static final String OPERATION_DELETE = "delete";
 
+  /** File system element store JMX type */
+  private static final String JMX_ELEMENT_STORE_TYPE = "ElementStore";
+
+  /** The JMX file system element store bean */
+  private ElementStoreBean elementStoreBean;
+
+  /** The JMX bean object instance */
+  private ObjectInstance registeredMXBean;
+
   private VCell<List<StaticMetadataService>> metadataSvcs = VCell
           .<List<StaticMetadataService>> cell(new ArrayList<StaticMetadataService>());
   private Mpeg7CatalogService mpeg7CatalogService;
@@ -95,6 +110,16 @@ public class EpisodeServicePublisher extends SimpleServicePublisher {
   private EpisodeServiceDatabase persistence;
   private ElementStore elementStore;
   private MediaInspectionService mediaInspectionSvc;
+  private EpisodeServiceImpl episodeService;
+
+  public synchronized void setHttpMediaPackageElementProvider(HttpMediaPackageElementProvider httpMediaPackageElementProvider) {
+    // Populate the search index if it is empty
+    // bad approach but episode service and its rest endpoint are in a cyclic dependency
+    episodeService.populateIndex(httpMediaPackageElementProvider.getUriRewriter());
+  }
+
+  public void unsetHttpMediaPackageElementProvider(HttpMediaPackageElementProvider ingore) {
+  }
 
   public void setStaticMetadataService(StaticMetadataService metadataSvc) {
     metadataSvcs.set(cons(metadataSvc, metadataSvcs.get()));
@@ -193,23 +218,24 @@ public class EpisodeServicePublisher extends SimpleServicePublisher {
                                                             seriesService,
                                                             mpeg7CatalogService,
                                                             securityService);
-    final EpisodeServiceImpl episodeService = new EpisodeServiceImpl(solrRequester,
-                                                                     solrIndex,
-                                                                     securityService,
-                                                                     authorizationService,
-                                                                     orgDirectory,
-                                                                     serviceRegistry,
-                                                                     workflowService,
-                                                                     mediaInspectionSvc,
-                                                                     persistence,
-                                                                     elementStore);
-    // Populate the search index if it is empty
-    episodeService.populateIndex();
+    episodeService = new EpisodeServiceImpl(solrRequester,
+                                            solrIndex,
+                                            securityService,
+                                            authorizationService,
+                                            orgDirectory,
+                                            serviceRegistry,
+                                            workflowService,
+                                            mediaInspectionSvc,
+                                            persistence,
+                                            elementStore);
+    elementStoreBean = new ElementStoreBean(elementStore);
+    registeredMXBean = JmxUtil.registerMXBean(elementStoreBean, JMX_ELEMENT_STORE_TYPE);
     return tuple(list(registerService(cc, episodeService, EpisodeService.class, "Episode service")),
             (Effect0) new Effect0() {
               @Override
               protected void run() {
                 SolrServerFactory.shutdown(solrServer);
+                JmxUtil.unregisterMXBean(registeredMXBean);
               }
             });
   }

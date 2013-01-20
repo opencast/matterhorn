@@ -43,22 +43,8 @@
       <div class="form-box layout-centered ui-widget">
         <div class="form-box-content ui-widget-content ui-corner-all">
           <form action="">
+            <div id="common-data"></div>
             <ul class="oc-ui-form-list">
-              <li>
-                <label class="scheduler-label" for="titleField" id="titleLabel"><span style="color: red;">* </span><span id="i18n_title_label">Title</span>:</label>
-
-                <input type="text" id="titleField" name="title" class="oc-ui-form-field requiredField dc-metadata-field" maxlength="255" />
-              </li>
-              <li>
-                <label class="scheduler-label" for="creator" id="creatorLabel"><span id="i18n_presenter_label">Presenter</span>:</label>
-                <input type="text" id="creator" name="creator" class="oc-ui-form-field dc-metadata-field"  maxlength="255"/>
-              </li>
-              <li id="seriesContainer">
-                <label class="scheduler-label" for="series" id="seriesLabel"><span id="i18n_series_label">Course/Series</span>:</label>
-
-                <input type="text" class="oc-ui-form-field" id="series" name="series" maxlength="255">
-                <input type="hidden" class="oc-ui-form-field dc-metadata-field" id="ispartof" name="ispartof" value="">
-              </li>
               <li>
                 <label class="scheduler-label" id="recordingDateLabel"><span class="scheduler-required-text">* </span><span id="i18n_date_label">Recording Date</span>:</label>
                 <input type="text" size="10" id="recordDate" name="recordDate" class="dc-metadata-field" />
@@ -183,31 +169,7 @@
           <div class="clear"></div>
 
         </div>
-        <div class="form-box-content ui-widget-content ui-corner-bottom unfoldable-content">
-          <form action="">
-            <ul class="oc-ui-form-list">
-              <li class="additionalMeta">
-                <label class="scheduler-label" for="contributor" id="contributorLabel"><span id="i18n_dept_label">Contributor</span>:</label>
-                <input type="text" class="oc-ui-form-field dc-metadata-field" name="contributor" id="contributor" maxlength="255" />
-              </li>
-
-              <li class="additionalMeta">
-                <label class="scheduler-label" for="subject" id="subjectLabel"><span id="i18n_sub_label">Subject</span>:</label>
-                <input type="text" class="oc-ui-form-field dc-metadata-field" name="subject" id="subject" maxlength="255" />
-              </li>
-              <li class="additionalMeta">
-                <label class="scheduler-label" for="language" id="languageLabel"><span id="i18n_lang_label">Language</span>:</label>
-                <input type="text" class="oc-ui-form-field dc-metadata-field" name="language" id="language" maxlength="255" />
-
-              </li>
-              <li class="additionalMeta">
-                <label class="scheduler-label" for="description" id="descriptionLabel"><span id="i18n_desc_label">Description</span>:</label>
-                <textarea name="description" id="description" class="oc-ui-form-field dc-metadata-field" rows="5" cols="10"></textarea>
-              </li>
-            </ul>
-          </form>
-
-        </div>
+        <div id="additional-description" class="form-box-content ui-widget-content ui-corner-bottom unfoldable-content"></div>
       </div>
 
       <!-- file upload -->
@@ -231,7 +193,7 @@
                 <label class="scheduler-label"><span id="i18n_file_location">File Location</span>:</label>
                 <input type="radio" class="file-source-select" name="fileSourceSingle" id="fileSourceSingleA" value="local" checked="true">
                 <label for="fileSourceSingleA" class="lbl_radio">Local hard drive</label>
-                &nbsp;&nbsp;
+                &#160;&#160;
 
                 <input type="radio" class="file-source-select" name="fileSourceSingle" id="fileSourceSingleB" value="inbox">
                 <label for="fileSourceSingleB" class="lbl_radio">Designated inbox on server</label>
@@ -239,7 +201,7 @@
               </li>
               <!-- field: Media File -->
               <li class="ui-helper-clearfix">
-                <label class="scheduler-label"><span class="color-red">* </span><span id="i18n_upload_file">Media File</span>:</label>
+                <label id="trackLabel" class="scheduler-label"><span class="color-red">* </span><span id="i18n_upload_file">Media File</span>:</label>
                 <iframe class="uploadForm-container" frameborder="0" scrolling="no" src="upload.html?flavor=presenter/source" class="uploadForm-container"></iframe>
                 <input type="hidden" class="track-flavor" value="presenter/source"/>
               </li>
@@ -253,11 +215,11 @@
               </li>
 
               <li class="ui-helper-clearfix">
-                <label class="scheduler-label">&nbsp;</label>
+                <label class="scheduler-label">&#160;</label>
                 <span style="font-size:80%;color:gray;">(Analysis and processing will occur to enable slide thumbnail navigation and possibly</span>
               </li>
               <li class="ui-helper-clearfix">
-                <label class="scheduler-label">&nbsp;</label>
+                <label class="scheduler-label">&#160;</label>
                 <span style="font-size:80%;color:gray;">in-video text search)</span>
               </li>
 
@@ -279,7 +241,7 @@
                   <label class="scheduler-label"><span class="i18n_file_location">File Location</span>:</label>
                   <input type="radio" class="file-source-select"  name="fileSourcePresentation" id="fileSourcePresentationA" value="local" checked="true">
                   <label for="fileSourcePresentationA" class="lbl_radio">Local hard drive</label>
-                  &nbsp;&nbsp;
+                  &#160;&#160;
 
                   <input type="radio" class="file-source-select" name="fileSourcePresentation" id="fileSourcePresentationB" value="inbox">
                   <label for="fileSourcePresentationB" class="lbl_radio">Designated inbox on server</label>
@@ -305,7 +267,7 @@
                   <label class="scheduler-label"><span class="i18n_file_location">File Location</span>:</label>
                   <input type="radio" class="file-source-select" name="fileSourcePresenter" id="fileSourcePresenterA" value="local" checked="true">
                   <label for="fileSourcePresenterA" class="lbl_radio">Local hard drive</label>
-                  &nbsp;&nbsp;
+                  &#160;&#160;
                   <input type="radio" class="file-source-select" name="fileSourcePresenter" id="fileSourcePresenterB" value="inbox">
 
                   <label for="fileSourcePresenterB" class="lbl_radio">Designated inbox on server</label>
@@ -331,7 +293,7 @@
                   <label class="scheduler-label"><span class="i18n_file_location">File Location</span>:</label>
                   <input type="radio" class="file-source-select" name="fileSourceAudio" id="fileSourceAudioA" value="local" checked="true">
                   <label for="fileSourceAudioA" class="lbl_radio">Local hard drive</label>
-                  &nbsp;&nbsp;
+                  &#160;&#160;
                   <input type="radio" class="file-source-select" name="fileSourceAudio" id="fileSourceAudioB" value="inbox">
                   <label for="fileSourceAudioB" class="lbl_radio">Designated inbox on server</label>
                 </li>
@@ -357,7 +319,7 @@
                   <label class="scheduler-label"><span class="i18n_file_location">File Location</span>:</label>
                   <input type="radio" class="file-source-select" name="fileSourceCaption" id="fileSourceAudioA" value="local" checked="true">
                   <label for="fileSourceCaptionA" class="lbl_radio">Local hard drive</label>
-                  &nbsp;&nbsp;
+                  &#160;&#160;
                   <input type="radio" class="file-source-select" name="fileSourceCaption" id="fileSourceAudioB" value="inbox">
                   <label for="fileSourceCaptionB" class="lbl_radio">Designated inbox on server</label>
                 </li>
@@ -378,23 +340,7 @@
       </div>
 
       <!-- Processing Instructions -->
-      <div class="form-box layout-centered container ui-widget">
-        <div class="form-box-head ui-widget-header ui-corner-top"><b id="i18n_process_title">Processing</b></div>
-
-        <div class="form-box-content ui-widget-content ui-corner-bottom">
-          <ul class="oc-ui-form-list">
-            <li class="ui-helper-clearfix">
-              <label class="scheduler-label"><span style="color: red;">* </span><span id="i18n_process_instr">Processing instructions</span>:</label>
-              <select id="workflowSelector" id="workflowSelector" class="workflowSelector"></select>
-            </li>
-            <li class="workflowConfigContainer" id="workflowConfigContainer">
-
-              <div class="workflowConfigPanel"></div>
-            </li>
-          </ul>
-        </div>
-      </div>
-      
+      <div id="processingRecording"></div>      
 
       <!-- submit/cancel controls -->
       <div class="form-box layout-centered ui-widget">
@@ -404,14 +350,14 @@
             <ul class="oc-ui-form-list">
               <!-- submit / cancal button -->
               <li class="ui-helper-clearfix">
-                <label class="scheduler-label">&nbsp;</label>
+                <label class="scheduler-label">&#160;</label>
                 <button id="submitButton" type="button" class="mouseover-pointer control-button">Upload</button>
                 <a id="cancelButton" title="Cancel" class="secondaryButton">Cancel</a>
               </li>
 
               <!-- * = required -->
               <li class="ui-helper-clearfix">
-                <label class="scheduler-label">&nbsp;</label>
+                <label class="scheduler-label">&#160;</label>
                 <span class="color-red">* </span><span id="i18n_required">Required</span>
               </li>
             </ul>
@@ -425,17 +371,17 @@
 </div>
 
 <div id="gray-out">
-  &nbsp;
+  &#160;
 </div>
 
 <div id="progressStage" class="ui-corner-all progress-stage" style="display:none;">
   <div class="progress-label-top upload-label">
-    &nbsp;
+    &#160;
   </div>
   <div class="progressbar ui-corner-all ui-helper-clearfix">
-    <div class="progressbar-indicator ui-state-default ui-corner-all" style="width:0%;">&nbsp;</div>
+    <div class="progressbar-indicator ui-state-default ui-corner-all" style="width:0%;">&#160;</div>
     <div class="progressbar-label"><span id="i18n_progress"></span></div>
   </div>
-  <div class="progress-label-left upload-label">&nbsp;</div>
-  <div class="progress-label-right upload-label">&nbsp;</div>
+  <div class="progress-label-left upload-label">&#160;</div>
+  <div class="progress-label-right upload-label">&#160;</div>
 </div>

@@ -15,8 +15,6 @@
  */
 package org.opencastproject.authorization.xacml;
 
-import static org.opencastproject.security.api.SecurityConstants.DEFAULT_ORGANIZATION_ANONYMOUS;
-
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.security.api.AccessControlEntry;
@@ -26,6 +24,7 @@ import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.User;
 import org.opencastproject.util.NotFoundException;
+import org.opencastproject.util.data.Option;
 import org.opencastproject.workspace.api.Workspace;
 
 import de.schlichtherle.io.FileOutputStream;
@@ -118,8 +117,8 @@ public class XacmlSecurityTest {
     acl.add(new AccessControlEntry("student", "read", true));
     acl.add(new AccessControlEntry("student", "comment", true));
 
-    acl.add(new AccessControlEntry(DEFAULT_ORGANIZATION_ANONYMOUS, "read", true));
-    acl.add(new AccessControlEntry(DEFAULT_ORGANIZATION_ANONYMOUS, "comment", false));
+    acl.add(new AccessControlEntry(DefaultOrganization.DEFAULT_ORGANIZATION_ANONYMOUS, "read", true));
+    acl.add(new AccessControlEntry(DefaultOrganization.DEFAULT_ORGANIZATION_ANONYMOUS, "comment", false));
 
     String xacml = XACMLUtils.getXacml(mediapackage, accessControlList);
     logger.debug("XACML contents: {}", xacml);
@@ -145,7 +144,7 @@ public class XacmlSecurityTest {
     Assert.assertTrue(authzService.hasPermission(mediapackage, "comment"));
 
     currentRoles.clear();
-    currentRoles.add(DEFAULT_ORGANIZATION_ANONYMOUS);
+    currentRoles.add(DefaultOrganization.DEFAULT_ORGANIZATION_ANONYMOUS);
     Assert.assertFalse(authzService.hasPermission(mediapackage, "delete"));
     Assert.assertTrue(authzService.hasPermission(mediapackage, "read"));
     Assert.assertFalse(authzService.hasPermission(mediapackage, "comment"));
@@ -310,15 +309,18 @@ public class XacmlSecurityTest {
     }
 
     @Override
-    public long getTotalSpace() {
-      // TODO Auto-generated method stub
-      return 0;
+    public Option<Long> getTotalSpace() {
+      return Option.<Long> none();
     }
 
     @Override
-    public long getUsableSpace() {
-      // TODO Auto-generated method stub
-      return 0;
+    public Option<Long> getUsableSpace() {
+      return Option.<Long> none();
+    }
+
+    @Override
+    public Option<Long> getUsedSpace() {
+      return Option.<Long> none();
     }
 
   }

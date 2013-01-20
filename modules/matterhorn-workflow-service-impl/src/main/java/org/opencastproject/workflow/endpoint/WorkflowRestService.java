@@ -19,6 +19,7 @@ import static javax.servlet.http.HttpServletResponse.SC_CREATED;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static javax.servlet.http.HttpServletResponse.SC_PRECONDITION_FAILED;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.INTEGER;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.TEXT;
@@ -44,11 +45,11 @@ import org.opencastproject.workflow.api.Configurable;
 import org.opencastproject.workflow.api.WorkflowDatabaseException;
 import org.opencastproject.workflow.api.WorkflowDefinition;
 import org.opencastproject.workflow.api.WorkflowDefinitionImpl;
+import org.opencastproject.workflow.api.WorkflowDefinitionSet;
 import org.opencastproject.workflow.api.WorkflowException;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
 import org.opencastproject.workflow.api.WorkflowInstanceImpl;
-import org.opencastproject.workflow.api.WorkflowOperationDefinition;
 import org.opencastproject.workflow.api.WorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowParser;
@@ -73,7 +74,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +110,6 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
   /** The default number of results returned */
   private static final int DEFAULT_LIMIT = 20;
-  /** The maximum number of results returned */
-  private static final int MAX_LIMIT = 100;
   /** The constant used to negate a querystring parameter. This is only supported on some parameters. */
   public static final String NEGATE_PREFIX = "-";
   /** The constant used to switch the direction of the sorting querystring parameter. */
@@ -258,28 +256,28 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   }
 
   @GET
-  @Path("definitions.{output:.*}")
-  @RestQuery(name = "definitions", description = "List all available workflow definitions", returnDescription = "Returns the workflow definitions", pathParameters = { @RestParameter(name = "output", isRequired = true, description = "The output format (XML or JSON)", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "The workflow definitions.") })
-  @SuppressWarnings("unchecked")
-  public Response getWorkflowDefinitions(@PathParam("output") String output) throws Exception {
+  @Path("definitions.json")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RestQuery(name = "definitions", description = "List all available workflow definitions as JSON", returnDescription = "Returns the workflow definitions as JSON", reponses = { @RestResponse(responseCode = SC_OK, description = "The workflow definitions.") })
+  public WorkflowDefinitionSet getWorkflowDefinitionsAsJson() throws Exception {
+    return getWorkflowDefinitionsAsXml();
+  }
+
+  @GET
+  @Path("definitions.xml")
+  @Produces(MediaType.APPLICATION_XML)
+  @RestQuery(name = "definitions", description = "List all available workflow definitions as XML", returnDescription = "Returns the workflow definitions as XML", reponses = { @RestResponse(responseCode = SC_OK, description = "The workflow definitions.") })
+  public WorkflowDefinitionSet getWorkflowDefinitionsAsXml() throws Exception {
     List<WorkflowDefinition> list = service.listAvailableWorkflowDefinitions();
-    if ("json".equals(output)) {
-      List<JSONObject> jsonDefs = new ArrayList<JSONObject>();
-      for (WorkflowDefinition definition : list) {
-        jsonDefs.add(getWorkflowDefinitionAsJson(definition));
-      }
-      JSONObject json = new JSONObject();
-      json.put("workflow_definitions", jsonDefs);
-      return Response.ok(json.toJSONString()).header("Content-Type", MediaType.APPLICATION_JSON).build();
-    } else {
-      return Response.ok(WorkflowParser.toXml(list)).header("Content-Type", MediaType.TEXT_XML).build();
-    }
+    return new WorkflowDefinitionSet(list);
   }
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   @Path("definition/{id}.json")
-  @RestQuery(name = "definitionasjson", description = "Returns a single workflow definition", returnDescription = "Returns a JSON representation of the workflow definition with the specified identifier", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "The workflow definition.") })
+  @RestQuery(name = "definitionasjson", description = "Returns a single workflow definition", returnDescription = "Returns a JSON representation of the workflow definition with the specified identifier", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier", type = STRING) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "The workflow definition."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "Workflow definition not found.") })
   public Response getWorkflowDefinitionAsJson(@PathParam("id") String workflowDefinitionId) throws NotFoundException {
     WorkflowDefinition def = null;
     try {
@@ -293,7 +291,9 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
   @GET
   @Produces(MediaType.TEXT_XML)
   @Path("definition/{id}.xml")
-  @RestQuery(name = "definitionasxml", description = "Returns a single workflow definition", returnDescription = "Returns an XML representation of the workflow definition with the specified identifier", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier", type = STRING) }, reponses = { @RestResponse(responseCode = SC_OK, description = "The workflow definition.") })
+  @RestQuery(name = "definitionasxml", description = "Returns a single workflow definition", returnDescription = "Returns an XML representation of the workflow definition with the specified identifier", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier", type = STRING) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "The workflow definition."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "Workflow definition not found.") })
   public Response getWorkflowDefinitionAsXml(@PathParam("id") String workflowDefinitionId) throws NotFoundException {
     return getWorkflowDefinitionAsJson(workflowDefinitionId);
   }
@@ -317,28 +317,6 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
     } catch (WorkflowDatabaseException e) {
       throw new WebApplicationException(Status.INTERNAL_SERVER_ERROR);
     }
-  }
-
-  /**
-   * @param definition
-   */
-  @SuppressWarnings("unchecked")
-  protected JSONObject getWorkflowDefinitionAsJson(WorkflowDefinition definition) {
-    JSONObject json = new JSONObject();
-    json.put("id", definition.getId());
-    json.put("title", definition.getTitle());
-    json.put("description", definition.getDescription());
-    List<JSONObject> opList = new ArrayList<JSONObject>();
-    for (WorkflowOperationDefinition operationDefinition : definition.getOperations()) {
-      JSONObject op = new JSONObject();
-      op.put("name", operationDefinition.getId());
-      op.put("description", operationDefinition.getDescription());
-      op.put("exception-handler-workflow", operationDefinition.getExceptionHandlingWorkflow());
-      op.put("fail-on-error", operationDefinition.isFailWorkflowOnException());
-      opList.add(op);
-    }
-    json.put("operations", opList);
-    return json;
   }
 
   @GET
@@ -383,12 +361,9 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @QueryParam("startPage") int startPage, @QueryParam("count") int count, @QueryParam("compact") boolean compact)
           throws Exception {
     // CHECKSTYLE:ON
-    if (count < 1 || count > MAX_LIMIT) {
+    if (count < 1)
       count = DEFAULT_LIMIT;
-    }
-    if (startPage < 0) {
-      startPage = 0;
-    }
+
     WorkflowQuery q = new WorkflowQuery();
     q.withCount(count);
     q.withStartPage(startPage);
@@ -561,36 +536,35 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
           @RestParameter(name = "definition", isRequired = true, description = "The XML representation of a workflow definition", type = TEXT, defaultValue = "${this.sampleWorkflowDefinition}", jaxbClass = WorkflowDefinitionImpl.class),
           @RestParameter(name = "mediapackage", isRequired = true, description = "The XML representation of a mediapackage", type = TEXT, defaultValue = "${this.sampleMediaPackage}", jaxbClass = MediaPackageImpl.class),
           @RestParameter(name = "parent", isRequired = false, description = "An optional parent workflow instance identifier", type = STRING),
-          @RestParameter(name = "properties", isRequired = false, description = "An optional set of key=value\\n properties", type = TEXT) }, reponses = { @RestResponse(responseCode = SC_OK, description = "An XML representation of the new workflow instance.") })
+          @RestParameter(name = "properties", isRequired = false, description = "An optional set of key=value\\n properties", type = TEXT) }, reponses = {
+          @RestResponse(responseCode = SC_OK, description = "An XML representation of the new workflow instance."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "If the parent workflow does not exist") })
   public WorkflowInstanceImpl start(@FormParam("definition") String workflowDefinitionXml,
           @FormParam("mediapackage") MediaPackageImpl mp, @FormParam("parent") String parentWorkflowId,
           @FormParam("properties") LocalHashMap localMap) {
-    if (mp == null) {
+    if (mp == null || StringUtils.isBlank(workflowDefinitionXml))
       throw new WebApplicationException(Status.BAD_REQUEST);
-    }
-    if (StringUtils.isBlank(workflowDefinitionXml)) {
-      throw new WebApplicationException(Status.BAD_REQUEST);
-    }
+
     WorkflowDefinition workflowDefinition;
     try {
       workflowDefinition = WorkflowParser.parseWorkflowDefinition(workflowDefinitionXml);
     } catch (WorkflowParsingException e) {
-      throw new WebApplicationException(e);
+      throw new WebApplicationException(e, Status.BAD_REQUEST);
     }
-    Map<String, String> properties = null;
-    if (localMap != null) {
+
+    Map<String, String> properties = new HashMap<String, String>();
+    if (localMap != null)
       properties = localMap.getMap();
-    } else {
-      properties = new HashMap<String, String>();
-    }
+
     Long parentIdAsLong = null;
     if (StringUtils.isNotEmpty(parentWorkflowId)) {
       try {
         parentIdAsLong = Long.parseLong(parentWorkflowId);
       } catch (NumberFormatException e) {
-        throw new WebApplicationException(e);
+        throw new WebApplicationException(e, Status.BAD_REQUEST);
       }
     }
+
     try {
       return (WorkflowInstanceImpl) service.start(workflowDefinition, mp, parentIdAsLong, properties);
     } catch (WorkflowException e) {
@@ -732,11 +706,13 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
   @PUT
   @Path("/definition")
-  @RestQuery(name = "updatedefinition", description = "Updates a workflow definition.", returnDescription = "A location headers containing the URL to the updated workflow definition.", restParameters = { @RestParameter(name = "workflowDefinition", isRequired = true, description = "The XML representation of the updated workflow definition.", type = TEXT) }, reponses = { @RestResponse(responseCode = SC_CREATED, description = "Workflow definition updated.") })
+  @RestQuery(name = "updatedefinition", description = "Updates a workflow definition.", returnDescription = "A location headers containing the URL to the updated workflow definition.", restParameters = { @RestParameter(name = "workflowDefinition", isRequired = true, description = "The XML representation of the updated workflow definition.", type = TEXT) }, reponses = {
+          @RestResponse(responseCode = SC_CREATED, description = "Workflow definition updated."),
+          @RestResponse(responseCode = SC_PRECONDITION_FAILED, description = "Workflow definition already registered.") })
   public Response registerWorkflowDefinition(@FormParam("workflowDefinition") WorkflowDefinitionImpl workflowDefinition) {
-    if (workflowDefinition == null) {
+    if (workflowDefinition == null)
       return Response.status(Status.BAD_REQUEST).build();
-    }
+
     try {
       service.getWorkflowDefinitionById(workflowDefinition.getId());
       return Response.status(Status.PRECONDITION_FAILED).build(); // the workflow definition should be unregistered
@@ -759,7 +735,9 @@ public class WorkflowRestService extends AbstractJobProducerEndpoint {
 
   @DELETE
   @Path("/definition/{id}")
-  @RestQuery(name = "deletedefinition", description = "Deletes a workflow definition.", returnDescription = "No content.", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier.", type = STRING) }, reponses = { @RestResponse(responseCode = SC_NO_CONTENT, description = "Workflow definition deleted.") })
+  @RestQuery(name = "deletedefinition", description = "Deletes a workflow definition.", returnDescription = "No content.", pathParameters = { @RestParameter(name = "id", isRequired = true, description = "The workflow definition identifier.", type = STRING) }, reponses = {
+          @RestResponse(responseCode = SC_NO_CONTENT, description = "Workflow definition deleted."),
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "Workflow definition not found.") })
   public Response unregisterWorkflowDefinition(@PathParam("id") String workflowDefinitionId) throws NotFoundException {
     try {
       service.unregisterWorkflowDefinition(workflowDefinitionId);

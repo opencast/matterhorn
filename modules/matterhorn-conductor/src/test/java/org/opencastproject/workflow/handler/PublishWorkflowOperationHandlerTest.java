@@ -15,19 +15,21 @@
  */
 package org.opencastproject.workflow.handler;
 
+import org.easymock.EasyMock;
+import org.junit.Before;
+import org.junit.Test;
+import org.opencastproject.job.api.JaxbJob;
+import org.opencastproject.job.api.Job;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilder;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.search.api.SearchService;
+import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
 import org.opencastproject.workflow.api.WorkflowInstanceImpl;
 import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationInstance.OperationState;
 import org.opencastproject.workflow.api.WorkflowOperationInstanceImpl;
-
-import org.easymock.EasyMock;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -50,7 +52,9 @@ public class PublishWorkflowOperationHandlerTest {
     URI uriMP = InspectWorkflowOperationHandler.class.getResource("/publish_mediapackage.xml").toURI();
     URI uriMPSearch = InspectWorkflowOperationHandler.class.getResource("/publish_search_mediapackage.xml").toURI();
     mp = builder.loadFromXml(uriMP.toURL().openStream());
+    mp.setTitle("Land and Vegetation: Key players on the Climate Scene");
     mpSearch = builder.loadFromXml(uriMPSearch.toURL().openStream());
+    mpSearch.setTitle("publish_search_mediapackage");
 
     // set up service
     operationHandler = new PublishWorkflowOperationHandler();
@@ -74,10 +78,20 @@ public class PublishWorkflowOperationHandlerTest {
     workflowInstance.setOperations(operationsList);
 
     // mock Search service, ensuring the correct media package is distributed to search service
+    JaxbJob job = new JaxbJob(Long.valueOf(1));
+    job.setStatus(Job.Status.FINISHED);
+    
+    ServiceRegistry serviceRegistry = EasyMock.createMock(ServiceRegistry.class);
+    EasyMock.expect(serviceRegistry.getJob(1)).andReturn(job);
+    EasyMock.replay(serviceRegistry);
+
     SearchService searchService = EasyMock.createMock(SearchService.class);
-    searchService.add(eqMediaPackage(mpSearch));
+    EasyMock.expect(searchService.add((MediaPackage)EasyMock.anyObject())).andReturn(job).anyTimes();
     EasyMock.replay(searchService);
+
+    searchService.add(eqMediaPackage(mpSearch));
     operationHandler.setSearchService(searchService);
+    operationHandler.setServiceRegistry(serviceRegistry);
 
     // Run the media package through the operation handler, ensuring that the flavors are retained
     operationHandler.start(workflowInstance, null);

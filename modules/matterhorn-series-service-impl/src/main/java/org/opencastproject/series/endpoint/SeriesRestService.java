@@ -17,9 +17,11 @@ package org.opencastproject.series.endpoint;
 
 import static javax.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static javax.servlet.http.HttpServletResponse.SC_CREATED;
+import static javax.servlet.http.HttpServletResponse.SC_FORBIDDEN;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_NO_CONTENT;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
+import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
 import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
 import static javax.ws.rs.core.Response.Status.CREATED;
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
@@ -48,7 +50,6 @@ import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
 import org.opencastproject.util.doc.rest.RestService;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
@@ -56,8 +57,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.text.ParseException;
 
@@ -78,15 +77,13 @@ import javax.ws.rs.core.Response;
  * 
  */
 @Path("/")
-@RestService(name = "seriesservice", title = "Series Service",
-  abstractText = "This service creates, edits and retrieves and helps managing series.", 
-  notes = {
+@RestService(name = "seriesservice", title = "Series Service", abstractText = "This service creates, edits and retrieves and helps managing series.", notes = {
         "All paths above are relative to the REST endpoint base (something like http://your.server/files)",
         "If the service is down or not working it will return a status 503, this means the the underlying service is "
-        + "not working and is either restarting or has failed",
+                + "not working and is either restarting or has failed",
         "A status code 500 means a general failure has occurred which is not recoverable and was not anticipated. In "
-        + "other words, there is a bug! You should file an error report with your server logs from the time when the "
-        + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
+                + "other words, there is a bug! You should file an error report with your server logs from the time when the "
+                + "error occurred: <a href=\"https://opencast.jira.com\">Opencast Issue Tracker</a>" })
 public class SeriesRestService {
 
   /** Logging utility */
@@ -106,9 +103,6 @@ public class SeriesRestService {
 
   /** Default number of items on page */
   private static final int DEFAULT_LIMIT = 20;
-
-  /** Maximum number of items on page */
-  private static final int MAX_LIMIT = 100;
 
   /** Suffix to mark descending ordering of results */
   public static final String DESCENDING_SUFFIX = "_DESC";
@@ -165,15 +159,20 @@ public class SeriesRestService {
   @Path("{seriesID:.+}.xml")
   @RestQuery(name = "getAsXml", description = "Returns the series with the given identifier", returnDescription = "Returns the series dublin core XML document", pathParameters = { @RestParameter(name = "seriesID", isRequired = true, description = "The series identifier", type = STRING) }, reponses = {
           @RestResponse(responseCode = SC_OK, description = "The series dublin core."),
-          @RestResponse(responseCode = SC_NOT_FOUND, description = "No series with this identifier was found.") })
+          @RestResponse(responseCode = SC_NOT_FOUND, description = "No series with this identifier was found."),
+          @RestResponse(responseCode = SC_FORBIDDEN, description = "You do not have permission to view this series."),
+          @RestResponse(responseCode = SC_UNAUTHORIZED, description = "You do not have permission to view this series. Maybe you need to authenticate.") })
   public Response getSeriesXml(@PathParam("seriesID") String seriesID) {
     logger.debug("Series Lookup: {}", seriesID);
     try {
       DublinCoreCatalog dc = this.seriesService.getSeries(seriesID);
-      String dcXML = serializeDublinCore(dc);
-      return Response.ok(dcXML).build();
+      return Response.ok(dc.toXmlString()).build();
     } catch (NotFoundException e) {
       return Response.status(Response.Status.NOT_FOUND).build();
+    } catch (UnauthorizedException e) {
+      logger.warn("permission exception retrieving series");
+      // TODO this should be an 403 (Forbidden) if the user is logged in
+      throw new WebApplicationException(Response.Status.UNAUTHORIZED);
     } catch (Exception e) {
       logger.error("Could not retrieve series: {}", e.getMessage());
       throw new WebApplicationException(Response.Status.INTERNAL_SERVER_ERROR);
@@ -239,24 +238,6 @@ public class SeriesRestService {
     throw new WebApplicationException(INTERNAL_SERVER_ERROR);
   }
 
-  /**
-   * Serializes Dublin Core and returns is as string.
-   * 
-   * @param dc
-   *          {@link DublinCoreCatalog} to be serialized.
-   * @return String representation of Dublin core
-   * @throws IOException
-   *           if serialization fails
-   */
-  private String serializeDublinCore(DublinCoreCatalog dc) throws IOException {
-    InputStream in = this.dcService.serialize(dc);
-
-    StringWriter writer = new StringWriter();
-    IOUtils.copy(in, writer, "UTF-8");
-
-    return writer.toString();
-  }
-
   @POST
   @Path("/")
   @RestQuery(name = "updateSeries", description = "Updates a series", returnDescription = "No content.", restParameters = {
@@ -268,13 +249,6 @@ public class SeriesRestService {
   public Response addOrUpdateSeries(@FormParam("series") String series, @FormParam("acl") String accessControl) {
     if (series == null) {
       logger.warn("series that should be added is null");
-      return Response.status(BAD_REQUEST).build();
-    }
-    AccessControlList acl;
-    try {
-      acl = AccessControlParser.parseAcl(accessControl);
-    } catch (Exception e) {
-      logger.warn("Could not parse ACL: {}", e.getMessage());
       return Response.status(BAD_REQUEST).build();
     }
     DublinCoreCatalog dc;
@@ -289,7 +263,14 @@ public class SeriesRestService {
     }
     try {
       DublinCoreCatalog newSeries = seriesService.updateSeries(dc);
-      if (accessControl != null) {
+      if (StringUtils.isNotBlank(accessControl)) {
+        AccessControlList acl;
+        try {
+          acl = AccessControlParser.parseAcl(accessControl);
+        } catch (Exception e) {
+          logger.warn("Could not parse ACL: {}", e.getMessage());
+          return Response.status(BAD_REQUEST).build();
+        }
         seriesService.updateAccessControl(dc.getFirst(PROPERTY_IDENTIFIER), acl);
       }
       if (newSeries == null) {
@@ -297,10 +278,9 @@ public class SeriesRestService {
         return Response.status(NO_CONTENT).build();
       }
       String id = newSeries.getFirst(PROPERTY_IDENTIFIER);
-      String serializedSeries = serializeDublinCore(newSeries);
       logger.debug("Created series {} ", id);
       return Response.status(CREATED).header("Location", getSeriesXmlUrl(id)).header("Location", getSeriesJsonUrl(id))
-              .entity(serializedSeries).build();
+              .entity(newSeries.toXmlString()).build();
     } catch (Exception e) {
       logger.warn("Could not add/update series: {}", e.getMessage());
     }
@@ -313,7 +293,6 @@ public class SeriesRestService {
           @RestResponse(responseCode = SC_NOT_FOUND, description = "No series with this identifier was found."),
           @RestResponse(responseCode = SC_NO_CONTENT, description = "The access control list has been updated."),
           @RestResponse(responseCode = SC_CREATED, description = "The access control list has been created."),
-          @RestResponse(responseCode = SC_NOT_FOUND, description = "No series with this identifier was found."),
           @RestResponse(responseCode = SC_BAD_REQUEST, description = "The required path or form params were missing in the request.") })
   public Response updateAccessControl(@PathParam("seriesID") String seriesID, @FormParam("acl") String accessControl)
           throws UnauthorizedException {
@@ -486,9 +465,8 @@ public class SeriesRestService {
       } catch (NumberFormatException e) {
         logger.warn("Bad count parameter");
       }
-      if ((count < 1) || (count > MAX_LIMIT)) {
+      if (count < 1)
         count = DEFAULT_LIMIT;
-      }
     }
 
     SeriesQuery q = new SeriesQuery();
