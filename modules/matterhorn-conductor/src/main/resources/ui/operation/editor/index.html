@@ -62,12 +62,28 @@
 
     <script type="text/x-jqote-template" id="splitSegmentTemplate">
         <![CDATA[
-          <% $.each(data[j].splits, function(key, split ) { 
+          <% $.each(data[j].splits, function(key, split ) {
             split.id = key;
             var duration = previewTracks[0].duration / 1000;
             var begin = parseFloat(split.clipBegin.toString().replace("s", ""));
             var end = parseFloat(split.clipEnd.toString().replace("s", ""));
             var perc = ((end - begin) / duration) * 100;
+            var percStr = perc + "";
+            if(percStr.indexOf(".") == 1) {
+              percStr = percStr.substr(0, 5);
+            } else if(percStr.indexOf(".") == 2) {
+              percStr = percStr.substr(0, 6);
+            }
+            perc = parseFloat(percStr);
+            if(data[j].splits.length < 5) {
+              if(perc > 0.04) {
+                perc -= 0.04;
+              }
+            } else if(data[j].splits.length < 10) {
+              if(perc > 0.008) {
+                perc -= 0.008;
+              }
+            }
           %>
             <div class="splitSegmentItem<%= !split.enabled ? ' splitSegmentDisabled disabled' : '' %>" 
                  id="splitSegmentItem-<%= key %>" 
@@ -111,7 +127,7 @@
       <div id="boxes">
 	<div id="leftBoxDescription">Segment list</div>
 	<div id="rightBoxDescription">Inspector</div>
-
+	<div class="clear"></div>
         <div id="leftBox"></div>
         <div id="rightBox">
           <div class="splitNumber">
@@ -135,8 +151,10 @@
             </div>
           </div>
         </div>
-        <input type="button" title="show all shortcuts" id="shortcuts" value="Shortcuts" />
-        <input type="button" title="Clear segment split" value="Clear segment list" id="clearList" />
+	<div id="buttons">
+          <input type="button" title="show all shortcuts" id="shortcuts" value="Shortcuts" />
+          <input type="button" title="Clear segment split" value="Clear segment list" id="clearList" />
+	</div>
       </div>
     </div>
     <div class="clear"></div>

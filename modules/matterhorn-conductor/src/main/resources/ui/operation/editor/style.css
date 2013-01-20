@@ -83,12 +83,15 @@ a.secondaryButton:hover,a.secondaryButton:focus {
 
 #editor {
   height: 350px;
+  width: 90%;
 }
 
 #boxes {
+  padding-left: 20px;
   padding-top: 20px;
-  width: 100%;
+  width: 90%;
   float: left;
+  min-width: 780px;
 }
 
 #leftBoxDescription {
@@ -117,6 +120,11 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   float: left;
   border: 1px solid black;
   margin-left: 10px;
+  width: 350px;
+}
+
+#buttons {
+  float: left;
   width: 350px;
 }
 
