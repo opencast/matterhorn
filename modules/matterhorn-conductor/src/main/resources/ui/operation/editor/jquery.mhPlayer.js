@@ -265,13 +265,21 @@
         var m = "00";
         var s = "00";
         if (!isNaN(seconds) && (seconds >= 0)) {
-          h = (Math.floor(seconds / 3600) < 10) ? "0" + Math.floor(seconds / 3600) : Math.floor(seconds / 3600);
-          m = (Math.floor(seconds / 60) < 10) ? "0" + Math.floor(seconds / 60) : Math.floor(seconds / 60);
-          s = (Math.floor(seconds - (m * 60)) < 10) ? "0" + Math.floor(seconds - (m * 60)) : Math.floor(seconds
-              - (m * 60));
-          ms = parseInt((seconds - parseInt(seconds)) * 100);
+	  var tmpH = Math.floor(seconds / 3600);
+	  var tmpM = Math.floor((seconds - (tmpH * 3600)) / 60);
+	  var tmpS = seconds - (tmpH * 3600) - (tmpM * 60);
+          var tmpMS = tmpS + "";
+	    console.log(tmpMS);
+          h = (tmpH < 10) ? "0" + tmpH : Math.floor(seconds / 3600);
+          m = (tmpM < 10) ? "0" + tmpM : tmpM;
+          s = (tmpS < 10) ? "0" + tmpS : tmpS;
+          s = s + "";
+	  var indexOfSDot = s.indexOf(".");
+          if(indexOfSDot != -1) {
+            s = s.substr(0, indexOfSDot + 5);
+          }
         }
-        return h + ":" + m + ":" + s + "." + ms;
+        return h + ":" + m + ":" + s;
       };
 
       /**
