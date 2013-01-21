@@ -67,7 +67,7 @@
             var duration = previewTracks[0].duration / 1000;
             var begin = parseFloat(split.clipBegin.toString().replace("s", ""));
             var end = parseFloat(split.clipEnd.toString().replace("s", ""));
-            var perc = ((end - begin) / duration) * 100;
+            var perc = ((end - begin) / duration) * 99.86;
             var percStr = perc + "";
             if(percStr.indexOf(".") == 1) {
               percStr = percStr.substr(0, 5);
@@ -75,17 +75,6 @@
               percStr = percStr.substr(0, 6);
             }
             perc = parseFloat(percStr);
-            if(data[j].splits.length < 5) {
-              if(perc > 0.08) {
-                perc -= 0.08;
-              } else if(perc > 0.02) {
-                perc -= 0.02;
-              }
-            } else if(data[j].splits.length < 10) {
-              if(perc > 0.008) {
-                perc -= 0.008;
-              }
-            }
           %>
             <div class="splitSegmentItem<%= !split.enabled ? ' splitSegmentDisabled disabled' : '' %>" 
                  id="splitSegmentItem-<%= key %>" 
