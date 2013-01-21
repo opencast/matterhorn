@@ -1189,6 +1189,7 @@ function playerReady() {
 	// adjust size of the holdState UI
 	var height = parseInt($('.holdStateUI').css('height').replace("px", ""));
 	var heightVideo = parseInt($('#videoHolder').css('height').replace("px", ""));
+	$('#videoHolder').css('width', '98%');
 	$('.holdStateUI').css('height', (height + heightVideo) + "px");
 	parent.ocRecordings.adjustHoldActionPanelHeight();
 
