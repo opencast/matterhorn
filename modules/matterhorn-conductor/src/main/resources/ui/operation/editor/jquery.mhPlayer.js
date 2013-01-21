@@ -269,7 +269,6 @@
 	  var tmpM = Math.floor((seconds - (tmpH * 3600)) / 60);
 	  var tmpS = seconds - (tmpH * 3600) - (tmpM * 60);
           var tmpMS = tmpS + "";
-	    console.log(tmpMS);
           h = (tmpH < 10) ? "0" + tmpH : Math.floor(seconds / 3600);
           m = (tmpM < 10) ? "0" + tmpM : tmpM;
           s = (tmpS < 10) ? "0" + tmpS : tmpS;
