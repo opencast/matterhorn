@@ -438,7 +438,7 @@ function cancelButtonClick() {
  */
 function splitRemoverClick() {
     item = $(this);
-    id = item.prop('id');
+    var id = item.prop('id');
     if (id != undefined) {
 	id = id.replace("splitItem-", "");
 	id = id.replace("splitRemover-", "");
