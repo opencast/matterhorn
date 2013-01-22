@@ -229,13 +229,6 @@ function getPlayerPaused() {
     return paused;
 }
 
-function setCurrentTime(time) {
-    time = isNaN(time) ? 0 : time;
-    var duration = getDuration();
-    time = (time > duration) ? duration : time;
-    editor.player.prop("currentTime", time);
-}
-
 /**
  * retrieves the current split item by time
  * 
@@ -288,6 +281,13 @@ function setCurrentTimeAsNewOutpoint() {
     if (editor.selectedSplit != null) {
 	$('#clipEnd').timefield('option', 'value', getCurrentTime() + "s");
     }
+}
+
+function setCurrentTime(time) {
+    time = isNaN(time) ? 0 : time;
+    var duration = getDuration();
+    time = (time > duration) ? duration : time;
+    editor.player.prop("currentTime", time);
 }
 
 /******************************************************************************/
