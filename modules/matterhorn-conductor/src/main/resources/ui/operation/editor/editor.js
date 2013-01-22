@@ -796,85 +796,152 @@ function playWithoutDeleted() {
 	var segmentEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
 	var clipEndFrom = -1;
 	var clipEndTo = -1;
+	var hasPrevElem = true;
+	var hasNextElem = true;
 
 	if((splitItem.id - 1) >= 0) {
+	    hasPrevElem = true;
 	    var prevSplitItem = editor.splitData.splits[splitItem.id - 1];
 	    while(!prevSplitItem.enabled) {
 		if((prevSplitItem.id - 1) < 0) {
+		    hasPrevElem = false;
 		    break;
+		} else {
+		    prevSplitItem = editor.splitData.splits[prevSplitItem.id - 1];
 		}
-		prevSplitItem = editor.splitData.splits[prevSplitItem.id - 1];
 	    }
-	    clipStartTo = parseFloat(prevSplitItem.clipEnd.replace("s", ""));
-	    clipStartFrom = clipStartTo - 2;
+	    if(hasPrevElem) {
+		clipStartTo = parseFloat(prevSplitItem.clipEnd.replace("s", ""));
+		clipStartFrom = clipStartTo - 2;
+	    }
 	}
-	if(clipStartTo == -1) {
-	    clipStartTo = segmentStart;
-	    clipStartFrom = clipStartTo - 2;
+	if(hasPrevElem) {
+	    clipStartFrom = (clipStartFrom < 0) ? 0 : clipStartFrom;
 	}
-	clipStartFrom = (clipStartFrom < 0) ? 0 : clipStartFrom;
 
 	if((splitItem.id + 1) < editor.splitData.splits.length) {
+	    hasNextElem = true;
 	    var nextSplitItem = editor.splitData.splits[splitItem.id + 1];
 	    while(!nextSplitItem.enabled) {
 		if((nextSplitItem.id + 1) >= editor.splitData.splits.length) {
+		    hasNextElem = false;
 		    break;
+		} else {
+		    nextSplitItem = editor.splitData.splits[nextSplitItem.id + 1];
 		}
-		nextSplitItem = editor.splitData.splits[nextSplitItem.id + 1];
 	    }
-	    clipEndFrom = parseFloat(nextSplitItem.clipBegin.replace("s", ""));
-	    clipEndTo = clipEndFrom + 2;
+	    if(hasNextElem) {
+		clipEndFrom = parseFloat(nextSplitItem.clipBegin.replace("s", ""));
+		clipEndTo = clipEndFrom + 2;
+	    }
 	}
-	if(clipEndFrom == -1) {
-	    clipEndFrom = segmentEnd;
-	    clipEndTo = clipEndFrom + 2;
+	if(hasNextElem) {
+	    var duration = editor.player.prop("duration");
+	    clipEndTo = (clipEndTo > duration) ? duration : clipEndTo;
 	}
-	var duration = editor.player.prop("duration");
-	clipEndTo = (clipEndTo > duration) ? duration : clipEndTo;
 
 	ocUtils.log("Play Times: " + clipStartFrom + " - " + clipStartTo + " | " + segmentStart + " - " + segmentEnd + " | " + clipEndFrom + " - " + clipEndTo);
-	
-	editor.player.prop("currentTime", clipStartFrom);
 
-	clearEvents();
-	editor.player.on("play", {
-	    duration : (clipStartTo - clipStartFrom) * 1000,
-	    endTime : clipStartTo
-	}, onPlay);
-	
-	playVideo();
-	
-	timeout3 = window.setTimeout(function(){
-	    pauseVideo();
+	if(hasPrevElem && hasNextElem) {
+	    editor.player.prop("currentTime", clipStartFrom);
+	    clearEvents();
+	    editor.player.on("play", {
+		duration : (clipStartTo - clipStartFrom) * 1000,
+		endTime : clipStartTo
+	    }, onPlay);
+	    
+	    playVideo();
+	    
+	    timeout3 = window.setTimeout(function(){
+		pauseVideo();
+		editor.player.prop("currentTime", segmentStart);
+		clearEvents();
+		currSplitItemClickedViaJQ = true;
+		editor.player.on("play", {
+		    duration : (segmentEnd - segmentStart) * 1000,
+		    endTime : segmentEnd
+		}, onPlay);
+		playVideo();
+	    }, (clipStartTo - clipStartFrom) * 1000);
+	    
+	    timeout4 = window.setTimeout(function(){
+		pauseVideo();
+		if(timeout3 != null) {
+		    window.clearTimeout(timeout3);
+		    timeout3 = null;
+		}
+		editor.player.prop("currentTime", clipEndFrom);
+		clearEvents();
+		currSplitItemClickedViaJQ = true;
+		editor.player.on("play", {
+		    duration : (clipEndTo - clipEndFrom) * 1000,
+		    endTime : clipEndTo
+		}, onPlay);
+		playVideo();
+		if(timeout4 != null) {
+		    window.clearTimeout(timeout4);
+		    timeout4 = null;
+		}
+	    }, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
+	} else if(!hasPrevElem && hasNextElem) {
 	    editor.player.prop("currentTime", segmentStart);
 	    clearEvents();
-	    currSplitItemClickedViaJQ = true;
 	    editor.player.on("play", {
 		duration : (segmentEnd - segmentStart) * 1000,
 		endTime : segmentEnd
 	    }, onPlay);
+	    
 	    playVideo();
-	}, (clipStartTo - clipStartFrom) * 1000);
-	
-	timeout4 = window.setTimeout(function(){
-	    pauseVideo();
-	    if(timeout3 != null) {
-		window.clearTimeout(timeout3);
-		timeout3 = null;
-	    }
-	    editor.player.prop("currentTime", clipEndFrom);
+	    
+	    timeout3 = window.setTimeout(function(){
+		pauseVideo();
+		editor.player.prop("currentTime", clipEndFrom);
+		clearEvents();
+		currSplitItemClickedViaJQ = true;
+		editor.player.on("play", {
+		    duration : (clipEndTo - clipEndFrom) * 1000,
+		    endTime : clipEndTo
+		}, onPlay);
+		playVideo();
+		if(timeout3 != null) {
+		    window.clearTimeout(timeout3);
+		    timeout3 = null;
+		}
+	    }, ((segmentEnd - segmentStart) * 1000));
+	} else if(hasPrevElem && !hasNextElem) {
+	    editor.player.prop("currentTime", clipStartFrom);
 	    clearEvents();
-	    currSplitItemClickedViaJQ = true;
 	    editor.player.on("play", {
-		duration : (clipEndTo - clipEndFrom) * 1000,
-		endTime : clipEndTo
+		duration : (clipStartTo - clipStartFrom) * 1000,
+		endTime : clipStartTo
 	    }, onPlay);
+	    
 	    playVideo();
-	    if(timeout4 != null) {
-		window.clearTimeout(timeout4);
-		timeout4 = null;
-	    }
-	}, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
+	    
+	    timeout3 = window.setTimeout(function(){
+		pauseVideo();
+		editor.player.prop("currentTime", segmentStart);
+		clearEvents();
+		currSplitItemClickedViaJQ = true;
+		editor.player.on("play", {
+		    duration : (segmentEnd - segmentStart) * 1000,
+		    endTime : segmentEnd
+		}, onPlay);
+		playVideo();
+		if(timeout3 != null) {
+		    window.clearTimeout(timeout3);
+		    timeout3 = null;
+		}
+	    }, (clipStartTo - clipStartFrom) * 1000);
+	} else if(!hasPrevElem && !hasNextElem) {
+	    clearEvents();
+	    editor.player.on("play", {
+		duration : (segmentEnd - segmentStart) * 1000,
+		endTime : segmentEnd
+	    }, onPlay);
+	    
+	    playVideo();
+	}
     }
 }
 
