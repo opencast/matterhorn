@@ -212,13 +212,37 @@ editor.downloadSMIL = function() {
 // getter
 /******************************************************************************/
 
+function getCurrentTime() {
+    var currentTime = editor.player.prop("currentTime");
+    currentTime = isNaN(currentTime) ? 0 : currentTime;
+    return currentTime;
+}
+
+function getDuration() {
+    var duration = editor.player.prop("duration");
+    duration = isNaN(duration) ? 0 : duration;
+    return duration;
+}
+
+function getPlayerPaused() {
+    var paused = editor.player.prop("paused");
+    return paused;
+}
+
+function setCurrentTime(time) {
+    time = isNaN(time) ? 0 : time;
+    var duration = getDuration();
+    time = (time > duration) ? duration : time;
+    editor.player.prop("currentTime", time);
+}
+
 /**
  * retrieves the current split item by time
  * 
  * @returns the current split item
  */
 function getCurrentSplitItem() {
-    var currentTime = editor.player.prop("currentTime");
+    var currentTime = getCurrentTime();
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
 	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
@@ -253,7 +277,7 @@ function setEnabled(uuid, enabled) {
  */
 function setCurrentTimeAsNewInpoint() {
     if (editor.selectedSplit != null) {
-	$('#clipBegin').timefield('option', 'value', editor.player.prop("currentTime") + "s");
+	$('#clipBegin').timefield('option', 'value', getCurrentTime() + "s");
     }
 }
 
@@ -262,7 +286,7 @@ function setCurrentTimeAsNewInpoint() {
  */
 function setCurrentTimeAsNewOutpoint() {
     if (editor.selectedSplit != null) {
-	$('#clipEnd').timefield('option', 'value', editor.player.prop("currentTime") + "s");
+	$('#clipEnd').timefield('option', 'value', getCurrentTime() + "s");
     }
 }
 
@@ -312,7 +336,7 @@ function checkClipBegin() {
 
 function checkClipEnd() {
     if($('#clipEnd').timefield('option', 'value').replace) {
-	var duration = editor.player.prop("duration");
+	var duration = getDuration();
 	var clipEnd = parseFloat($('#clipEnd').timefield('option', 'value').replace("s", ""));
 	if(clipEnd > duration) {
 	    clipEnd = duration;
@@ -352,12 +376,13 @@ function checkPrevAndNext(id) {
 	    editor.splitData.splits.splice(0, 0, newSplitItem);
 	}
     } else if (id == editor.splitData.splits.length - 1) {
-	if ($('#clipEnd').timefield('option', 'seconds') != editor.player.prop("duration")) {
+	var duration = getDuration();
+	if ($('#clipEnd').timefield('option', 'seconds') != duration) {
 	    var newLastItem = {
 		description : "",
 		enabled : true,
 		clipBegin : splitItem.clipEnd,
-		clipEnd : editor.player.prop("duration") + "s"
+		clipEnd : duration + "s"
 	    };
 
 	    // add the new item to the end
@@ -519,7 +544,7 @@ function splitItemClick() {
 	    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
 	    if(!timeoutUsed) {
 		if(!currSplitItemClickedViaJQ) {
-		    editor.player.prop("currentTime", clipBegin);
+		    setCurrentTime(clipBegin);
 		}
 	    }
 
@@ -532,7 +557,7 @@ function splitItemClick() {
  * click/shortcut handler for adding a split item at current time
  */
 function splitButtonClick() {
-    var currentTime = editor.player.prop('currentTime');
+    var currentTime = getCurrentTime();
     for ( var i = 0; i < editor.splitData.splits.length; i++) {
 	var splitItem = editor.splitData.splits[i];
 	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
@@ -572,7 +597,7 @@ function selectCurrentSplitItem() {
     if(splitItem != null) {
 	currSplitItemClickedViaJQ = true;
 	$('#splitSegmentItem-' + splitItem.id).click();
-	$('#descriptionCurrentTime').html(formatTime(editor.player.prop("currentTime")));
+	$('#descriptionCurrentTime').html(formatTime(getCurrentTime()));
     }
 }
 
@@ -591,7 +616,7 @@ function selectSegmentListElement(number) {
  * updates the currentTime div
  */
 function updateCurrentTime() {
-    $('#current_time').html(formatTime(editor.player.prop("currentTime")));
+    $('#current_time').html(formatTime(getCurrentTime()));
 }
 
 /**
@@ -696,7 +721,7 @@ function onTimeout() {
 	pauseVideo();
 	var check = function() {
 	    endTime = currEvt.data.endTime;
-	    if (endTime > editor.player.prop("currentTime")) {
+	    if (endTime > getCurrentTime()) {
 		playVideo();
 		timeout2 = window.setTimeout(check, 10);
 		timeoutUsed = true;
@@ -707,7 +732,7 @@ function onTimeout() {
 		jumpBackTime = currEvt.data.jumpBackTime;
 		jumpBackTime = ((jumpBackTime == null) || (jumpBackTime == undefined)) ? null : jumpBackTime;
 		if(jumpBackTime != null) {
-		    editor.player.prop("currentTime", jumpBackTime);
+		    setCurrentTime(jumpBackTime);
 		    jumpBackTime = null;
 		}
 	    }
@@ -731,7 +756,7 @@ function playVideo() {
  * pause the video
  */
 function pauseVideo() {
-    if (!editor.player.prop("paused")) {
+    if (!getPlayerPaused()) {
 	editor.player[0].pause();
     }
 }
@@ -741,13 +766,12 @@ function pauseVideo() {
  */
 function playCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
-    var currentTime = editor.player.prop("currentTime");
     if (splitItem != null) {
 	pauseVideo();
 	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
 	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
 	var duration = (clipEnd - clipBegin) * 1000;
-	editor.player.prop("currentTime", clipBegin);
+	setCurrentTime(clipBegin);
 
 	clearEvents();
 	editor.player.on("play", {
@@ -766,7 +790,7 @@ function playEnding() {
     if (splitItem != null) {
 	pauseVideo();
 	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
-	editor.player.prop("currentTime", clipEnd - 2);
+	setCurrentTime(clipEnd - 2);
 
 	clearEvents();
 	editor.player.on("play", {
@@ -782,7 +806,6 @@ function playEnding() {
  */
 function playWithoutDeleted() {
     var splitItem = getCurrentSplitItem();
-    var currentTime = editor.player.prop("currentTime");
     
     if (splitItem != null) {
 	pauseVideo();
@@ -833,14 +856,14 @@ function playWithoutDeleted() {
 	    }
 	}
 	if(hasNextElem) {
-	    var duration = editor.player.prop("duration");
+	    var duration = getDuration();
 	    clipEndTo = (clipEndTo > duration) ? duration : clipEndTo;
 	}
 
 	ocUtils.log("Play Times: " + clipStartFrom + " - " + clipStartTo + " | " + segmentStart + " - " + segmentEnd + " | " + clipEndFrom + " - " + clipEndTo);
 
 	if(hasPrevElem && hasNextElem) {
-	    editor.player.prop("currentTime", clipStartFrom);
+	    setCurrentTime(clipStartFrom);
 	    clearEvents();
 	    editor.player.on("play", {
 		duration : (clipStartTo - clipStartFrom) * 1000,
@@ -851,7 +874,7 @@ function playWithoutDeleted() {
 	    
 	    timeout3 = window.setTimeout(function(){
 		pauseVideo();
-		editor.player.prop("currentTime", segmentStart);
+		setCurrentTime(segmentStart);
 		clearEvents();
 		currSplitItemClickedViaJQ = true;
 		editor.player.on("play", {
@@ -867,7 +890,7 @@ function playWithoutDeleted() {
 		    window.clearTimeout(timeout3);
 		    timeout3 = null;
 		}
-		editor.player.prop("currentTime", clipEndFrom);
+		setCurrentTime(clipEndFrom);
 		clearEvents();
 		currSplitItemClickedViaJQ = true;
 		editor.player.on("play", {
@@ -881,7 +904,7 @@ function playWithoutDeleted() {
 		}
 	    }, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
 	} else if(!hasPrevElem && hasNextElem) {
-	    editor.player.prop("currentTime", segmentStart);
+	    setCurrentTime(segmentStart);
 	    clearEvents();
 	    editor.player.on("play", {
 		duration : (segmentEnd - segmentStart) * 1000,
@@ -892,7 +915,7 @@ function playWithoutDeleted() {
 	    
 	    timeout3 = window.setTimeout(function(){
 		pauseVideo();
-		editor.player.prop("currentTime", clipEndFrom);
+		setCurrentTime(clipEndFrom);
 		clearEvents();
 		currSplitItemClickedViaJQ = true;
 		editor.player.on("play", {
@@ -906,7 +929,7 @@ function playWithoutDeleted() {
 		}
 	    }, ((segmentEnd - segmentStart) * 1000));
 	} else if(hasPrevElem && !hasNextElem) {
-	    editor.player.prop("currentTime", clipStartFrom);
+	    setCurrentTime(clipStartFrom);
 	    clearEvents();
 	    editor.player.on("play", {
 		duration : (clipStartTo - clipStartFrom) * 1000,
@@ -917,7 +940,7 @@ function playWithoutDeleted() {
 	    
 	    timeout3 = window.setTimeout(function(){
 		pauseVideo();
-		editor.player.prop("currentTime", segmentStart);
+		setCurrentTime(segmentStart);
 		clearEvents();
 		currSplitItemClickedViaJQ = true;
 		editor.player.on("play", {
@@ -955,18 +978,18 @@ function jumpToSegment() {
     id = id.replace('splitItemDiv-', '');
     id = id.replace('splitSegmentItem-', '');
 
-    editor.player.prop("currentTime", editor.splitData.splits[id].clipBegin.replace("s", ""));
+    setCurrentTime(editor.splitData.splits[id].clipBegin.replace("s", ""));
 }
 
 /**
  * jump to next segment
  */
 function nextSegment() {
-    var playerPaused = editor.player.prop("paused");
+    var playerPaused = getPlayerPaused();
     if(!playerPaused) {
 	pauseVideo();
     }
-    var currentTime = editor.player.prop("currentTime");
+    var currentTime = getCurrentTime();
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
@@ -981,9 +1004,9 @@ function nextSegment() {
     }
     if(new_id > 0) {
 	if (new_id <= editor.splitData.splits.length - 1) {
-	    editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+	    setCurrentTime(editor.splitData.splits[new_id].clipBegin.replace("s", ""));
 	} else if (new_id <= editor.splitData.splits.length) {
-	    editor.player.prop("currentTime", editor.player.prop("duration"));
+	    setCurrentTime(getDuration());
 	}
     }
 }
@@ -992,11 +1015,11 @@ function nextSegment() {
  * jump to previous segment
  */
 function previousSegment() {
-    var playerPaused = editor.player.prop("paused");
+    var playerPaused = getPlayerPaused();
     if(!playerPaused) {
 	pauseVideo();
     }
-    var currentTime = editor.player.prop("currentTime");
+    var currentTime = getCurrentTime();
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
@@ -1014,7 +1037,7 @@ function previousSegment() {
 	}
     }
     if (new_id >= 0) {
-	editor.player.prop("currentTime", editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+	setCurrentTime(editor.splitData.splits[new_id].clipBegin.replace("s", ""));
     }
 }
 
@@ -1059,7 +1082,7 @@ function addShortcuts() {
 	disable_in_input : true,
     });
     shortcut.add(default_config[PLAY_PAUSE], function() {
-	if (editor.player.prop("paused")) {
+	if (getPlayerPaused()) {
 	    playVideo();
 	} else {
 	    pauseVideo();
@@ -1155,7 +1178,7 @@ function playerReady() {
 	// paint a green line for current time
 	editor.player.bind("timeupdate", function() {
 	    var duration = workflowInstance.mediapackage.duration / 1000;
-	    var perc = editor.player.prop("currentTime") / duration * 100;
+	    var perc = getCurrentTime() / duration * 100;
 	    $('#currentTimeDiv').css("left", perc + "%");
 	});
 
@@ -1366,7 +1389,7 @@ $(document).ready(function() {
 	if(!$.browser.webkit && !$.browser.mozilla) {
 	    playVideo();
 	    pauseVideo();
-	    editor.player.prop("currentTime", 0);
+	    setCurrentTime(0);
 	}
     }, 100);
 })
