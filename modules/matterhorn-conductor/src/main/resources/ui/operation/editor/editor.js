@@ -228,7 +228,6 @@ function getCurrentSplitItem() {
 	    return splitItem;
 	}
     }
-    // return null;
     return currSplitItem;
 }
 
@@ -272,7 +271,7 @@ function setCurrentTimeAsNewOutpoint() {
 /******************************************************************************/
 
 /**
- * formating a time String to hh:MM:ss.mm
+ * formatting a time string to hh:MM:ss.mm
  * 
  * @param time
  *          the timeString
@@ -430,7 +429,7 @@ function cancelButtonClick() {
     $('.splitItem').removeClass('splitItemSelected');
     $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
     editor.selectedSplit = null;
-    enabledRightBox(false);
+    enableRightBox(false);
 }
 
 /**
@@ -524,7 +523,7 @@ function splitItemClick() {
 		}
 	    }
 
-	    enabledRightBox(true);
+	    enableRightBox(true);
 	}
     }
 }
@@ -601,7 +600,7 @@ function updateCurrentTime() {
  * @param enabled
  *          whether enabled or not
  */
-function enabledRightBox(enabled) {
+function enableRightBox(enabled) {
     if (enabled) {
 	$('#rightBox :input').removeProp('disabled');
 	$('.frameButton').button("enable");
@@ -725,9 +724,7 @@ function onTimeout() {
  * play the video
  */
 function playVideo() {
-    // if (!editor.player.prop("playing")) {
     editor.player[0].play();
-    // }
 }
 
 /**
@@ -1242,14 +1239,16 @@ function playerReady() {
 		    $('#segmentsWaveform').height($('#waveformImage').height());
 		    $('.holdStateUI').height($('#segmentsWaveform').height() + $('#videoPlayer').height() + 70);
 		});
-		// $('#waveformImage').addimagezoom();
-		// $('#splitSegments').mouseover(function(evt) {
-		// $('#waveformImage').trigger("mouseover");
-		// }).mouseout(function(evt) {
-		// $('#waveformImage').trigger("mouseout");
-		// }).mousemove(function(evt) {
-		// $('#waveformImage').trigger("mousemove");
-		// })
+		/*
+		  $('#waveformImage').addimagezoom();
+		  $('#splitSegments').mouseover(function(evt) {
+		  $('#waveformImage').trigger("mouseover");
+		  }).mouseout(function(evt) {
+		  $('#waveformImage').trigger("mouseout");
+		  }).mousemove(function(evt) {
+		  $('#waveformImage').trigger("mousemove");
+		  });
+		*/
 	    }
 	});
 
@@ -1307,7 +1306,7 @@ $(document).ready(function() {
     $('#cancelButton').click(cancelButtonClick);
     $('#deleteButton').click(splitRemoverClick);
 
-    enabledRightBox(false);
+    enableRightBox(false);
     initPlayButtons();
     addShortcuts();
 
