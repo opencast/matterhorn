@@ -1358,5 +1358,16 @@ $(document).ready(function() {
 	// window hasn't changed size in 500ms
 	ocUtils.log("Resize done. Updating split list view.");
 	editor.updateSplitList();
+	selectCurrentSplitItem();
     });
+
+    window.setTimeout(function() {
+	selectCurrentSplitItem();
+
+	if(!$.browser.webkit && !$.browser.mozilla) {
+	    playVideo();
+	    pauseVideo();
+	    editor.player.prop("currentTime", 0);
+	}
+    }, 100);
 })
