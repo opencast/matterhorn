@@ -258,7 +258,7 @@
        * 
        * @param seconds
        *          time to format in seconds
-       * @return given time in seconds formatted to mm:ss
+       * @return given time in seconds formatted to hh:MM:ss.mmmm
        */
       var formatTime = function(seconds) {
         var h = "00";

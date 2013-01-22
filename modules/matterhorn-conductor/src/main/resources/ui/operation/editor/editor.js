@@ -238,14 +238,22 @@ function getCurrentSplitItem() {
     var currentTime = getCurrentTime();
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipBegin = splitItem.clipBegin;
+	var clipEnd = splitItem.clipEnd;
 	if (clipBegin <= currentTime && currentTime < clipEnd) {
 	    splitItem.id = i;
 	    return splitItem;
 	}
     }
     return currSplitItem;
+}
+
+function getTimefieldTimeBegin() {
+    return $('#clipBegin').timefield('option', 'seconds');
+}
+
+function getTimefieldTimeEnd() {
+    return $('#clipEnd').timefield('option', 'seconds');
 }
 
 /******************************************************************************/
@@ -270,7 +278,7 @@ function setEnabled(uuid, enabled) {
  */
 function setCurrentTimeAsNewInpoint() {
     if (editor.selectedSplit != null) {
-	$('#clipBegin').timefield('option', 'value', getCurrentTime() + "s");
+	setTimefieldTimeBegin(getCurrentTime());
     }
 }
 
@@ -279,7 +287,7 @@ function setCurrentTimeAsNewInpoint() {
  */
 function setCurrentTimeAsNewOutpoint() {
     if (editor.selectedSplit != null) {
-	$('#clipEnd').timefield('option', 'value', getCurrentTime() + "s");
+	setTimefieldTimeEnd(getCurrentTime());
     }
 }
 
@@ -288,6 +296,14 @@ function setCurrentTime(time) {
     var duration = getDuration();
     time = (time > duration) ? duration : time;
     editor.player.prop("currentTime", time);
+}
+
+function setTimefieldTimeBegin(time) {
+    $('#clipBegin').timefield('option', 'value', time + "s");
+}
+
+function setTimefieldTimeEnd(time) {
+    $('#clipEnd').timefield('option', 'value', time + "s");
 }
 
 /******************************************************************************/
@@ -321,82 +337,78 @@ function isInInterval(toCheck, lower, upper) {
 }
 
 function checkClipBegin() {
-    if($('#clipBegin').timefield('option', 'value').replace) {
-	var clipBegin = parseFloat($('#clipBegin').timefield('option', 'value').replace("s", ""));
-	if(isNaN(clipBegin))
-	{
-	    $('#clipBegin').timefield('option', 'value', '0s');
-	}
-	else
-	{
-	    $('#clipBegin').timefield('option', 'value', clipBegin + 's');
-	}
+    var clipBegin = getTimefieldTimeBegin();
+    if(isNaN(clipBegin) || (clipBegin < 0))
+    {
+	displayError("The inpoint is too low or the format is not correct. Correct format: hh:MM:ss.mmmm. Please check.", "Check inpoint");
+	return false;
     }
+    return true;
 }
 
 function checkClipEnd() {
-    if($('#clipEnd').timefield('option', 'value').replace) {
-	var duration = getDuration();
-	var clipEnd = parseFloat($('#clipEnd').timefield('option', 'value').replace("s", ""));
-	if(clipEnd > duration) {
-	    clipEnd = duration;
-	}
-	if(isNaN(clipEnd))
-	{
-	    $('#clipEnd').timefield('option', 'value', '0s');
-	}
-	else
-	{
-	    $('#clipEnd').timefield('option', 'value', clipEnd + 's');
-	}
-	var currSplitItem_ = getCurrentSplitItem();
-	if(currSplitItem_) {
-	    getCurrentSplitItem().clipEnd = clipEnd + 's';
-	    editor.updateSplitList(true);
-	}
+    var clipEnd = getTimefieldTimeEnd();
+    var duration = getDuration();
+    if(isNaN(clipEnd) || (clipEnd > duration)) {
+	displayError("The outpoint is too high or the format is not correct. Correct format: hh:MM:ss.mmmm. Please check.", "Check outpoint");
+	return false;
     }
+    return true;
 }
 
 function checkPrevAndNext(id) {
-    // it's the first check whether we need a new first item
+    var duration = getDuration();
+    // new first item
     if (id == 0) {
-	if (editor.splitData.splits.length > 1) {
-	    var next = editor.splitData.splits[id + 1];
-	    next.clipBegin = splitItem.clipEnd;
-	}
-	if ($('#clipBegin').timefield('option', 'seconds') != 0) {
-	    var newSplitItem = {
-		description : "",
-		clipBegin : "0s",
-		enabled : true,
-		clipEnd : splitItem.clipBegin
-	    };
-
-	    // add new item to front
-	    editor.splitData.splits.splice(0, 0, newSplitItem);
-	}
+        if (editor.splitData.splits.length > 1) {
+            var next = editor.splitData.splits[id + 1];
+            next.clipBegin = splitItem.clipEnd;
+        }
+        if (getTimefieldTimeBegin() != 0) {
+            var newSplitItem = {
+                description : "",
+                clipBegin : 0,
+                clipEnd : splitItem.clipBegin,
+                enabled : true
+            };
+	    
+            // add new item to front
+            editor.splitData.splits.splice(0, 0, newSplitItem);
+        }
+	// new last item
     } else if (id == editor.splitData.splits.length - 1) {
 	var duration = getDuration();
-	if ($('#clipEnd').timefield('option', 'seconds') != duration) {
+	if (getTimefieldTimeEnd() != duration) {
 	    var newLastItem = {
 		description : "",
-		enabled : true,
 		clipBegin : splitItem.clipEnd,
-		clipEnd : duration + "s"
+		clipEnd : duration,
+		enabled : true
 	    };
 
 	    // add the new item to the end
 	    editor.splitData.splits.push(newLastItem);
 	}
 	var prev = editor.splitData.splits[id - 1];
-	prev.clipEnd = splitItem.clipBegin
+	prev.clipEnd = splitItem.clipBegin;
+	// in the middle
     } else {
-	var next = editor.splitData.splits[id + 1];
 	var prev = editor.splitData.splits[id - 1];
+	var next = editor.splitData.splits[id + 1];
+
+	if(getTimefieldTimeBegin() <= prev.clipBegin) {
+	    displayError("The inpoint is lower than the begin of the last segment. Please check.", "Check inpoint");
+	    return false;
+	}
+	if(getTimefieldTimeEnd() >= next.clipEnd) {
+	    displayError("The outpoint is bigger than the end of the next segment. Please check.", "Check outpoint");
+	    return false;
+	}
 
 	prev.clipEnd = splitItem.clipBegin;
 	next.clipBegin = splitItem.clipEnd;
     }
+    return true;
 }
 
 /******************************************************************************/
@@ -407,37 +419,26 @@ function checkPrevAndNext(id) {
  * click handler for saving data in editing box
  */
 function okButtonClick() {
-    checkClipBegin();
-    checkClipEnd();
-    id = $('#splitUUID').val();
-    if (id != "") {
-	id = parseInt(id);
-	if (parseFloat($('#clipBegin').timefield('option', 'value').replace("s", "")) > parseFloat($('#clipEnd').timefield(
-	    'option', 'value').replace("s", ""))) {
-	    $('<div />').html("The inpoint is bigger than the outpoint. Please check.").dialog({
-		title : "Check in and outpoint",
-		resizable : false,
-		buttons : {
-		    OK : function() {
-			$(this).dialog("close");
-		    }
-		}
-	    });
-	    return;
+    if(checkClipBegin() && checkClipEnd()) {
+	id = $('#splitUUID').val();
+	if (id != "") {
+	    id = parseInt(id);
+	    if (getTimefieldTimeBegin() > getTimefieldTimeEnd()) {
+		displayError("The inpoint is bigger than the outpoint. Please check.", "Check in and outpoint");
+		return;
+	    }
+
+	    splitItem = editor.splitData.splits[id];
+	    splitItem.clipBegin = getTimefieldTimeBegin();
+	    splitItem.clipEnd = getTimefieldTimeEnd();
+	    splitItem.description = $('#splitDescription').val();
+
+	    if(checkPrevAndNext(id)) {
+		editor.updateSplitList(true);
+		$('#videoPlayer').focus();
+		selectSegmentListElement(id);
+	    }
 	}
-
-	splitItem = editor.splitData.splits[id];
-	splitItem.description = $('#splitDescription').val();
-	splitItem.clipBegin = $('#clipBegin').timefield('option', 'value');
-	splitItem.clipEnd = $('#clipEnd').timefield('option', 'value');
-
-	checkPrevAndNext(id);
-
-	editor.updateSplitList(true);
-
-	$('#videoPlayer').focus();
-	selectSegmentListElement(id);
-
     }
 }
 
@@ -448,8 +449,8 @@ function cancelButtonClick() {
     $('#splitDescription').html('');
     $('#splitUUID').val('');
     $('#splitDescription').val("");
-    $('#clipBegin').timefield('option', 'value', '0s');
-    $('#clipEnd').timefield('option', 'value', '0s');
+    setTimefieldTimeBegin(0);
+    setTimefieldTimeEnd(0);
     $('#splitIndex').html('#');
     $('.splitItem').removeClass('splitItemSelected');
     $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
@@ -512,7 +513,6 @@ function splitItemClick() {
 
 	// if it's not already disabled
 	if (!$(this).hasClass('disabled') && ((isSeeking && ($(this).prop('id').indexOf('Div-') == -1)) || !isSeeking)) {
-
 	    // remove all selected classes
 	    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
 	    $('.splitItem').removeClass('splitItemSelected');
@@ -535,13 +535,13 @@ function splitItemClick() {
 	    editor.selectedSplit.id = parseInt(id);
 	    $('#splitDescription').val(splitItem.description);
 	    $('#splitUUID').val(id);
-	    $('#clipBegin').timefield('option', 'value', splitItem.clipBegin);
-	    $('#clipEnd').timefield('option', 'value', splitItem.clipEnd);
+	    setTimefieldTimeBegin(splitItem.clipBegin);
+	    setTimefieldTimeEnd(splitItem.clipEnd);
 	    $('#splitIndex').html(parseInt(id) + 1);
 
 	    currSplitItem = splitItem;
 	    
-	    var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
+	    var clipBegin = splitItem.clipBegin;
 	    if(!timeoutUsed) {
 		if(!currSplitItemClickedViaJQ) {
 		    setCurrentTime(clipBegin);
@@ -558,24 +558,24 @@ function splitItemClick() {
  */
 function splitButtonClick() {
     var currentTime = getCurrentTime();
-    for ( var i = 0; i < editor.splitData.splits.length; i++) {
+    for ( var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipBegin = splitItem.clipBegin;
+	var clipEnd = splitItem.clipEnd;
 	if (clipBegin < currentTime && currentTime < clipEnd) {
-	    newEnd = "0s";
+	    newEnd = 0;
 	    if (editor.splitData.splits.length == i + 1) {
 		newEnd = splitItem.clipEnd;
 	    } else {
 		newEnd = editor.splitData.splits[i + 1].clipBegin;
 	    }
 	    var newItem = {
-		clipBegin : currentTime + 's',
+		clipBegin : currentTime,
 		clipEnd : newEnd,
 		enabled : true,
 		description : ""
 	    }
-	    splitItem.clipEnd = currentTime + 's';
+	    splitItem.clipEnd = currentTime;
 	    editor.splitData.splits.splice(i + 1, 0, newItem);
 	    editor.updateSplitList();
 	    selectSegmentListElement(i + 1);
@@ -611,6 +611,18 @@ function selectSegmentListElement(number) {
 /******************************************************************************/
 // visual
 /******************************************************************************/
+
+function displayError(errorMsg, errorTitle) {
+    $('<div />').html(errorMsg).dialog({
+	title : errorTitle,
+	resizable : false,
+	buttons : {
+	    OK : function() {
+		$(this).dialog("close");
+	    }
+	}
+    });
+}
 
 /**
  * updates the currentTime div
@@ -768,8 +780,8 @@ function playCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
     if (splitItem != null) {
 	pauseVideo();
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipBegin = splitItem.clipBegin;
+	var clipEnd = splitItem.clipEnd;
 	var duration = (clipEnd - clipBegin) * 1000;
 	setCurrentTime(clipBegin);
 
@@ -789,7 +801,7 @@ function playEnding() {
     var splitItem = getCurrentSplitItem();
     if (splitItem != null) {
 	pauseVideo();
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipEnd = splitItem.clipEnd;
 	setCurrentTime(clipEnd - 2);
 
 	clearEvents();
@@ -812,8 +824,8 @@ function playWithoutDeleted() {
 
 	var clipStartFrom = -1;
 	var clipStartTo = -1;
-	var segmentStart = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var segmentEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var segmentStart = splitItem.clipBegin;
+	var segmentEnd = splitItem.clipEnd;
 	var clipEndFrom = -1;
 	var clipEndTo = -1;
 	var hasPrevElem = true;
@@ -831,7 +843,7 @@ function playWithoutDeleted() {
 		}
 	    }
 	    if(hasPrevElem) {
-		clipStartTo = parseFloat(prevSplitItem.clipEnd.replace("s", ""));
+		clipStartTo = prevSplitItem.clipEnd;
 		clipStartFrom = clipStartTo - 2;
 	    }
 	}
@@ -851,7 +863,7 @@ function playWithoutDeleted() {
 		}
 	    }
 	    if(hasNextElem) {
-		clipEndFrom = parseFloat(nextSplitItem.clipBegin.replace("s", ""));
+		clipEndFrom = nextSplitItem.clipBegin;
 		clipEndTo = clipEndFrom + 2;
 	    }
 	}
@@ -978,7 +990,7 @@ function jumpToSegment() {
     id = id.replace('splitItemDiv-', '');
     id = id.replace('splitSegmentItem-', '');
 
-    setCurrentTime(editor.splitData.splits[id].clipBegin.replace("s", ""));
+    setCurrentTime(editor.splitData.splits[id].clipBegin);
 }
 
 /**
@@ -993,8 +1005,8 @@ function nextSegment() {
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipBegin = splitItem.clipBegin;
+	var clipEnd = splitItem.clipEnd;
 	if((isInInterval(currentTime, clipBegin - 0.1, clipBegin + 0.1) || (currentTime >= clipBegin)) &&
 	   (!isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1) && (currentTime < clipEnd))) {
 	    new_id = i + 1;
@@ -1004,7 +1016,7 @@ function nextSegment() {
     }
     if(new_id > 0) {
 	if (new_id <= editor.splitData.splits.length - 1) {
-	    setCurrentTime(editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+	    setCurrentTime(editor.splitData.splits[new_id].clipBegin);
 	} else if (new_id <= editor.splitData.splits.length) {
 	    setCurrentTime(getDuration());
 	}
@@ -1023,8 +1035,8 @@ function previousSegment() {
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = parseFloat(splitItem.clipBegin.replace("s", ""));
-	var clipEnd = parseFloat(splitItem.clipEnd.replace("s", ""));
+	var clipBegin = splitItem.clipBegin;
+	var clipEnd = splitItem.clipEnd;
 	if(((currentTime > clipBegin) && (currentTime < clipEnd)) || isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1)) {
 	    new_id = i;
 	    break;
@@ -1037,7 +1049,7 @@ function previousSegment() {
 	}
     }
     if (new_id >= 0) {
-	setCurrentTime(editor.splitData.splits[new_id].clipBegin.replace("s", ""));
+	setCurrentTime(editor.splitData.splits[new_id].clipBegin);
     }
 }
 
@@ -1153,8 +1165,8 @@ function initPlayButtons() {
 	editor.splitData.splits = [];
 	// create standard split point
 	editor.splitData.splits.push({
-	    clipBegin : '0s',
-	    clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
+	    clipBegin : 0,
+	    clipEnd : workflowInstance.mediapackage.duration / 1000,
 	    enabled : true,
 	    description : ""
 	});
@@ -1184,8 +1196,8 @@ function playerReady() {
 
 	// create standard split point
 	editor.splitData.splits.push({
-	    clipBegin : '0s',
-	    clipEnd : workflowInstance.mediapackage.duration / 1000 + "s",
+	    clipBegin : 0,
+	    clipEnd : workflowInstance.mediapackage.duration / 1000,
 	    enabled : true,
 	    description : ""
 	});
@@ -1204,8 +1216,8 @@ function playerReady() {
 		    $.each(smil.smil.body.seq.par, function(key, value) {
 			value.ref = ocUtils.ensureArray(value.ref);
 			editor.splitData.splits.push({
-			    clipBegin : value.ref[0].clipBegin,
-			    clipEnd : value.ref[0].clipEnd,
+			    clipBegin : parseFloat(value.ref[0].clipBegin.replace("s", "")),
+			    clipEnd : parseFloat(value.ref[0].clipEnd.replace("s", "")),
 			    enabled : true,
 			    description : value.ref[0].description ? value.ref[0].description : "",
 			});
@@ -1222,8 +1234,8 @@ function playerReady() {
 		      $.each(smil.smil.body.seq.par, function(key, value) {
 		      value.ref = ocUtils.ensureArray(value.ref);
 		      editor.splitData.splits.push({
-		      clipBegin : value.ref[0].clipBegin,
-		      clipEnd : value.ref[0].clipEnd,
+		      clipBegin : parseFloat(value.ref[0].clipBegin.replace("s", "")),
+		      clipEnd : parseFloat(value.ref[0].clipEnd.replace("s", "")),
 		      enabled : true,
 		      description : value.ref[0].description ? value.ref[0].description : "",
 		      });
@@ -1296,10 +1308,10 @@ function playerReady() {
 	});
 
 	$('#clipBegin input').blur(function(evt) {
-	    checkClipBegin();
+	    // checkClipBegin();
 	});
 	$('#clipEnd input').blur(function(evt) {
-	    checkClipEnd();
+	    // checkClipEnd(); // TODO
 	});
 
 	// add evtl handler for enter in editing fields
