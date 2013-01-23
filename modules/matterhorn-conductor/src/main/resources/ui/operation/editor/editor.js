@@ -739,6 +739,25 @@ function clearEvents() {
 }
 
 /**
+ * clearing events2
+ */
+function clearEvents2() {
+    if(timeout3 != null) {
+	window.clearTimeout(timeout3);
+	timeout3 = null;
+    }
+    if(timeout4 != null) {
+	window.clearTimeout(timeout4);
+	timeout4 = null;
+    }
+    editor.player.on("play", {
+	duration : 0,
+	endTime : getDuration()
+    }, onPlay);
+    clearEvents();
+}
+
+/**
  * function executed when play event was thrown
  * 
  * @param evt
@@ -764,8 +783,14 @@ function onTimeout() {
 		timeout2 = window.setTimeout(check, 10);
 		timeoutUsed = true;
 	    } else {
-		pauseVideo();
 		clearEvents();
+		pauseVideo();
+		if((timeout3 == null) && (timeout4 == null)) {
+		    editor.player.on("play", {
+			duration : 0,
+			endTime : getDuration()
+		    }, onPlay);
+		}
 		
 		jumpBackTime = currEvt.data.jumpBackTime;
 		jumpBackTime = ((jumpBackTime == null) || (jumpBackTime == undefined)) ? null : jumpBackTime;
@@ -1371,6 +1396,9 @@ $(document).ready(function() {
     // 37 - left, 38 - up, 39 - right, 40 - down
     $(document).keydown(function(e){
 	var keyCode = e.keyCode || e.which();
+	if(keyCode == 32) {
+	    clearEvents2();
+	}
 	if (!$('#clipBegin').is(":focus") && !$('#clipEnd').is(":focus") && ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40))) {
 	    isSeeking=true;
 	    return false;
@@ -1386,15 +1414,7 @@ $(document).ready(function() {
 
     $(document).click(function() {
 	if(!currSplitItemClickedViaJQ) {
-	    clearEvents();
-	    if(timeout3 != null) {
-		window.clearTimeout(timeout3);
-		timeout3 = null;
-	    }
-	    if(timeout4 != null) {
-		window.clearTimeout(timeout4);
-		timeout4 = null;
-	    }
+	    clearEvents2();
 	}
 	currSplitItemClickedViaJQ = false;
     });
