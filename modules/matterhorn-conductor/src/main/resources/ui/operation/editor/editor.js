@@ -439,7 +439,8 @@ function okButtonClick() {
 	if (id != "") {
 	    id = parseInt(id);
 	    if (getTimefieldTimeBegin() > getTimefieldTimeEnd()) {
-		displayError("The inpoint is bigger than the outpoint. Please check.", "Check in and outpoint");
+		displayError("The inpoint is bigger than the outpoint. Please check.", "Check inpoint and outpoint");
+		selectSegmentListElement(id);
 		return;
 	    }
 
