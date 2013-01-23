@@ -36,6 +36,14 @@ var NEXT_MARKER = "trim.next_marker";
 var PREVIOUS_MARKER = "trim.previous_marker";
 var PLAY_ENDING_OF_CURRENT_SEGMENT = "trim.play_ending_of_current_segment";
 
+// key codes
+var KEY_ENTER = 13;
+var KEY_SPACE = 32;
+var KEY_LEFT = 37;
+var KEY_UP = 38;
+var KEY_RIGHT = 39;
+var KEY_DOWN = 40;
+
 var default_config = {};
 default_config[PREVIOUS_FRAME] = "left";
 default_config[NEXT_FRAME] = "right";
@@ -59,6 +67,8 @@ editor.smil = null;
 editor.canvas = null;
 editor.ready = false;
 
+var windowResizeMS = 500;
+var initMS = 150;
 var timeout1 = null;
 var timeout2 = null;
 var timeout3 = null;
@@ -573,6 +583,7 @@ function splitItemClick() {
 		if(!currSplitItemClickedViaJQ) {
 		    setCurrentTime(splitItem.clipBegin);
 		}
+		// update the current time of the player
 		$('.video-timer').html(formatTime(getCurrentTime()) + "/" + formatTime(getDuration()));
 	    }
 
@@ -1360,13 +1371,15 @@ function playerReady() {
 	});
 
 	// add evtl handler for enter in editing fields
-	$('#clipBegin input').keyup(function(evt) {
-	    if (evt.keyCode == 13) {
+	$('#clipBegin input').keyup(function(e) {
+	    var keyCode = e.keyCode || e.which();
+	    if (keyCode == KEY_ENTER) {
 		okButtonClick();
 	    }
 	});
-	$('#clipEnd input').keyup(function(evt) {
-	    if (evt.keyCode == 13) {
+	$('#clipEnd input').keyup(function(e) {
+	    var keyCode = e.keyCode || e.which();
+	    if (keyCode == KEY_ENTER) {
 		okButtonClick();
 	    }
 	});
@@ -1393,19 +1406,18 @@ $(document).ready(function() {
     checkClipBegin();
     checkClipEnd();
 
-    // 37 - left, 38 - up, 39 - right, 40 - down
     $(document).keydown(function(e){
 	var keyCode = e.keyCode || e.which();
-	if(keyCode == 32) {
+	if(keyCode == KEY_SPACE) {
 	    clearEvents2();
 	}
-	if (!$('#clipBegin').is(":focus") && !$('#clipEnd').is(":focus") && ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40))) {
+	if (!$('#clipBegin').is(":focus") && !$('#clipEnd').is(":focus") && ((keyCode == KEY_LEFT) || (keyCode == KEY_UP) || (keyCode == KEY_RIGHT) || (keyCode == KEY_DOWN))) {
 	    isSeeking=true;
 	    return false;
 	}
     }).keyup(function(e){
 	var keyCode = e.keyCode || e.which();
-	if ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40)) {
+	if ((keyCode == KEY_LEFT) || (keyCode == KEY_UP) || (keyCode == KEY_RIGHT) || (keyCode == KEY_DOWN)) {
 	    isSeeking=false;
 	    lastTimeSplitItemClick = new Date();
 	    return false;
@@ -1425,12 +1437,11 @@ $(document).ready(function() {
 	}
 	this.resizeTO = setTimeout(function() {
             $(this).trigger('resizeEnd');
-	}, 500);
+	}, windowResizeMS);
     });
 
     $(window).bind('resizeEnd', function() {
-	// window hasn't changed size in 500ms
-	ocUtils.log("Resize done. Updating split list view.");
+	// window has not been resized in windowResizeMS ms
 	editor.updateSplitList();
 	selectCurrentSplitItem();
     });
@@ -1443,5 +1454,5 @@ $(document).ready(function() {
 	    pauseVideo();
 	    setCurrentTime(0);
 	}
-    }, 100);
+    }, initMS);
 })
