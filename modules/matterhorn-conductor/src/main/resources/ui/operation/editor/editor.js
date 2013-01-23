@@ -249,11 +249,11 @@ function getCurrentSplitItem() {
 }
 
 function getTimefieldTimeBegin() {
-    return $('#clipBegin').timefield('option', 'seconds');
+    return $('#clipBegin').timefield('option', 'value');
 }
 
 function getTimefieldTimeEnd() {
-    return $('#clipEnd').timefield('option', 'seconds');
+    return $('#clipEnd').timefield('option', 'value');
 }
 
 /******************************************************************************/
@@ -299,11 +299,11 @@ function setCurrentTime(time) {
 }
 
 function setTimefieldTimeBegin(time) {
-    $('#clipBegin').timefield('option', 'value', time + "s");
+    $('#clipBegin').timefield('option', 'value', time);
 }
 
 function setTimefieldTimeEnd(time) {
-    $('#clipEnd').timefield('option', 'value', time + "s");
+    $('#clipEnd').timefield('option', 'value', time);
 }
 
 /******************************************************************************/
@@ -313,19 +313,34 @@ function setTimefieldTimeEnd(time) {
 /**
  * formatting a time string to hh:MM:ss.mm
  * 
- * @param time
- *          the timeString
+ * @param seconds
+ *          the timeString in seconds
  * @returns the formated time string
  */
-function formatTime(time) {
-    if (typeof time == "string") {
-	time = time.replace("s", "");
-	time = parseFloat(time);
+function formatTime(seconds) {
+    if (typeof seconds == "string") {
+	seconds = parseFloat(seconds);
     }
-    seconds = parseInt(time);
-    millis = parseInt((time - seconds) * 100);
-    formatted = ocUtils.formatSeconds(time) + "." + millis;
-    return formatted;
+    
+    var h = "00";
+    var m = "00";
+    var s = "00";
+    if (!isNaN(seconds) && (seconds >= 0)) {
+	var tmpH = Math.floor(seconds / 3600);
+	var tmpM = Math.floor((seconds - (tmpH * 3600)) / 60);
+	var tmpS = Math.floor(seconds - (tmpH * 3600) - (tmpM * 60));
+	var tmpMS = seconds - tmpS;
+	h = (tmpH < 10) ? "0" + tmpH : (Math.floor(seconds / 3600) + "");
+	m = (tmpM < 10) ? "0" + tmpM : (tmpM + "");
+	s = (tmpS < 10) ? "0" + tmpS : (tmpS + "");
+	ms = tmpMS + "";
+	var indexOfSDot = ms.indexOf(".");
+	if(indexOfSDot != -1) {
+	    ms = ms.substr(indexOfSDot + 1, ms.length);
+	}
+	ms = ms.substr(0, 4);
+    }
+    return h + ":" + m + ":" + s + "." + ms;
 }
 
 /******************************************************************************/
@@ -428,17 +443,28 @@ function okButtonClick() {
 		return;
 	    }
 
+	    var tmpBegin = splitItem.clipBegin;
+	    var tmpEnd = splitItem.clipEnd;
+	    var tmpDescription = splitItem.description;
+
 	    splitItem = editor.splitData.splits[id];
 	    splitItem.clipBegin = getTimefieldTimeBegin();
 	    splitItem.clipEnd = getTimefieldTimeEnd();
 	    splitItem.description = $('#splitDescription').val();
-
 	    if(checkPrevAndNext(id)) {
 		editor.updateSplitList(true);
 		$('#videoPlayer').focus();
 		selectSegmentListElement(id);
+	    } else {
+		splitItem = editor.splitData.splits[id];
+		splitItem.clipBegin = tmpBegin;
+		splitItem.clipEnd = tmpEnd;
+		splitItem.description = tmpDescription;
+		selectSegmentListElement(id);
 	    }
 	}
+    } else {
+	selectCurrentSplitItem();
     }
 }
 
@@ -541,10 +567,9 @@ function splitItemClick() {
 
 	    currSplitItem = splitItem;
 	    
-	    var clipBegin = splitItem.clipBegin;
 	    if(!timeoutUsed) {
 		if(!currSplitItemClickedViaJQ) {
-		    setCurrentTime(clipBegin);
+		    setCurrentTime(splitItem.clipBegin);
 		}
 	    }
 
@@ -558,13 +583,13 @@ function splitItemClick() {
  */
 function splitButtonClick() {
     var currentTime = getCurrentTime();
-    for ( var i = 0; i < editor.splitData.splits.length; ++i) {
+    for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
 	var clipBegin = splitItem.clipBegin;
 	var clipEnd = splitItem.clipEnd;
-	if (clipBegin < currentTime && currentTime < clipEnd) {
+	if ((clipBegin < currentTime) && (currentTime < clipEnd)) {
 	    newEnd = 0;
-	    if (editor.splitData.splits.length == i + 1) {
+	    if (editor.splitData.splits.length == (i + 1)) {
 		newEnd = splitItem.clipEnd;
 	    } else {
 		newEnd = editor.splitData.splits[i + 1].clipBegin;
@@ -1216,8 +1241,8 @@ function playerReady() {
 		    $.each(smil.smil.body.seq.par, function(key, value) {
 			value.ref = ocUtils.ensureArray(value.ref);
 			editor.splitData.splits.push({
-			    clipBegin : parseFloat(value.ref[0].clipBegin.replace("s", "")),
-			    clipEnd : parseFloat(value.ref[0].clipEnd.replace("s", "")),
+			    clipBegin : parseFloat(value.ref[0].clipBegin),
+			    clipEnd : parseFloat(value.ref[0].clipEnd),
 			    enabled : true,
 			    description : value.ref[0].description ? value.ref[0].description : "",
 			});
@@ -1234,8 +1259,8 @@ function playerReady() {
 		      $.each(smil.smil.body.seq.par, function(key, value) {
 		      value.ref = ocUtils.ensureArray(value.ref);
 		      editor.splitData.splits.push({
-		      clipBegin : parseFloat(value.ref[0].clipBegin.replace("s", "")),
-		      clipEnd : parseFloat(value.ref[0].clipEnd.replace("s", "")),
+		      clipBegin : parseFloat(value.ref[0].clipBegin),
+		      clipEnd : parseFloat(value.ref[0].clipEnd),
 		      enabled : true,
 		      description : value.ref[0].description ? value.ref[0].description : "",
 		      });

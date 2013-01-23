@@ -253,33 +253,38 @@
        * utitlity functions
        ************************************************************************/
 
-      /**
-       * formats given time in seconds to mm:ss
-       * 
-       * @param seconds
-       *          time to format in seconds
-       * @return given time in seconds formatted to hh:MM:ss.mmmm
-       */
-      var formatTime = function(seconds) {
-        var h = "00";
-        var m = "00";
-        var s = "00";
-        if (!isNaN(seconds) && (seconds >= 0)) {
-	  var tmpH = Math.floor(seconds / 3600);
-	  var tmpM = Math.floor((seconds - (tmpH * 3600)) / 60);
-	  var tmpS = seconds - (tmpH * 3600) - (tmpM * 60);
-          var tmpMS = tmpS + "";
-          h = (tmpH < 10) ? "0" + tmpH : Math.floor(seconds / 3600);
-          m = (tmpM < 10) ? "0" + tmpM : tmpM;
-          s = (tmpS < 10) ? "0" + tmpS : tmpS;
-          s = s + "";
-	  var indexOfSDot = s.indexOf(".");
-          if(indexOfSDot != -1) {
-            s = s.substr(0, indexOfSDot + 5);
-          }
-        }
-        return h + ":" + m + ":" + s;
-      };
+	/**
+	 * formats given time in seconds to mm:ss
+	 * 
+	 * @param seconds
+	 *          time to format in seconds
+	 * @return given time in seconds formatted to hh:MM:ss.mmmm
+	 */
+	var formatTime = function(seconds) {
+	    if (typeof seconds == "string") {
+		seconds = parseFloat(seconds);
+	    }
+	    
+            var h = "00";
+            var m = "00";
+            var s = "00";
+            if (!isNaN(seconds) && (seconds >= 0)) {
+		var tmpH = Math.floor(seconds / 3600);
+		var tmpM = Math.floor((seconds - (tmpH * 3600)) / 60);
+		var tmpS = Math.floor(seconds - (tmpH * 3600) - (tmpM * 60));
+		var tmpMS = seconds - tmpS;
+		h = (tmpH < 10) ? "0" + tmpH : (Math.floor(seconds / 3600) + "");
+		m = (tmpM < 10) ? "0" + tmpM : (tmpM + "");
+		s = (tmpS < 10) ? "0" + tmpS : (tmpS + "");
+		ms = tmpMS + "";
+		var indexOfSDot = ms.indexOf(".");
+		if(indexOfSDot != -1) {
+		    ms = ms.substr(indexOfSDot + 1, ms.length);
+		}
+		ms = ms.substr(0, 4);
+            }
+            return h + ":" + m + ":" + s + "." + ms;
+	};
 
       /**
        * updates the time on the video time field
