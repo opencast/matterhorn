@@ -238,9 +238,7 @@ function getCurrentSplitItem() {
     var currentTime = getCurrentTime();
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = splitItem.clipBegin;
-	var clipEnd = splitItem.clipEnd;
-	if (clipBegin <= currentTime && currentTime < clipEnd) {
+	if ((splitItem.clipBegin <= currentTime) && (currentTime < splitItem.clipEnd)) {
 	    splitItem.id = i;
 	    return splitItem;
 	}
@@ -590,9 +588,7 @@ function splitButtonClick() {
     var currentTime = getCurrentTime();
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = splitItem.clipBegin;
-	var clipEnd = splitItem.clipEnd;
-	if ((clipBegin < currentTime) && (currentTime < clipEnd)) {
+	if ((splitItem.clipBegin < currentTime) && (currentTime < splitItem.clipEnd)) {
 	    newEnd = 0;
 	    if (editor.splitData.splits.length == (i + 1)) {
 		newEnd = splitItem.clipEnd;
@@ -810,15 +806,13 @@ function playCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
     if (splitItem != null) {
 	pauseVideo();
-	var clipBegin = splitItem.clipBegin;
-	var clipEnd = splitItem.clipEnd;
-	var duration = (clipEnd - clipBegin) * 1000;
-	setCurrentTime(clipBegin);
+	var duration = (splitItem.clipEnd - splitItem.clipBegin) * 1000;
+	setCurrentTime(splitItem.clipBegin);
 
 	clearEvents();
 	editor.player.on("play", {
 	    duration : duration,
-	    endTime : clipEnd
+	    endTime : splitItem.clipEnd
 	}, onPlay);
 	playVideo();
     }
@@ -1035,10 +1029,8 @@ function nextSegment() {
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = splitItem.clipBegin;
-	var clipEnd = splitItem.clipEnd;
-	if((isInInterval(currentTime, clipBegin - 0.1, clipBegin + 0.1) || (currentTime >= clipBegin)) &&
-	   (!isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1) && (currentTime < clipEnd))) {
+	if((isInInterval(currentTime, splitItem.clipBegin - 0.1, splitItem.clipBegin + 0.1) || (currentTime >= splitItem.clipBegin)) &&
+	   (!isInInterval(currentTime, splitItem.clipEnd - 0.1, splitItem.clipEnd + 0.1) && (currentTime < splitItem.clipEnd))) {
 	    new_id = i + 1;
 	    break;
 	}
@@ -1065,15 +1057,13 @@ function previousSegment() {
     var new_id = -1;
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
 	var splitItem = editor.splitData.splits[i];
-	var clipBegin = splitItem.clipBegin;
-	var clipEnd = splitItem.clipEnd;
-	if(((currentTime > clipBegin) && (currentTime < clipEnd)) || isInInterval(currentTime, clipEnd - 0.1, clipEnd + 0.1)) {
+	if(((currentTime > splitItem.clipBegin) && (currentTime < splitItem.clipEnd)) || isInInterval(currentTime, splitItem.clipEnd - 0.1, splitItem.clipEnd + 0.1)) {
 	    new_id = i;
 	    break;
-	} else if(isInInterval(currentTime, clipBegin - 0.1, clipBegin + 0.1)) {
+	} else if(isInInterval(currentTime, splitItem.clipBegin - 0.1, splitItem.clipBegin + 0.1)) {
 	    new_id = i - 1;
 	    break;
-	} else if ((i == (editor.splitData.splits.length - 1)) && (currentTime >= clipEnd)) {
+	} else if ((i == (editor.splitData.splits.length - 1)) && (currentTime >= splitItem.clipEnd)) {
 	    new_id = editor.splitData.splits.length - 1;
 	    break;
 	}
