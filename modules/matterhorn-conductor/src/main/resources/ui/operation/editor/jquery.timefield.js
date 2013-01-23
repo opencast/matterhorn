@@ -64,6 +64,9 @@
 		    ms = ms.substr(indexOfSDot + 1, ms.length);
 		}
 		ms = ms.substr(0, 4);
+		while(ms.length < 4) {
+		    ms += "0";
+		}
             }
             return h + ":" + m + ":" + s + "." + ms;
 	},

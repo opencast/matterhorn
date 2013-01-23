@@ -339,6 +339,9 @@ function formatTime(seconds) {
 	    ms = ms.substr(indexOfSDot + 1, ms.length);
 	}
 	ms = ms.substr(0, 4);
+	while(ms.length < 4) {
+	    ms += "0";
+	}
     }
     return h + ":" + m + ":" + s + "." + ms;
 }
@@ -538,7 +541,7 @@ function splitItemClick() {
     if((now - lastTimeSplitItemClick) > 80) {
 	lastTimeSplitItemClick = now;
 
-	// if it's not already disabled
+	// if not disabled and not seeking
 	if (!$(this).hasClass('disabled') && ((isSeeking && ($(this).prop('id').indexOf('Div-') == -1)) || !isSeeking)) {
 	    // remove all selected classes
 	    $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
@@ -572,6 +575,7 @@ function splitItemClick() {
 		if(!currSplitItemClickedViaJQ) {
 		    setCurrentTime(splitItem.clipBegin);
 		}
+		$('.video-timer').html(formatTime(getCurrentTime()) + "/" + formatTime(getDuration()));
 	    }
 
 	    enableRightBox(true);
@@ -1337,7 +1341,7 @@ function playerReady() {
 	    // checkClipBegin();
 	});
 	$('#clipEnd input').blur(function(evt) {
-	    // checkClipEnd(); // TODO
+	    // checkClipEnd();
 	});
 
 	// add evtl handler for enter in editing fields
@@ -1377,7 +1381,7 @@ $(document).ready(function() {
     // 37 - left, 38 - up, 39 - right, 40 - down
     $(document).keydown(function(e){
 	var keyCode = e.keyCode || e.which();
-	if ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40)) {
+	if (!$('#clipBegin').is(":focus") && !$('#clipEnd').is(":focus") && ((keyCode == 37) || (keyCode == 38) || (keyCode == 39) || (keyCode == 40))) {
 	    isSeeking=true;
 	    return false;
 	}
