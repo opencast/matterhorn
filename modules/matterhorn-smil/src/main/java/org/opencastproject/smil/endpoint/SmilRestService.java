@@ -82,26 +82,26 @@ public class SmilRestService {
     p.addElement(m);
     m = new MediaElement();
     m.setClipBegin("123.123s");
-    m.setClipEnd("321.312s");
+    m.setClipEnd("321.321s");
     m.setType("video");
-    m.setSrc("http://www.google.de/avi.avi");
+    m.setSrc("http://www.google.de/avi2.avi");
     p.addElement(m);
 
     p = new ParallelElement();
     smil.getBody().getSequence().addParallel(p);
 
     m = new MediaElement();
-    m.setClipBegin("123.123s");
-    m.setClipEnd("321.312s");
+    m.setClipBegin("456.456s");
+    m.setClipEnd("654.654s");
     m.setType("video");
     m.setSrc("http://www.google.de/avi.avi");
 
     p.addElement(m);
     m = new MediaElement();
-    m.setClipBegin("123.123s");
-    m.setClipEnd("321.312s");
+    m.setClipBegin("456.456s");
+    m.setClipEnd("654.654s");
     m.setType("video");
-    m.setSrc("http://www.google.de/avi.avi");
+    m.setSrc("http://www.google.de/avi2.avi");
     p.addElement(m);
 
     return getEntityResponse(smil, format);
@@ -127,12 +127,8 @@ public class SmilRestService {
              returnDescription = "returns a new SMIL",
              reponses = {
                  @RestResponse(description = "SMIL was created successfully", responseCode = 200),
-                 @RestResponse(
-                               description = "An error occurred while creating SMIL",
-                               responseCode = 500),
-                 @RestResponse(
-                               description = "the SMIL document could not be found inside the worklfow",
-                               responseCode = 404) })
+                 @RestResponse(description = "There is no workflow with this Id", responseCode = 404),
+                 @RestResponse(description = "An error occurred while creating SMIL", responseCode = 500) })
   public Response getNew(@QueryParam("workflowId") long workflowId,
                          @QueryParam("format") @DefaultValue("xml") String format) {
     logger.debug("creating new Smil Document");
@@ -168,9 +164,8 @@ public class SmilRestService {
              returnDescription = "returns the associated SMIL",
              reponses = {
                  @RestResponse(description = "SMIL was retrieved successfully", responseCode = 200),
-                 @RestResponse(
-                               description = "An error occurred while retrieving SMIL",
-                               responseCode = 500) })
+                 @RestResponse(description = "There is no SMIL for the workflow with the given Id", responseCode = 404),
+                 @RestResponse(description = "An error occurred while retrieving SMIL", responseCode = 500)})
   public Response getSmil(@PathParam("workflowId") long workflowId,
                           @QueryParam("format") @DefaultValue("xml") String format) {
     logger.debug("retrieving SMIL document from workflow: {}", workflowId);
@@ -200,12 +195,9 @@ public class SmilRestService {
                                                type = RestParameter.Type.STRING) },
              returnDescription = "returns the edited SMIL",
              reponses = {
-                 @RestResponse(
-                               description = "SMIL was manipulated successfully",
-                               responseCode = 200),
-                 @RestResponse(
-                               description = "An error occurred while editing SMIL",
-                               responseCode = 500) })
+                 @RestResponse(description = "SMIL was manipulated successfully", responseCode = 200),
+                 @RestResponse(description = "There is no SMIL for the workflow with the given Id", responseCode = 404),
+                 @RestResponse(description = "An error occurred while editing SMIL", responseCode = 500) })
   public Response addParallelElement(@PathParam("workflowId") long workflowId,
                                      @PathParam("elementId") String elementId,
                                      @QueryParam("format") @DefaultValue("xml") String format) {
@@ -241,12 +233,9 @@ public class SmilRestService {
                                 type = RestParameter.Type.STRING) },
              returnDescription = "returns the edited SMIL",
              reponses = {
-                 @RestResponse(
-                               description = "SMIL was manipulated successfully",
-                               responseCode = 200),
-                 @RestResponse(
-                               description = "An error occurred while editing SMIL",
-                               responseCode = 500) })
+                 @RestResponse(description = "SMIL was manipulated successfully", responseCode = 200),
+                 @RestResponse(description = "There is no SMIL for the workflow with the given Id", responseCode = 404),
+                 @RestResponse(description = "An error occurred while editing SMIL", responseCode = 500) })
   public Response removeElement(@PathParam("workflowId") long workflowId,
                                 @PathParam("elementId") String elementId,
                                 @QueryParam("format") @DefaultValue("xml") String format) {
@@ -318,12 +307,9 @@ public class SmilRestService {
                                 name = "mhElement",
                                 type = RestParameter.Type.STRING), },
              reponses = {
-                 @RestResponse(
-                               description = "SMIL was manipulated successfully",
-                               responseCode = 200),
-                 @RestResponse(
-                               description = "An error occurred while editing SMIL",
-                               responseCode = 500) })
+                 @RestResponse(description = "SMIL was manipulated successfully", responseCode = 200),
+                 @RestResponse(description = "There is no SMIL for the workflow with the given Id", responseCode = 404),
+                 @RestResponse(description = "An error occurred while editing SMIL", responseCode = 500) })
   public Response addMediaElement(@PathParam("workflowId") long workflowId,
                                   @PathParam("elementId") String elementId,
                                   @QueryParam("type") String type,
@@ -372,9 +358,10 @@ public class SmilRestService {
                                                name = "format",
                                                isRequired = false,
                                                type = RestParameter.Type.STRING) },
-             reponses = { @RestResponse(
-                                        description = "SMIL was created successfully",
-                                        responseCode = 200) })
+             reponses = { 
+                @RestResponse(description = "SMIL was cleared successfully", responseCode = 200),
+                @RestResponse(description = "There is no SMIL for the workflow with the given Id", responseCode = 404),
+                @RestResponse(description = "An error occurred while clear SMIL", responseCode = 500)})
   public Response clearDocument(@PathParam("workflowId") long workflowId,
                                 @QueryParam("format") @DefaultValue("xml") String format) {
     Smil smil = null;
@@ -385,7 +372,7 @@ public class SmilRestService {
       logger.error("could not find SMIL");
       return Response.status(404).entity(buildUnexpectedErrorMessage(e)).build();
     } catch (SmilException e) {
-      logger.error("error while adding media element to SMIL");
+      logger.error("error while clear SMIL");
       return Response.serverError().entity(buildUnexpectedErrorMessage(e)).build();
     }
 
@@ -437,5 +424,4 @@ public class SmilRestService {
   protected void setSmilService(SmilService smilService) {
     this.smilService = smilService;
   }
-
 }

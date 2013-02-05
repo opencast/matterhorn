@@ -28,12 +28,15 @@ import java.io.InputStream;
 import java.util.Arrays;
 
 import javax.imageio.ImageIO;
+import org.opencastproject.ingest.api.IngestException;
 
 import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
+import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.Track;
+import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
@@ -108,6 +111,23 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       return createResult(Action.SKIP);
     }
 
+    // size of chunk that should be loaded
+    int chunkSize = 16 * 1024 * 1024;
+    // for signed signals, the middle is 0 (-1 ~ 1)
+    double middleLine = 0;
+    // magnifier
+    int magnifier = 1000;
+    // middle line
+    int middle = 0;
+    // x position in waveform
+    int xPos = 0;
+    
+    int height = 500;
+    int width = 5000;
+    middle = height / 2;
+    
+    BufferedImage bufferedImage = null;
+    
     try {
       logger.debug("tracks: {}", Arrays.toString(tracks));
       File waveFile = workspace.get(tracks[0].getURI());
@@ -122,30 +142,14 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       FileInputStream in = new FileInputStream(waveFile);
       // ignore first 44 bytes because that's the header of the wave file
       in.read(new byte[44]);
-      // size of chunk that should be loaded
-      int chunkSize = 16 * 1024 * 1024;
-      // for signed signals, the middle is 0 (-1 ~ 1)
-      double middleLine = 0;
-      // magnifier
-      int magnifier = 1000;
-      // middle line
-      int middle = 0;
-      // x position in waveform
-      int xPos = 0;
       // number of bytes per sample (should be 2)
       int bytePerSample = wave.getWaveHeader().getBitsPerSample() / 8;
       // number of samples in wave file
       int numSamples = in.available() / bytePerSample;
+      // render wave form image
+      bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
       /************************************/
-      int height = 500;
-      int width = 5000;
-
-      middle = height / 2;
-
-      // render wave form image
-      BufferedImage bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-
       // set default white background
       Graphics2D graphics = bufferedImage.createGraphics();
       graphics.setPaint(new Color(255, 255, 255));
@@ -206,19 +210,34 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
         bytes = getPart(in, chunkSize);
       }
 
-      // finally save the image to file
-      logger.debug("putting bufferedImage in ByteArrayOutputstream");
-      ByteArrayOutputStream os = new ByteArrayOutputStream();
-      ImageIO.write(bufferedImage, "png", os);
-      InputStream is = new ByteArrayInputStream(os.toByteArray());
-      logger.debug("adding waveform as an attachment to mediapackage");
-      mediaPackage = ingestService.addAttachment(is, "waveform.png", waveformFlavor, mediaPackage);
-
-    } catch (Exception e) {
-      logger.error(e.getMessage());
-      throw new WorkflowOperationException(e);
+    } catch (NotFoundException ex) {
+      logger.error("Getting wav file from workspace failed", ex);
+      throw new WorkflowOperationException(ex);
+    } catch (IOException ex) {
+      logger.error("Failed to read wav file", ex);
+      throw new WorkflowOperationException(ex);
     }
-    return createResult(mediaPackage, Action.CONTINUE);
+    
+    try {
+        // finally save the image to file
+        logger.debug("putting bufferedImage in ByteArrayOutputstream");
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        ImageIO.write(bufferedImage, "png", os);
+        InputStream is = new ByteArrayInputStream(os.toByteArray());
+        logger.debug("adding waveform as an attachment to mediapackage");
+        mediaPackage = ingestService.addAttachment(is, "waveform.png", waveformFlavor, mediaPackage);
+        
+        return createResult(mediaPackage, Action.CONTINUE);
+    } catch (MediaPackageException ex) {
+        logger.error("Failed to put waveform image to mediapackage", ex);
+        throw new WorkflowOperationException(ex);
+    } catch (IngestException ex) {
+        logger.error("Ingesting failed", ex);
+        throw new WorkflowOperationException(ex);
+    } catch (IOException ex) {
+        logger.error("Ingesting failed", ex);
+        throw new WorkflowOperationException(ex);
+    }
   }
 
   /**
@@ -490,7 +509,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       }
 
       if (bitsPerSample != 8 && bitsPerSample != 16) {
-        System.err.println("WaveHeader: only supports bitsPerSample 8 or 16");
+        logger.debug("WaveHeader: only supports bitsPerSample 8 or 16");
         return false;
       }
 
@@ -499,7 +518,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
           && audioFormat == 1) {
         return true;
       } else {
-        System.err.println("WaveHeader: Unsupported header format");
+        logger.debug("WaveHeader: Unsupported header format");
       }
 
       return false;
