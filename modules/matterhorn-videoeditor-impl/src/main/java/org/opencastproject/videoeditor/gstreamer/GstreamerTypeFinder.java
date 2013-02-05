@@ -119,6 +119,9 @@ public class GstreamerTypeFinder {
       }
     });
     
+    filesrc.disown();
+    decodebin.disown();
+    
     pipeline.play();
     mainLoop.run();
     pipeline.stop();

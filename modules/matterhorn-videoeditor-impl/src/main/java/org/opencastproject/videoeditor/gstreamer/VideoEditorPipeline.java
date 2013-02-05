@@ -62,7 +62,6 @@ public class VideoEditorPipeline {
     private Pipeline pipeline;
     private MainLoop mainLoop = new MainLoop();
     private String lastErrorMessage = null;
-    private static final Object runLock = new Object();
 
     public VideoEditorPipeline(Properties properties) {
         this.properties = properties != null ? properties : new Properties();
@@ -75,10 +74,8 @@ public class VideoEditorPipeline {
      */
     public void run() {
         logger.debug("starting pipeline...");
-        synchronized (runLock) {
-            pipeline.play();
-            mainLoop.run();
-        }
+        pipeline.play();
+        mainLoop.run();
         logger.debug("main loop quit!");
         stop();
     }
@@ -222,7 +219,6 @@ public class VideoEditorPipeline {
 
         fileSink.set("location", sourceBins.getOutputFilePath());
         fileSink.set("sync", false);
-//        fileSink.set("async", false);
 
         Bin sourceBin;
         Element capsfilter;
@@ -241,6 +237,10 @@ public class VideoEditorPipeline {
             if (properties.containsKey(VideoEditorProperties.AUDIO_CAPS)) {
                 capsfilter.setCaps(Caps.fromString(properties.getProperty(VideoEditorProperties.AUDIO_CAPS)));
             }
+            // remove java references to elements
+            capsfilter.disown();
+            encoder.disown();
+            sourceBin.disown();
         }
 
         if (sourceBins.hasVideoSource()) {
@@ -256,10 +256,18 @@ public class VideoEditorPipeline {
             if (properties.containsKey(VideoEditorProperties.VIDEO_CAPS)) {
                 capsfilter.setCaps(Caps.fromString(properties.getProperty(VideoEditorProperties.VIDEO_CAPS)));
             }
+            // remove java references to elements
+            capsfilter.disown();
+            encoder.disown();
+            sourceBin.disown();
         }
 
         // add Gstreamer event listener
         addListener();
+        
+        // remove java references to elements
+        muxer.disown();
+        fileSink.disown();
     }
 
     /**
