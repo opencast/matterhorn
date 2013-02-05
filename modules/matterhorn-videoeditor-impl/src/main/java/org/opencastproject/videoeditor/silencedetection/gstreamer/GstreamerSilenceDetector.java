@@ -74,6 +74,17 @@ public class GstreamerSilenceDetector {
   public GstreamerSilenceDetector(Properties properties, String trackId, String filePath) throws PipelineBuildException {
     this.trackId = trackId;
     this.filePath = filePath;
+    
+    minSilenceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_MIN_LENGTH, DEFAULT_SILENCE_MIN_LENGTH));
+    minVoiceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.VOICE_MIN_LENGTH, DEFAULT_VOICE_MIN_LENGTH));
+    Long preSilenceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_PRE_LENGTH, DEFAULT_SILENCE_PRE_LENGTH));
+    Double thresholdDB = Double.parseDouble(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_THRESHOLD_DB, DEFAULT_THRESHOLD_DB));
+    
+    // create and setup silence detection pipeline
     pipeline = new Pipeline();
     
     final Element filesource = ElementFactory.make(GstreamerElements.FILESRC, null);
@@ -93,18 +104,7 @@ public class GstreamerSilenceDetector {
     }
     
     filesource.set("location", filePath);
-    
-    minSilenceLength = Long.parseLong(properties.getProperty(
-            SilenceDetectionProperties.SILENCE_PRE_LENGTH, DEFAULT_SILENCE_PRE_LENGTH));
-    minVoiceLength = Long.parseLong(properties.getProperty(
-            SilenceDetectionProperties.VOICE_MIN_LENGTH, DEFAULT_VOICE_MIN_LENGTH));
-    
-    Long preSilenceLength = Long.parseLong(properties.getProperty(
-            SilenceDetectionProperties.SILENCE_PRE_LENGTH, DEFAULT_SILENCE_PRE_LENGTH));
     cutter.set("run-length", TimeUnit.MILLISECONDS.toNanos(preSilenceLength));
-    
-    Double thresholdDB = Double.parseDouble(properties.getProperty(
-            SilenceDetectionProperties.SILENCE_THRESHOLD_DB, DEFAULT_THRESHOLD_DB));
     cutter.set("threshold-dB", thresholdDB);
     
     fakesink.set("sync", false);
@@ -129,18 +129,18 @@ public class GstreamerSilenceDetector {
         switch(message.getType()) {
           case EOS:
             logger.debug("EOS from " + message.getSource().getName());
-            mainLoop.quit();
             if (lastSilenceStart > lastSilenceStop) {
               addMediaSegment(TimeUnit.NANOSECONDS.toMillis(lastSilenceStart), 
                       fakesink.getLastBuffer().getTimestamp().toMillis());
             }
+            mainLoop.quit();
             break;
           case ERROR:
             logger.warn("ERROR from {}: {}", new String[] { 
               message.getSource().getName(), message.getStructure().toString() });
-            mainLoop.quit();
             lastPipelineError = String.format("Gstreamer ERROR from %s", 
                     message.getSource().getName());
+            mainLoop.quit();
             break;
           case ELEMENT:
             if (message.getSource() == cutter) {
@@ -151,6 +151,12 @@ public class GstreamerSilenceDetector {
         }
       }
     });
+    
+    filesource.disown();
+    decodebin.disown();
+    audioconvert.disown();
+    cutter.disown();
+    fakesink.disown();
   }
   
   /**
