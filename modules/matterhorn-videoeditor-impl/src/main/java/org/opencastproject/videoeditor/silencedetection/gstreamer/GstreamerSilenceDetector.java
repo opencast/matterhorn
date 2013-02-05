@@ -43,11 +43,14 @@ public class GstreamerSilenceDetector {
   
   private static final Logger logger = LoggerFactory.getLogger(GstreamerSilenceDetector.class);
   
-  private static final long DEFAULT_SILENCE_MIN_LENGTH = 5L;
-  private static final long DEFAULT_SILENCE_PRE_LENGTH = 2L;
-  private static final double DEFAULT_THRESHOLD_DB = -40L;
+  private static final String DEFAULT_SILENCE_MIN_LENGTH = "5000";
+  private static final String DEFAULT_SILENCE_PRE_LENGTH = "2000";
+  private static final String DEFAULT_THRESHOLD_DB = "-40";
+  private static final String DEFAULT_VOICE_MIN_LENGTH = "60000";
   
-  private final Properties properties;
+  private long minSilenceLength;
+  private long minVoiceLength;
+  
   private final String trackId;
   private final String filePath;
   
@@ -69,7 +72,6 @@ public class GstreamerSilenceDetector {
    * @throws PipelineBuildException if build pipeline fails
    */
   public GstreamerSilenceDetector(Properties properties, String trackId, String filePath) throws PipelineBuildException {
-    this.properties = properties;
     this.trackId = trackId;
     this.filePath = filePath;
     pipeline = new Pipeline();
@@ -92,18 +94,17 @@ public class GstreamerSilenceDetector {
     
     filesource.set("location", filePath);
     
-    Long minSilenceLength;
-    if (properties.containsKey(SilenceDetectionProperties.SILENCE_PRE_LENGTH)) {
-      minSilenceLength = Long.parseLong(properties.getProperty(SilenceDetectionProperties.SILENCE_PRE_LENGTH));
-    } else {
-      minSilenceLength = DEFAULT_SILENCE_PRE_LENGTH;
-    }
-    cutter.set("run-length", TimeUnit.SECONDS.toNanos(minSilenceLength));
+    minSilenceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_PRE_LENGTH, DEFAULT_SILENCE_PRE_LENGTH));
+    minVoiceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.VOICE_MIN_LENGTH, DEFAULT_VOICE_MIN_LENGTH));
     
-    Double thresholdDB = DEFAULT_THRESHOLD_DB;
-    if (properties.containsKey(SilenceDetectionProperties.SILENCE_THRESHOLD_DB)) {
-      thresholdDB = Double.parseDouble(properties.getProperty(SilenceDetectionProperties.SILENCE_THRESHOLD_DB));
-    }
+    Long preSilenceLength = Long.parseLong(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_PRE_LENGTH, DEFAULT_SILENCE_PRE_LENGTH));
+    cutter.set("run-length", TimeUnit.MILLISECONDS.toNanos(preSilenceLength));
+    
+    Double thresholdDB = Double.parseDouble(properties.getProperty(
+            SilenceDetectionProperties.SILENCE_THRESHOLD_DB, DEFAULT_THRESHOLD_DB));
     cutter.set("threshold-dB", thresholdDB);
     
     fakesink.set("sync", false);
@@ -207,12 +208,7 @@ public class GstreamerSilenceDetector {
       throw new ProcessFailedException(lastPipelineError);
     }
     
-    long minSilenceLength = TimeUnit.SECONDS.toMillis(DEFAULT_SILENCE_MIN_LENGTH);
-    if (properties.containsKey(SilenceDetectionProperties.SILENCE_MIN_LENGTH)) {
-      minSilenceLength = Long.parseLong(properties.getProperty(SilenceDetectionProperties.SILENCE_MIN_LENGTH));
-      minSilenceLength = TimeUnit.SECONDS.toMillis(minSilenceLength);
-    }
-    
+    // go thrue found segments and filter them with minimum silence length
     List<MediaSegment> segmentsTmp = new LinkedList<MediaSegment>();
     MediaSegment lastSegment = null;
     for (int i = 0; i < segments.size(); i++) {
@@ -230,8 +226,13 @@ public class GstreamerSilenceDetector {
       }
       segmentsTmp.add(lastSegment);
     }
-    
-    segments = segmentsTmp;
+    // drop all segments with length < minimum length
+    segments = new LinkedList();
+    for (MediaSegment segment : segmentsTmp) {
+        if (segment.getSegmentStop() - segment.getSegmentStart() >= minVoiceLength) {
+            segments.add(segment);
+        }
+    }
   }
   
   /**

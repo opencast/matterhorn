@@ -20,11 +20,12 @@ package org.opencastproject.videoeditor.silencedetection.impl;
  */
 public interface SilenceDetectionProperties {
   
-  /** Timespan in seconds before silece cut begin. */
+  /** Timespan in milliseconds before silece cut begin. */
   String SILENCE_PRE_LENGTH = "silence.pre.length";
-  /** Minimum length in seconds to accept silence sequence. */
+  /** Minimum length in milliseconds to accept silence sequence. */
   String SILENCE_MIN_LENGTH = "silence.min.length";
   /** Silence threshold in decibel (e.g. -50 for loud classrooms, -35 for very silent indoor location). */
   String SILENCE_THRESHOLD_DB = "silence.threshold.db";
-
+  /* Minimum (voice) segment length in milliseconds. */
+  String VOICE_MIN_LENGTH = "voice.min.length";
 }
