@@ -233,6 +233,13 @@ public class GstreamerSilenceDetector {
             segments.add(segment);
         }
     }
+    
+    if (segments.size() == 0 && segmentsTmp.size() != 0) {
+        logger.warn("Found segments are shorter then minimum segment length. Join them all...");
+        segments.add(new MediaSegment(
+                segmentsTmp.get(0).getSegmentStart(), 
+                segmentsTmp.get(segmentsTmp.size() - 1).getSegmentStop()));
+    }
   }
   
   /**
