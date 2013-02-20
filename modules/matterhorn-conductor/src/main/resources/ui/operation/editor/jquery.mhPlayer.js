@@ -195,11 +195,9 @@
 		mhVideo.prop("poster", options.preview);
 	    }
 	    var video_wrap = $('<div></div>').addClass(mainClass).addClass(options.theme).prop("id", "videoHolder");
-	    var subtle = (options.subtitle != '') ? '<div class="srt" data-video="' + mhVideo.attr("id") + '" data-srt="'
-		+ options.subtitle + '"></div>' : '';
 	    var video_controls = '';
 	    if (controls) {
-		video_controls = subtle + 
+		video_controls =
 		    '<div class="' + classVideoControls + ' ' + $(val).attr('id') + '">' + 
 		    '<div class="videocontrolsDiv">' +
 		    '<a class="' + classVideoPlay + '" title="' + strPlay + '"></a>' +
@@ -218,15 +216,9 @@
 		    '<div class="' + classVideoSeek + '"></div>' + 
 		    '<div class="' + classFullscreen + '"></div>' +
 		    '</div>';
-	    } else {
-		video_controls = subtle;
 	    }
 	    mhVideo.wrap(video_wrap);
 	    mhVideo.after(video_controls);
-	    // set width of the captions
-	    if (subtle) {
-		$(".srt").css("width", mhVideo.prop("width"));
-	    }
 	    var video_container = mhVideo.parent('.' + mainClass);
 	    var video_controls = $('.' + classVideoControls, video_container);
 	    var play_btn = $('.' + classVideoPlay, video_container);
@@ -640,8 +632,6 @@
 	    prev_btn.click(onPrevFrame);
 	    next_btn.click(onNextFrame);
 	    initFrameButtonsMouseEvents();
-
-	    $.addSrt();
 
 	    /*************************************************************************
 	     * misc
