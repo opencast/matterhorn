@@ -4,7 +4,7 @@
   <groupId>org.opencastproject</groupId>
   <artifactId>base</artifactId>
   <packaging>pom</packaging>
-  <version>1.4-rc6</version>
+  <version>1.4-rc7</version>
   <name>matterhorn</name>
   <description>The Opencast Project's Matterhorn software is a media capture, processing, and distribution system</description>
   <url>http://opencastproject.org</url>
@@ -35,7 +35,7 @@
         <module>modules/matterhorn-admin-ui</module>
         <module>modules/matterhorn-authorization-xacml</module>
         <module>modules/matterhorn-caption-api</module>
-		<module>modules/matterhorn-caption-impl</module>
+		    <module>modules/matterhorn-caption-impl</module>
         <module>modules/matterhorn-capture-admin-service-api</module>
         <module>modules/matterhorn-capture-admin-service-impl</module>
         <module>modules/matterhorn-common</module>
@@ -74,6 +74,7 @@
         <module>modules/matterhorn-videoeditor-api</module>
         <module>modules/matterhorn-videoeditor-impl</module>
         <module>modules/matterhorn-textanalyzer-api</module>
+		    <module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-videosegmenter-api</module>
         <module>modules/matterhorn-webconsole</module>
         <module>modules/matterhorn-workflow-service-api</module>
@@ -153,7 +154,6 @@
         <activeByDefault>false</activeByDefault>
       </activation>
       <modules>
-        <module>modules/matterhorn-authorization-xacml</module>
         <module>modules/matterhorn-common</module>
         <module>modules/matterhorn-db</module>
         <module>modules/matterhorn-dublincore</module>
@@ -161,17 +161,48 @@
         <module>modules/matterhorn-ingest-service-impl</module>
         <module>modules/matterhorn-json</module>
         <module>modules/matterhorn-kernel</module>
-        <module>modules/matterhorn-mediapackage-ui</module>
+        <module>modules/matterhorn-series-service-api</module>
+        <module>modules/matterhorn-series-service-impl</module>
         <module>modules/matterhorn-metadata-api</module>
+        <module>modules/matterhorn-serviceregistry</module>
         <module>modules/matterhorn-mpeg7</module>
         <module>modules/matterhorn-runtime-dependencies</module>
         <module>modules/matterhorn-runtime-info-ui</module>
-        <module>modules/matterhorn-series-service-api</module>
-        <module>modules/matterhorn-series-service-impl</module>
-        <module>modules/matterhorn-solr</module>
+		<module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-workflow-service-api</module>
         <module>modules/matterhorn-working-file-repository-service-api</module>
         <module>modules/matterhorn-workspace-api</module>
+      </modules>
+    </profile>
+
+    <profile>
+      <id>ingest-standalone</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <modules>
+        <module>modules/matterhorn-common</module>
+        <module>modules/matterhorn-db</module>
+        <module>modules/matterhorn-dublincore</module>
+        <module>modules/matterhorn-ingest-service-api</module>
+        <module>modules/matterhorn-ingest-service-impl</module>
+        <module>modules/matterhorn-json</module>
+        <module>modules/matterhorn-kernel</module>
+        <module>modules/matterhorn-series-service-api</module>
+        <module>modules/matterhorn-series-service-remote</module>
+        <module>modules/matterhorn-metadata-api</module>
+        <module>modules/matterhorn-serviceregistry</module>
+        <module>modules/matterhorn-mpeg7</module>
+        <module>modules/matterhorn-runtime-dependencies</module>
+        <module>modules/matterhorn-runtime-info-ui</module>
+		<module>modules/matterhorn-userdirectory-jpa</module>
+		<module>modules/matterhorn-webconsole</module>
+        <module>modules/matterhorn-workflow-service-api</module>
+        <module>modules/matterhorn-workflow-service-remote</module>   
+        <module>modules/matterhorn-working-file-repository-service-api</module>
+        <module>modules/matterhorn-working-file-repository-service-impl</module>
+        <module>modules/matterhorn-workspace-api</module>
+        <module>modules/matterhorn-workspace-impl</module>
       </modules>
     </profile>
 
@@ -197,6 +228,7 @@
         <module>modules/matterhorn-runtime-dependencies</module>
         <module>modules/matterhorn-runtime-info-ui</module>
         <module>modules/matterhorn-static</module>
+		    <module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-webconsole</module>
         <module>modules/matterhorn-workflow-service-api</module>
         <module>modules/matterhorn-workspace-api</module>
@@ -255,6 +287,7 @@
         <module>modules/matterhorn-search-service-feeds</module>
         <module>modules/matterhorn-search-service-impl</module>
         <module>modules/matterhorn-solr</module>
+		    <module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-usertracking-api</module>
         <module>modules/matterhorn-usertracking-impl</module>
         <module>modules/matterhorn-webconsole</module>
@@ -288,6 +321,7 @@
         <module>modules/matterhorn-search-service-feeds</module>
         <module>modules/matterhorn-search-service-impl</module>
         <module>modules/matterhorn-solr</module>
+		    <module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-usertracking-api</module>
         <module>modules/matterhorn-usertracking-impl</module>
         <module>modules/matterhorn-webconsole</module>
@@ -353,6 +387,7 @@
         <!--
         <module>modules/matterhorn-textextractor-ocropus</module>
         -->
+		    <module>modules/matterhorn-userdirectory-jpa</module>
         <module>modules/matterhorn-videosegmenter-api</module>
         <module>modules/matterhorn-videosegmenter-impl</module>
         <module>modules/matterhorn-webconsole</module>
@@ -1211,7 +1246,7 @@
       <dependency>
         <groupId>org.springframework.security</groupId>
         <artifactId>spring-security-cas-client</artifactId>
-        <version>3.0.2.RELEASE</version>
+        <version>3.1.0.RELEASE</version>
       </dependency>
 
       <dependency>

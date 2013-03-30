@@ -25,7 +25,6 @@ import org.opencastproject.feed.api.FeedGenerator;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
-import org.opencastproject.mediapackage.Track;
 import org.opencastproject.search.api.SearchResult;
 import org.opencastproject.search.api.SearchResultItem;
 import org.opencastproject.search.api.SearchResultItem.SearchResultItemType;
@@ -69,6 +68,9 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
 
   /** Link to the user interface */
   protected String linkTemplate = null;
+  
+  /** Link to the user alternative interface */
+  protected String linkSelf = null;  
 
   /** The feed homepage */
   protected String home = null;
@@ -105,6 +107,10 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
 
   /** The feed description */
   protected String description = null;
+  
+  /** The URL of the server for valid URIs in the feeds */
+  protected String serverUrl = null; 
+
 
   /** the logging facility provided by log4j */
   private static final Logger logger = LoggerFactory.getLogger(AbstractFeedGenerator.class);
@@ -113,7 +119,7 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
    * Creates a new abstract feed generator.
    * <p>
    * <b>Note:</b> Subclasses using this constructor need to set required member variables prior to calling
-   * {@link #createFeed(org.opencastproject.feed.api.Feed.Type, String[])} for the first time.
+   * {@link #createFeed(org.opencastproject.feed.api.Feed.Type, String[], int)} for the first time.
    */
   protected AbstractFeedGenerator() {
     atomTrackFlavors = new HashSet<MediaPackageElementFlavor>();
@@ -278,13 +284,19 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
    * {@inheritDoc}
    * 
    * @see org.opencastproject.feed.api.FeedGenerator#createFeed(org.opencastproject.feed.api.Feed.Type,
-   *      java.lang.String[])
+   *      java.lang.String[], int)
    */
-  public final Feed createFeed(Feed.Type type, String[] query) {
+  public final Feed createFeed(Feed.Type type, String[] query, int size) {
+    logger.debug("Started to create {} feed", type);
     SearchResult result = null;
 
     if (type == null)
       throw new IllegalArgumentException("Feed type must not be null");
+
+    if (size <= 0) {
+      logger.trace("Using the feed's configured size of {}", this.size);
+      size = this.size;
+    }
 
     // Check if the feed generator is correctly set up
     if (uri == null)
@@ -320,6 +332,7 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
     // String rssFlavor = query.length > 1 ? query[query.length - 1] : null;
 
     // Iterate over the feed data and create the entries
+    int itemCount = 0;
     for (SearchResultItem resultItem : result.getItems()) {
       try {
         if (resultItem.getType().equals(SearchResultItemType.Series))
@@ -330,6 +343,9 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
         logger.error(
                 "Error creating entry with id " + resultItem.getId() + " for feed " + this + ": " + t.getMessage(), t);
       }
+      itemCount++;
+      if (itemCount >= size)
+        break;
     }
     return f;
   }
@@ -393,43 +409,100 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
    * @return the feed
    */
   protected Feed addEpisode(Feed feed, String[] query, SearchResultItem resultItem) {
-    Date d = resultItem.getDcCreated();
     String link = getLinkForEntry(feed, resultItem);
     String title = resultItem.getDcTitle();
-    FeedEntry entry = createEntry(feed, title, link, resultItem.getId());
 
-    //
-    // Add extension modules (itunes, dc, doi)
+    // Get the media enclosures
+    List<MediaPackageElement> enclosures = getEnclosures(feed, resultItem);
+    if (enclosures.size() == 0) {
+      logger.debug("No media formats found for feed entry {}", title);
+      return feed;
+    }
 
-    // iTunes extension
+   String entryUri = null;
+    
+    // For RSS feeds, create multiple entries (one per enclosure). For Atom, add all enclosures to the same item
+    switch (feed.getType()) {
+      case RSS:
+        entryUri = resultItem.getId();
+        for (MediaPackageElement e : enclosures) {
+          List<MediaPackageElement> enclosure = new ArrayList<MediaPackageElement>(1);
+          enclosure.add(e);
+          FeedEntry entry = createEntry(feed, title, link, entryUri);
+          entry = populateFeedEntry(entry, resultItem, enclosure);
+          entry.setUri(entry.getUri() + "/" + e.getIdentifier());
+          feed.addEntry(entry);
+        }
+        break;
+      case Atom:
+        entryUri = generateEntryUri(resultItem.getId());
+        FeedEntry entry = createEntry(feed, title, link, entryUri);
+        entry = populateFeedEntry(entry, resultItem, enclosures);
+        if (getLinkSelf() != null) {
+          LinkImpl self = new LinkImpl(getSelfLinkForEntry(feed, resultItem));
+          self.setRel("self");
+          entry.addLink(self);
+        }  
+        feed.addEntry(entry);
+        if (feed.getUpdatedDate() == null) feed.setUpdatedDate(entry.getUpdatedDate());
+        else if (entry.getUpdatedDate().before(feed.getUpdatedDate())) feed.setUpdatedDate(entry.getUpdatedDate());
+        break;
+      default:
+        throw new IllegalStateException("Unsupported feed type " + feed.getType());
+    }
+    
+    return feed;
+  }
+
+  protected String generateEntryUri(String id) {
+    return serverUrl + "/entry-uri/" + id;
+  }
+
+  /**
+   * Populates the feed entry with metadata and the enclosures.
+   * 
+   * @param entry
+   *          the entry to enrich
+   * @param metadata
+   *          the metadata
+   * @param enclosures
+   *          the media enclosures
+   * @return the enriched item
+   */
+  private FeedEntry populateFeedEntry(FeedEntry entry, SearchResultItem metadata, List<MediaPackageElement> enclosures) {
+    Date d = metadata.getDcCreated();
+    Date updatedDate = metadata.getModified();
+    String title = metadata.getDcTitle();
+    
+    // Configure the iTunes extension
 
     ITunesFeedEntryExtension iTunesEntry = new ITunesFeedEntryExtension();
-    iTunesEntry.setDuration(resultItem.getDcExtent());
-    // Additional iTunes properties
+    iTunesEntry.setDuration(metadata.getDcExtent());
     iTunesEntry.setBlocked(false);
     iTunesEntry.setExplicit(false);
+    if (StringUtils.isNotBlank(metadata.getDcCreator()))
+      iTunesEntry.setAuthor(metadata.getDcCreator());
     // TODO: Add iTunes keywords and subtitles
     // iTunesEntry.setKeywords(keywords);
     // iTunesEntry.setSubtitle(subtitle);
 
-    // DC extension
+    // Configure the DC extension
 
     DublinCoreExtension dcExtension = new DublinCoreExtension();
-    // Additional dublin core properties
     dcExtension.setTitle(title);
-    dcExtension.setIdentifier(resultItem.getId());
+    dcExtension.setIdentifier(metadata.getId());
 
     // Set contributor
-    if (!StringUtils.isEmpty(resultItem.getDcContributor())) {
-      for (String contributor : resultItem.getDcContributor().split(";;")) {
+    if (!StringUtils.isEmpty(metadata.getDcContributor())) {
+      for (String contributor : metadata.getDcContributor().split(";;")) {
         entry.addContributor(new PersonImpl(contributor));
         dcExtension.addContributor(contributor);
       }
     }
 
     // Set creator
-    if (!StringUtils.isEmpty(resultItem.getDcCreator())) {
-      for (String creator : resultItem.getDcCreator().split(";;")) {
+    if (!StringUtils.isEmpty(metadata.getDcCreator())) {
+      for (String creator : metadata.getDcCreator().split(";;")) {
         if (iTunesEntry.getAuthor() == null)
           iTunesEntry.setAuthor(creator);
         entry.addAuthor(new PersonImpl(creator));
@@ -438,33 +511,40 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
     }
 
     // Set publisher
-    if (!StringUtils.isEmpty(resultItem.getDcPublisher())) {
-      dcExtension.addPublisher(resultItem.getDcPublisher());
+    if (!StringUtils.isEmpty(metadata.getDcPublisher())) {
+      dcExtension.addPublisher(metadata.getDcPublisher());
     }
 
     // Set rights
-    if (!StringUtils.isEmpty(resultItem.getDcAccessRights())) {
-      dcExtension.setRights(resultItem.getDcAccessRights());
+    if (!StringUtils.isEmpty(metadata.getDcAccessRights())) {
+      dcExtension.setRights(metadata.getDcAccessRights());
     }
 
     // Set abstract
-    if (!StringUtils.isEmpty(resultItem.getDcAbstract())) {
-      String summary = resultItem.getDcAbstract();
+    if (!StringUtils.isEmpty(metadata.getDcAbstract())) {
+      String summary = metadata.getDcAbstract();
       entry.setDescription(new ContentImpl(summary));
       iTunesEntry.setSummary(summary);
       dcExtension.setDescription(summary);
     }
 
     // Set the language
-    if (!StringUtils.isEmpty(resultItem.getDcLanguage())) {
-      dcExtension.setLanguage(resultItem.getDcLanguage());
+    if (!StringUtils.isEmpty(metadata.getDcLanguage())) {
+      dcExtension.setLanguage(metadata.getDcLanguage());
     }
 
     // Set the publication date
     if (d != null) {
       entry.setPublishedDate(d);
       dcExtension.setDate(d);
+    } else if (metadata.getModified() != null) {
+      entry.setPublishedDate(metadata.getModified());
+      dcExtension.setDate(metadata.getModified());
     }
+    
+    // Set the updated date
+    if (updatedDate == null) updatedDate = d;
+    entry.setUpdatedDate(updatedDate);
 
     // TODO: Finish dc support
 
@@ -478,25 +558,38 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
     // dcEntry.setSource(arg0);
     // dcEntry.setSubject(arg0);
 
-    // Add the enclosures
-    addEnclosures(feed, entry, resultItem);
-
     // Set the cover image
     String coverUrl = null;
-    if (!StringUtils.isEmpty(resultItem.getCover())) {
-      coverUrl = resultItem.getCover();
+    if (!StringUtils.isEmpty(metadata.getCover())) {
+      coverUrl = metadata.getCover();
       setImage(entry, coverUrl);
     }
-
-    iTunesEntry.setAuthor("test");
 
     entry.addExtension(iTunesEntry);
     entry.addExtension(dcExtension);
 
-    // Add entry to feed
-    feed.addEntry(entry);
+    // Add the enclosures
+    for (MediaPackageElement element : enclosures) {
 
-    return feed;
+      String trackMimeType = element.getMimeType().toString();
+      long trackLength = element.getSize();
+      if (trackLength <= 0)
+        trackLength = metadata.getDcExtent();
+
+      String trackFlavor = element.getFlavor().toString();
+      
+      String trackUrl = null;
+      try {
+        trackUrl = element.getURI().toURL().toExternalForm();
+      } catch (MalformedURLException e) {
+        // Can't happen
+      }
+
+      Enclosure enclosure = new EnclosureImpl(trackUrl, trackMimeType, trackFlavor, trackLength);
+      entry.addEnclosure(enclosure);
+    }
+
+    return entry;
   }
 
   /**
@@ -700,51 +793,6 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
   }
 
   /**
-   * Adds the enclosures to the feed entry. In case of an rss feed, where only one enclosure is supported, either the
-   * one identified by <code>defaultFormat</code> or the first one in the format list is chosen.
-   * 
-   * @param feed
-   *          the feed that is to be built
-   * @param entry
-   *          the feed entry
-   * @param resultItem
-   *          the result item from the solr index
-   * @return the list of formats that have been added
-   */
-  protected List<MediaPackageElement> addEnclosures(Feed feed, FeedEntry entry, SearchResultItem resultItem)
-          throws IllegalStateException {
-    List<MediaPackageElement> enclosedFormats = new ArrayList<MediaPackageElement>();
-
-    // Assemble formats to add
-    List<MediaPackageElement> elements = getElementsForEntry(feed, resultItem);
-
-    // Did we find any distribution formats?
-    if (elements.size() == 0) {
-      logger.debug("No media formats found for feed entry {}", entry);
-      return enclosedFormats;
-    }
-
-    // Create enclosures
-    for (MediaPackageElement element : elements) {
-      String trackUrl = null;
-      try {
-        trackUrl = element.getURI().toURL().toExternalForm();
-        String trackMimeType = element.getMimeType().toString();
-        long trackLength = element.getSize();
-        if (trackLength <= 0)
-          trackLength = resultItem.getDcExtent();
-        Enclosure enclosure = new EnclosureImpl(trackUrl, trackMimeType, trackLength);
-        entry.addEnclosure(enclosure);
-        enclosedFormats.add(element);
-      } catch (MalformedURLException e) {
-        logger.error("Error converting {} to string", trackUrl, e);
-      }
-    }
-
-    return enclosedFormats;
-  }
-
-  /**
    * Returns the identifier of those tracks that are to be included as enclosures in the feed. Note that for a feed type
    * of {@link Feed.Type#RSS}, the list must exactly contain one single entry.
    * <p>
@@ -757,7 +805,7 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
    *          the result item
    * @return the set of identifier
    */
-  protected List<MediaPackageElement> getElementsForEntry(Feed feed, SearchResultItem resultItem) {
+  protected List<MediaPackageElement> getEnclosures(Feed feed, SearchResultItem resultItem) {
     MediaPackage mediaPackage = resultItem.getMediaPackage();
 
     List<MediaPackageElement> candidateElements = new ArrayList<MediaPackageElement>();
@@ -777,42 +825,11 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
 
     // Collect track id's by flavor
     if (flavors.size() > 0) {
-      selectElements: for (MediaPackageElementFlavor flavor : flavors) {
+      for (MediaPackageElementFlavor flavor : flavors) {
         MediaPackageElement[] elements = mediaPackage.getElementsByFlavor(flavor);
-        if (feed.getType().equals(Feed.Type.RSS)) {
-          for (String mediaType : rssMediaTypes) {
-            for (MediaPackageElement element : elements) {
-              if (candidateElements.contains(element))
-                continue;
-              if (mediaType.equals(PROP_RSS_MEDIA_TYPE_DEFAULT)) {
-                if (element.containsTag(tags)) {
-                  candidateElements.add(element);
-                  break selectElements;
-                }
-              }
-              if (!(element instanceof Track)) {
-                continue;
-              }
-              Track track = (Track) element;
-              if ("video".equals(mediaType) && track.hasVideo()) {
-                if (element.containsTag(tags)) {
-                  candidateElements.add(element);
-                  break selectElements;
-                }
-              }
-              if ("audio".equals(mediaType) && track.hasAudio()) {
-                if (element.containsTag(tags)) {
-                  candidateElements.add(element);
-                  break selectElements;
-                }
-              }
-            }
-          }
-        } else {
-          for (MediaPackageElement element : elements) {
-            if (element.containsTag(tags)) {
-              candidateElements.add(element);
-            }
+        for (MediaPackageElement element : elements) {
+          if (element.containsTag(tags)) {
+            candidateElements.add(element);
           }
         }
       }
@@ -863,6 +880,26 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
   public String getLinkTemplate() {
     return linkTemplate;
   }
+  
+  /**
+   * Sets the entry's base url that will be used to form the alternate episode link in the feeds. If the url contains a
+   * placeholder in the form <code>{0}</code>, it will be replaced by the episode id.
+   * 
+   * @param url
+   *          the url
+   */
+  public void setLinkSelf(String url) {
+    linkSelf = url;
+  }
+
+  /**
+   * Returns the self link template to the default user interface.
+   * 
+   * @return the link to the ui
+   */
+  public String getLinkSelf() {
+    return linkSelf;
+  }
 
   /**
    * Generates a link for the current feed entry by using the entry identifier and the result of
@@ -879,6 +916,23 @@ public abstract class AbstractFeedGenerator implements FeedGenerator {
     if (linkTemplate == null)
       throw new IllegalStateException("No template defined");
     return MessageFormat.format(linkTemplate, solrResultItem.getId());
+  }
+  
+  /**
+   * Generates a link for the current feed entry by using the entry identifier and the result of
+   * {@link #getLinkSelf()} to create the url. Overwrite this method to provide your own way of generating links to
+   * feed entries.
+   * 
+   * @param feed
+   *          the feed
+   * @param solrResultItem
+   *          solr search result for this feed entry
+   * @return the link to the ui
+   */
+  protected String getSelfLinkForEntry(Feed feed, SearchResultItem solrResultItem) {
+    if (linkSelf == null)
+      return linkSelf;
+    return MessageFormat.format(linkSelf, solrResultItem.getId());
   }
 
   /**

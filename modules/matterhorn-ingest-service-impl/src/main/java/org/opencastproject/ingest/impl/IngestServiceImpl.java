@@ -32,6 +32,7 @@ import org.opencastproject.mediapackage.MediaPackageElements;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.MediaPackageParser;
 import org.opencastproject.mediapackage.identifier.HandleException;
+import org.opencastproject.mediapackage.identifier.UUIDIdBuilderImpl;
 import org.opencastproject.metadata.dublincore.DublinCore;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
@@ -50,9 +51,9 @@ import org.opencastproject.workflow.api.WorkflowDatabaseException;
 import org.opencastproject.workflow.api.WorkflowDefinition;
 import org.opencastproject.workflow.api.WorkflowException;
 import org.opencastproject.workflow.api.WorkflowInstance;
-import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
 import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationInstance.OperationState;
+import org.opencastproject.workflow.api.WorkflowParsingException;
 import org.opencastproject.workflow.api.WorkflowService;
 import org.opencastproject.workspace.api.Workspace;
 
@@ -84,6 +85,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Stack;
@@ -261,7 +263,7 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
 
     // Keep track of the zip file we use to store the zip stream
     File zipFile = null;
-
+    URI uri = null;
     try {
 
       // We don't need anybody to do the dispatching for us. Therefore we need to make sure that the job is never in
@@ -272,7 +274,7 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
 
       // locally unpack the mediaPackage
       // save inputStream to file
-      URI uri = workspace.putInCollection(COLLECTION_ID + job.getId(), job.getId() + ".zip", zipStream);
+      uri = workspace.putInCollection(COLLECTION_ID + job.getId(), job.getId() + ".zip", zipStream);
 
       zipFile = workspace.get(uri);
       logger.info("Ingesting zipped media package to {}", zipFile);
@@ -301,6 +303,9 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
 
       // Build the mediapackage
       MediaPackage mp = loadMediaPackageFromManifest(manifest);
+
+      if (mp.getIdentifier() == null || StringUtils.isBlank(mp.getIdentifier().toString()))
+        mp.setIdentifier(new UUIDIdBuilderImpl().createNew());
 
       if (mp.getTracks().length == 0)
         throw new IngestException("MediaPackage cannot be empty");
@@ -350,7 +355,14 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
       job.setStatus(Job.Status.FAILED);
       throw e;
     } finally {
-      workspace.deleteFromCollection(COLLECTION_ID + job.getId(), job.getId() + ".zip");
+      if (uri != null)
+        try {
+          workspace.delete(uri);
+        } catch (NotFoundException nfe) {
+          logger.error("Error removing missing temporary ingest file " + COLLECTION_ID + "/" + uri, nfe);
+        } catch (IOException ioe) {
+          logger.error("Error removing temporary ingest file " + uri, ioe);
+        }
       if (zipFile != null)
         FileUtils.deleteQuietly(zipFile.getParentFile());
       try {
@@ -759,7 +771,7 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
   public WorkflowInstance ingest(MediaPackage mp, String workflowDefinitionID, Map<String, String> properties,
           Long workflowId) throws IngestException, NotFoundException, UnauthorizedException {
     // If the workflow definition and instance ID are null, use the default, or throw if there is none
-    if (workflowDefinitionID == null && workflowId == null) {
+    if (StringUtils.isBlank(workflowDefinitionID) && workflowId == null) {
       if (this.defaultWorkflowDefinionId == null) {
         ingestStatistics.failed();
         throw new IllegalStateException(
@@ -774,21 +786,68 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
     if (workflowId != null) {
       try {
         workflow = workflowService.getWorkflowById(workflowId.longValue());
-        if (workflow.getState().equals(WorkflowState.FAILED)) {
-          logger.warn("The workflow with id '{}' is failed, starting a new workflow for this recording",
-                  workflow.getId());
-          workflow = null;
-        } else if (workflow.getState().equals(WorkflowState.SUCCEEDED)) {
-          logger.warn("The workflow with id '{}' already succeeded, starting a new workflow for this recording",
-                  workflow.getId());
-          workflow = null;
-        }
-
       } catch (NotFoundException e) {
         logger.warn("Failed to find a workflow with id '{}'", workflowId);
       } catch (WorkflowDatabaseException e) {
         ingestStatistics.failed();
         throw new IngestException(e);
+      }
+    }
+
+    // Make sure the workflow is in an acceptable state to be continued. If not, start over, but use the workflow
+    // definition and recording properties from the original workflow, unless provded by the ingesting parties
+    boolean startOver = false;
+    if (workflow != null) {
+      switch (workflow.getState()) {
+        case FAILED:
+        case FAILING:
+        case STOPPED:
+          logger.info("The workflow with id '{}' is failed, starting a new workflow for this recording",
+                  workflow.getId());
+          startOver = true;
+          break;
+        case SUCCEEDED:
+          logger.info("The workflow with id '{}' already succeeded, starting a new workflow for this recording",
+                  workflow.getId());
+          startOver = true;
+          break;
+        case RUNNING:
+          logger.info("The workflow with id '{}' is already running, starting a new workflow for this recording",
+                  workflow.getId());
+          startOver = true;
+          break;
+        case INSTANTIATED:
+        case PAUSED:
+        default:
+          break;
+      }
+
+      // Is it ok to go with the given workflow or do we need to start over?
+      if (startOver) {
+        WorkflowDefinition workflowDef;
+        try {
+          workflowDef = workflowService.getWorkflowDefinitionById(workflow.getTemplate());
+          if (workflowDef == null)
+            throw new IngestException("Workflow definition '" + workflow.getTemplate() + "' does not exist anymore");
+
+          // Did the ingesting party provide the workflow configuration?
+          if (properties == null || properties.size() == 0) {
+            logger.debug("Restoring workflow properties from workflow {}", workflow.getId());
+            properties = new HashMap<String, String>();
+            for (String key : workflow.getConfigurationKeys()) {
+              properties.put(key, workflow.getConfiguration(key));
+            }
+          }
+
+          // TODO: get metadata from old workflow (series and episode dc) if not provided by the ingesting party
+
+          ingestStatistics.successful();
+          return workflowService.start(workflowDef, mp, properties);
+        } catch (WorkflowDatabaseException e) {
+          throw new IngestException("Unable to start a new workflow", e);
+        } catch (WorkflowParsingException e) {
+          throw new IngestException("Unable to start a new workflow", e);
+        }
       }
     }
 
@@ -866,8 +925,15 @@ public class IngestServiceImpl extends AbstractJobProducer implements IngestServ
         // Update
         workflowService.update(workflow);
 
+        // Merge the properties
+        Map<String, String> mergedProperties = new HashMap<String, String>();
+        for (String property : workflow.getConfigurationKeys()) {
+          mergedProperties.put(property, workflow.getConfiguration(property));
+        }
+        mergedProperties.putAll(properties);
+
         // resume the workflow
-        workflowService.resume(workflowId.longValue(), properties);
+        workflowService.resume(workflowId.longValue(), mergedProperties);
 
         ingestStatistics.successful();
 

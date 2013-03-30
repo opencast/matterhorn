@@ -20,6 +20,7 @@ import static org.opencastproject.util.data.functions.Misc.chuck;
 
 import org.opencastproject.security.api.TrustedHttpClient;
 import org.opencastproject.util.FileSupport;
+import org.opencastproject.util.IoSupport;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.PathSupport;
 import org.opencastproject.util.data.Function;
@@ -355,10 +356,14 @@ public class WorkspaceImpl implements Workspace {
     File f = getWorkspaceFile(uri, false);
     if (f.isFile()) {
       synchronized (wsRoot) {
+        File mpElementDir = f.getParentFile();
         FileUtils.forceDelete(f);
-        if (f.getParentFile().list().length == 0) {
-          FileUtils.forceDelete(f.getParentFile());
-        }
+        if (mpElementDir.list().length == 0)
+          FileUtils.forceDelete(mpElementDir);
+
+        // Also delete mediapackage itself when empty
+        if (mpElementDir.getParentFile().list().length == 0)
+          FileUtils.forceDelete(mpElementDir.getParentFile());
       }
     }
 
@@ -373,7 +378,10 @@ public class WorkspaceImpl implements Workspace {
     wfr.delete(mediaPackageID, mediaPackageElementID);
     File f = new File(PathSupport.concat(new String[] { wsRoot, WorkingFileRepository.MEDIAPACKAGE_PATH_PREFIX,
             mediaPackageID, mediaPackageElementID }));
+    File mpDirectory = f.getParentFile();
     FileUtils.deleteQuietly(f);
+    if (mpDirectory.list().length == 0)
+      FileUtils.deleteDirectory(mpDirectory);
   }
 
   /**
@@ -435,34 +443,33 @@ public class WorkspaceImpl implements Workspace {
     InputStream tee = null;
     File tempFile = null;
     FileOutputStream out = null;
-    synchronized (wsRoot) {
-      tempFile = getWorkspaceFile(uri, true);
-      FileUtils.touch(tempFile);
-      out = new FileOutputStream(tempFile);
-    }
-
-    // Try hard linking first and fall back to tee-ing to both the working file repository and the workspace
-    if (linkingEnabled) {
-      tee = in;
-      wfr.putInCollection(collectionId, fileName, tee);
-      FileUtils.forceMkdir(tempFile.getParentFile());
-      File workingFileRepoDirectory = new File(PathSupport.concat(new String[] { wfrRoot,
-              WorkingFileRepository.COLLECTION_PATH_PREFIX, collectionId }));
-      File workingFileRepoCopy = new File(workingFileRepoDirectory, safeFileName);
-      FileSupport.link(workingFileRepoCopy, tempFile, true);
-    } else {
-      tee = new TeeInputStream(in, out, true);
-      wfr.putInCollection(collectionId, fileName, tee);
-    }
-
-    // Cleanup
     try {
-      tee.close();
-      out.close();
-    } catch (IOException e) {
-      logger.warn("Unable to close file stream: " + e.getLocalizedMessage());
-    }
+      synchronized (wsRoot) {
+        tempFile = getWorkspaceFile(uri, true);
+        FileUtils.touch(tempFile);
+        out = new FileOutputStream(tempFile);
+      }
 
+      // Try hard linking first and fall back to tee-ing to both the working file repository and the workspace
+      if (linkingEnabled) {
+        tee = in;
+        wfr.putInCollection(collectionId, fileName, tee);
+        FileUtils.forceMkdir(tempFile.getParentFile());
+        File workingFileRepoDirectory = new File(PathSupport.concat(new String[] { wfrRoot,
+                WorkingFileRepository.COLLECTION_PATH_PREFIX, collectionId }));
+        File workingFileRepoCopy = new File(workingFileRepoDirectory, safeFileName);
+        FileSupport.link(workingFileRepoCopy, tempFile, true);
+      } else {
+        tee = new TeeInputStream(in, out, true);
+        wfr.putInCollection(collectionId, fileName, tee);
+      }
+    } catch (IOException e) {
+      FileUtils.deleteQuietly(tempFile);
+      throw e;
+    } finally {
+      IoSupport.closeQuietly(tee);
+      IoSupport.closeQuietly(out);
+    }
     return uri;
   }
 
@@ -545,12 +552,16 @@ public class WorkspaceImpl implements Workspace {
     String filename = FilenameUtils.getName(path);
     String collection = getCollection(collectionURI);
 
+    logger.debug("Moving {} from {} to {}/{}", new String[] { filename, collection, toMediaPackage,
+            toMediaPackageElement });
+
     // Move the local file
     File original = getWorkspaceFile(collectionURI, false);
     if (original.isFile()) {
       URI copyURI = wfr.getURI(toMediaPackage, toMediaPackageElement, toFileName);
       File copy = getWorkspaceFile(copyURI, true);
       FileUtils.forceMkdir(copy.getParentFile());
+      FileUtils.deleteQuietly(copy);
       FileUtils.moveFile(original, copy);
     }
 
@@ -582,7 +593,10 @@ public class WorkspaceImpl implements Workspace {
     }
     File f = new File(PathSupport.concat(new String[] { wsRoot, WorkingFileRepository.COLLECTION_PATH_PREFIX,
             collectionId, fileName }));
+    File collectionDir = f.getParentFile();
     FileUtils.deleteQuietly(f);
+    if (collectionDir.list().length == 0)
+      FileUtils.deleteDirectory(collectionDir);
   }
 
   /**

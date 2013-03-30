@@ -13,7 +13,7 @@
     <!-- scripts -->
     <script type="text/javascript" src="/engage/ui/js/jquery/jquery.js"></script>
     <script type="text/javascript" src="/engage/ui/js/jquery/plugins/jquery.utils.js"></script>
-    <script type="text/javascript" src="/engage/ui/js/jquery/plugins/jquery.xslt.js"></script>
+    <script type="text/javascript" src="/engage/ui/js/jquery/plugins/jquery.xslt.new.js"></script>
     <script type="text/javascript" src="/engage/ui/js/oc-pager.js"></script>
     <script type="text/javascript" src="/engage/ui/js/engage-ui.js"></script>
     <script type="text/javascript">
@@ -60,7 +60,8 @@
           restEndpoint = restEndpoint + "&offset=" + (page - 1) * 10;
 
           restEndpoint = restEndpoint + "&_=" + new Date().getTime(); // workaround for IE ajax caching problem
-          $('#stage').xslt(restEndpoint, "xsl/episodes.xsl", function ()
+
+          $('#stage').xslt({xmlUrl: restEndpoint, xslUrl: "xsl/episodes.xsl", dataTypeXML: true, callback: function (data)
           {
               Opencast.pager.renderPager();
               var total = $('#oc-episodes-total').html();
@@ -126,17 +127,17 @@
                   }
               }
 
-          });
+          }});
 
           if (searchQuery != null && searchQuery != "")
           {
               $('#rsslink').attr("href", "/feeds/rss/2.0/search/" + searchQuery);
-              $('#atomlink').attr("href", "/feeds/atom/0.3/search/" + searchQuery);
+              $('#atomlink').attr("href", "/feeds/atom/1.0/search/" + searchQuery);
           }
           else
           {
               $('#rsslink').attr("href", "/feeds/rss/2.0/latest");
-              $('#atomlink').attr("href", "/feeds/atom/0.3/latest");
+              $('#atomlink').attr("href", "/feeds/atom/1.0/latest");
           }
       });
     </script>
@@ -184,7 +185,7 @@
       document.write('<div class="oc-search-bar-holder fl-helper-clearfix">');
       document.write('&nbsp;');
       document.write('<div class="oc-search-bar">');
-      document.write('<span class="subscriptions"><a id="rsslink" href="/feeds/rss/2.0/latest">RSS</a>&nbsp;|&nbsp;<a id="atomlink" href="/feeds/atom/0.3/latest">ATOM</a></span>');
+      document.write('<span class="subscriptions"><a id="rsslink" href="/feeds/rss/2.0/latest">RSS</a>&nbsp;|&nbsp;<a id="atomlink" href="/feeds/atom/1.0/latest">ATOM</a></span>');
       document.write('<br/>');
       document.write('<span style="float:right">');
       document.write('<form action="index.html">');

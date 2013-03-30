@@ -21,13 +21,11 @@ import org.opencastproject.episode.api.EpisodeQuery;
 import org.opencastproject.episode.api.EpisodeService;
 import org.opencastproject.episode.api.EpisodeServiceException;
 import org.opencastproject.episode.api.HttpMediaPackageElementProvider;
-import org.opencastproject.episode.api.JaxbSearchResultItem;
 import org.opencastproject.episode.api.SearchResult;
 import org.opencastproject.episode.api.SearchResultItem;
 import org.opencastproject.episode.api.UriRewriter;
 import org.opencastproject.episode.api.Version;
-import org.opencastproject.episode.impl.solr.Convert;
-import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.episode.impl.Convert;
 import org.opencastproject.mediapackage.MediaPackageElement;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageImpl;
@@ -36,7 +34,6 @@ import org.opencastproject.util.MimeType;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.RestUtil;
 import org.opencastproject.util.data.Collections;
-import org.opencastproject.util.data.Function;
 import org.opencastproject.util.data.Function0;
 import org.opencastproject.util.data.Function2;
 import org.opencastproject.util.data.Option;
@@ -75,11 +72,14 @@ import java.util.Map;
 import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 import static javax.servlet.http.HttpServletResponse.SC_OK;
 import static org.opencastproject.episode.api.EpisodeQuery.query;
-import static org.opencastproject.mediapackage.MediaPackageSupport.rewriteUris;
+import static org.opencastproject.util.MimeTypeUtil.suffix;
+import static org.opencastproject.util.RestUtil.R.noContent;
+import static org.opencastproject.util.RestUtil.R.notFound;
+import static org.opencastproject.util.RestUtil.R.serverError;
 import static org.opencastproject.util.UrlSupport.uri;
 import static org.opencastproject.util.data.Monadics.mlist;
+import static org.opencastproject.util.data.Option.option;
 import static org.opencastproject.util.data.Option.some;
-import static org.opencastproject.util.data.functions.Misc.chuck;
 import static org.opencastproject.util.doc.rest.RestParameter.Type.STRING;
 import static org.opencastproject.workflow.api.ConfiguredWorkflow.workflow;
 
@@ -138,7 +138,7 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
     return handleException(new Function0<Response>() {
       @Override public Response apply() {
         getEpisodeService().add(mediaPackage);
-        return Response.noContent().build();
+        return noContent();
       }
     });
   }
@@ -156,9 +156,9 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
     return handleException(new Function0.X<Response>() {
       @Override public Response xapply() throws NotFoundException {
         if (mediaPackageId != null && getEpisodeService().delete(mediaPackageId))
-          return Response.noContent().build();
+          return noContent();
         else
-          throw new NotFoundException();
+          return notFound();
       }
     });
   }
@@ -343,8 +343,8 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
 
         // Return the results using the requested format
         final String type = "json".equals(format) ? MediaType.APPLICATION_JSON : MediaType.APPLICATION_XML;
-        final SearchResult sr = rewriteForDelivery(getEpisodeService().find(search));
-        return Response.ok(sr).type(type).build();
+        final SearchResult sr = getEpisodeService().find(search, rewriteUri);
+        return Response.ok(Convert.convert(sr)).type(type).build();
       }
     });
   }
@@ -379,7 +379,7 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
                                          some(fileName)).build();
         }
         // none
-        return chuck(new NotFoundException());
+        return notFound();
       }
     });
   }
@@ -396,13 +396,14 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
   public Response getMediapackage(@PathParam("mediaPackageID") final String mediaPackageId) {
     return handleException(new Function0<Response>() {
       @Override public Response apply() {
-        final EpisodeQuery idQuery = query(getSecurityService()).id(mediaPackageId);
-        for (SearchResultItem item : mlist(getEpisodeService().find(idQuery).getItems()).head()) {
-          final MediaPackage rewritten = rewriteUris(item.getMediaPackage(), rewriteUri.curry(item.getOcVersion()));
-          return Response.ok(rewritten).build();
-        }
-        // none
-        return chuck(new NotFoundException());
+        final EpisodeQuery idQuery = query(getSecurityService()).id(mediaPackageId).onlyLastVersion();
+        final List<SearchResultItem> result = getEpisodeService().find(idQuery, rewriteUri).getItems();
+        if (result.size() > 1)
+          return serverError();
+        if (result.size() == 0)
+          return notFound();
+        final SearchResultItem item = result.get(0);
+        return Response.ok(item.getMediaPackage()).build();
       }
     });
   }
@@ -417,44 +418,16 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
    */
   private final UriRewriter rewriteUri = new UriRewriter() {
     @Override public URI apply(Version version, MediaPackageElement mpe) {
+      final String mimeType = option(mpe.getMimeType()).bind(suffix).getOrElse("unknown");
       return uri(getServerUrl(),
                  getMountPoint(),
                  ARCHIVE_PATH_PREFIX,
                  mpe.getMediaPackage().getIdentifier(),
                  mpe.getIdentifier(),
                  version,
-                 mpe.getElementType().toString().toLowerCase() + "." + mpe.getMimeType().getSuffix().getOrElse(".unknown"));
+                 mpe.getElementType().toString().toLowerCase() + "." + mimeType);
     }
   };
-
-  /** Rewrite all URIs of contained media package elements to point to the EpisodeService. */
-  public SearchResult rewriteForDelivery(final SearchResult result) {
-    return Convert.convert(new SearchResult() {
-      @Override public List<SearchResultItem> getItems() {
-        return mlist(result.getItems()).map(new Function<SearchResultItem, SearchResultItem>() {
-          @Override public SearchResultItem apply(SearchResultItem item) {
-            final JaxbSearchResultItem rewritten = Convert.convert(item);
-            rewritten.setMediaPackage(rewriteUris(item.getMediaPackage(), rewriteUri.curry(item.getOcVersion())));
-            return rewritten;
-          }
-        }).value();
-      }
-
-      @Override public String getQuery() { return result.getQuery(); }
-
-      @Override public long size() { return result.size(); }
-
-      @Override public long getTotalSize() { return result.getTotalSize(); }
-
-      @Override public long getOffset() { return result.getOffset(); }
-
-      @Override public long getLimit() { return result.getLimit(); }
-
-      @Override public long getSearchTime() { return result.getSearchTime(); }
-
-      @Override public long getPage() { return result.getPage(); }
-    });
-  }
 
   /** Unify exception handling. */
   public static <A> A handleException(final Function0<A> f) {
@@ -463,11 +436,13 @@ public abstract class AbstractEpisodeServiceRestEndpoint implements HttpMediaPac
     } catch (EpisodeServiceException e) {
       if (e.isCauseNotAuthorized())
         throw new WebApplicationException(e, Response.Status.UNAUTHORIZED);
-      throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+      if (e.isCauseNotFound())
+        throw new WebApplicationException(e, Response.Status.NOT_FOUND);
+      throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
     } catch (Exception e) {
       if (e instanceof NotFoundException)
         throw new WebApplicationException(e, Response.Status.NOT_FOUND);
-      throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+      throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
     }
   }
 }

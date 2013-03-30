@@ -8,7 +8,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-rc6</version>
+    <version>1.4-rc7</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -224,6 +224,7 @@
               OSGI-INF/operations/inspect.xml,
               OSGI-INF/operations/prepare-av.xml,
               OSGI-INF/operations/publish.xml,
+              OSGI-INF/operations/republish.xml,
               OSGI-INF/operations/retract-download.xml,
               OSGI-INF/operations/retract-streaming.xml,
               OSGI-INF/operations/review.xml,

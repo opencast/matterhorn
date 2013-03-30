@@ -48,10 +48,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.persistence.EntityManager;
@@ -199,7 +199,7 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
       return (AgentImpl) q.getSingleResult();
     } catch (NoResultException e) {
       return null;
-    } // TODO check if closing em helps here.
+    }
   }
 
   /**
@@ -247,7 +247,7 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
       Organization org = securityService.getOrganization();
       AgentImpl a = new AgentImpl(agentName, org.getId(), state, "", new Properties());
       updateAgentInDatabase(a);
-    } else {
+    } else if (!agent.getState().equals(state)) {
       // the agent is known, so set the state
       logger.debug("Setting Agent {} to state {}.", agentName, state);
       agent.setState(state);
@@ -542,6 +542,26 @@ public class CaptureAgentStateServiceImpl implements CaptureAgentStateService, M
     } catch (UnauthorizedException e) {
       logger.warn("Can not update workflow: {}", e.getMessage());
     }
+
+    // Does the workflow exist?
+    if (workflowToUpdate == null) {
+      logger.warn("The workflow '{}' cannot be updated because it does not exist", recordingId);
+      return;
+    }
+
+    WorkflowState wfState = workflowToUpdate.getState();
+    switch (workflowToUpdate.getState()) {
+      case FAILED:
+      case FAILING:
+      case STOPPED:
+      case SUCCEEDED:
+        logger.debug("The workflow '{}' should not be updated because it is {}", recordingId, wfState.toString().toLowerCase());
+        return;
+      default:
+        break;
+
+    }
+
     try {
       if (state.endsWith("_error")) {
         workflowToUpdate.getCurrentOperation().setState(WorkflowOperationInstance.OperationState.FAILED);

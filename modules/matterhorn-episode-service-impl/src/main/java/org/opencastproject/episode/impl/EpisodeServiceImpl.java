@@ -46,6 +46,7 @@ import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.UnauthorizedException;
 import org.opencastproject.security.api.User;
+import org.opencastproject.security.util.SecurityUtil;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.util.data.Effect;
 import org.opencastproject.util.data.Effect0;
@@ -72,11 +73,15 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opencastproject.episode.api.EpisodeQuery.query;
+import static org.opencastproject.episode.impl.Protected.granted;
+import static org.opencastproject.episode.impl.Protected.rejected;
 import static org.opencastproject.episode.impl.StoragePath.spath;
+import static org.opencastproject.episode.impl.Util.filterItems;
 import static org.opencastproject.episode.impl.elementstore.DeletionSelector.delAll;
 import static org.opencastproject.episode.impl.elementstore.Source.source;
 import static org.opencastproject.mediapackage.MediaPackageSupport.modify;
 import static org.opencastproject.mediapackage.MediaPackageSupport.rewriteUris;
+import static org.opencastproject.mediapackage.MediaPackageSupport.uriRewriter;
 import static org.opencastproject.security.api.SecurityConstants.GLOBAL_ADMIN_ROLE;
 import static org.opencastproject.util.JobUtil.waitForJob;
 import static org.opencastproject.util.data.Collections.array;
@@ -88,7 +93,6 @@ import static org.opencastproject.util.data.Option.none;
 import static org.opencastproject.util.data.Option.option;
 import static org.opencastproject.util.data.Option.some;
 import static org.opencastproject.util.data.functions.Functions.constant;
-import static org.opencastproject.util.data.functions.Misc.chuck;
 
 public final class EpisodeServiceImpl implements EpisodeService {
   /** Log facility */
@@ -104,11 +108,12 @@ public final class EpisodeServiceImpl implements EpisodeService {
   private final EpisodeServiceDatabase persistence;
   private final ElementStore elementStore;
   private final MediaInspectionService mediaInspectionSvc;
+  private final String systemUserName;
 
   public EpisodeServiceImpl(SolrRequester solrRequester, SolrIndexManager solrIndex, SecurityService secSvc,
           AuthorizationService authSvc, OrganizationDirectoryService orgDir, ServiceRegistry svcReg,
           WorkflowService workflowSvc, MediaInspectionService mediaInspectionSvc, EpisodeServiceDatabase persistence,
-          ElementStore elementStore) {
+          ElementStore elementStore, String systemUserName) {
     this.solrRequester = solrRequester;
     this.solrIndex = solrIndex;
     this.secSvc = secSvc;
@@ -119,6 +124,7 @@ public final class EpisodeServiceImpl implements EpisodeService {
     this.persistence = persistence;
     this.elementStore = elementStore;
     this.mediaInspectionSvc = mediaInspectionSvc;
+    this.systemUserName = systemUserName;
   }
 
   @Override
@@ -193,18 +199,19 @@ public final class EpisodeServiceImpl implements EpisodeService {
     return handleException(new Function0.X<Boolean>() {
       @Override
       public Boolean xapply() throws Exception {
-        for (Episode e : persistence.getLatestEpisode(mediaPackageId)) {
-          return protect(e.getAcl(), list(WRITE_PERMISSION), new Function0.X<Boolean>() {
-            @Override
-            public Boolean xapply() throws Exception {
-              logger.info("Removing mediapackage {} from the archive", mediaPackageId);
-              final Date now = new Date();
-              return elementStore.delete(delAll(getOrgId(), mediaPackageId))
-                      && persistence.deleteEpisode(mediaPackageId, now) && solrIndex.delete(mediaPackageId, now);
-            }
-          });
+        for (Protected<Episode> p : persistence.getLatestEpisode(mediaPackageId).map(protectEpisode(WRITE_PERMISSION))) {
+          if (p.isGranted()) {
+            logger.info("Removing mediapackage {} from the archive", mediaPackageId);
+            final Date now = new Date();
+            return elementStore.delete(delAll(getOrgId(), mediaPackageId))
+                    && persistence.deleteEpisode(mediaPackageId, now)
+                    && solrIndex.delete(mediaPackageId, now);
+          } else {
+            // rejected
+            throw new EpisodeServiceException(p.getRejected());
+          }
         }
-        // none
+        // mediapackage not found
         return false;
       }
     });
@@ -212,44 +219,51 @@ public final class EpisodeServiceImpl implements EpisodeService {
 
   // todo workflows are started until user is not authorized
   @Override
-  public List<WorkflowInstance> applyWorkflow(final ConfiguredWorkflow workflow, final UriRewriter rewriteUri,
-          final EpisodeQuery q) throws EpisodeServiceException {
+  public List<WorkflowInstance> applyWorkflow(final ConfiguredWorkflow workflow,
+                                              final UriRewriter rewriteUri,
+                                              final EpisodeQuery q)
+          throws EpisodeServiceException {
     return handleException(new Function0.X<List<WorkflowInstance>>() {
       @Override
       public List<WorkflowInstance> xapply() throws Exception {
         // todo only the latest version is used, this should change when the UI supports versions
         q.onlyLastVersion();
-        return mlist(solrRequester.find(q).getItems()).bind(
-                applyWorkflow(workflow, rewriteUri).o(protectResultItem(WRITE_PERMISSION))).value();
+        return mlist(solrRequester.find(q).getItems())
+                .bind(filterUnprotectedItemsForWrite)
+                .bind(applyWorkflow(workflow, rewriteUri)).value();
       }
     });
   }
 
   // todo workflows are started until user is not authorized
   @Override
-  public List<WorkflowInstance> applyWorkflow(final ConfiguredWorkflow workflow, final UriRewriter rewriteUri,
-          final List<String> mediaPackageIds) throws EpisodeServiceException {
+  public List<WorkflowInstance> applyWorkflow(final ConfiguredWorkflow workflow,
+                                              final UriRewriter rewriteUri,
+                                              final List<String> mediaPackageIds)
+          throws EpisodeServiceException {
     return handleException(new Function0.X<List<WorkflowInstance>>() {
       @Override
       public List<WorkflowInstance> xapply() throws Exception {
-        return mlist(mediaPackageIds).bind(queryForMediaPackage)
-                .bind(applyWorkflow(workflow, rewriteUri).o(protectResultItem(WRITE_PERMISSION))).value();
+        return mlist(mediaPackageIds)
+                .bind(queryLatestMediaPackageById)
+                .bind(filterUnprotectedItemsForWrite)
+                .bind(applyWorkflow(workflow, rewriteUri)).value();
       }
     });
   }
 
-  // todo method only returns if _all_ media packages can be read by the current user.
-  // maybe the resulting list should just be filterered
-  // This approach has low performance since all result items are fetched from the index and filtered
-  // afterwards. This is due to moving security checks from the subcomponents towards the EpisodeService.
+  // todo Maybe the resulting list should just be filtered by means of the solr query.
+  //   The current approach has low performance since all result items are fetched from the index and filtered
+  //   afterwards. This is due to moving security checks from the sub-components towards the EpisodeService.
   @Override
-  public SearchResult find(final EpisodeQuery q) throws EpisodeServiceException {
+  public SearchResult find(final EpisodeQuery q, final UriRewriter rewriter) throws EpisodeServiceException {
     return handleException(new Function0.X<SearchResult>() {
-      @Override
-      public SearchResult xapply() throws Exception {
-        final SearchResult r = solrRequester.find(q);
-        // check if user is allowed to read each media package
-        mlist(r.getItems()).each(protectResultItem(READ_PERMISSION).toEffect());
+      @Override public SearchResult xapply() throws Exception {
+        final SearchResult r = filterItems(solrRequester.find(q), filterUnprotectedItemsForRead);
+        for (SearchResultItem item : r.getItems()) {
+          // rewrite URIs in place
+          rewriteForDelivery(rewriter, item);
+        }
         return r;
       }
     });
@@ -259,32 +273,43 @@ public final class EpisodeServiceImpl implements EpisodeService {
   public Option<ArchivedMediaPackageElement> get(final String mpId, final String mpElemId, final Version version)
           throws EpisodeServiceException {
     return handleException(new Function0.X<Option<ArchivedMediaPackageElement>>() {
-      @Override
-      public Option<ArchivedMediaPackageElement> xapply() throws Exception {
-        for (final Episode e : persistence.getEpisode(mpId, version).map(protectEpisode(READ_PERMISSION))) {
-          final MediaPackage mp = e.getMediaPackage();
-          for (MediaPackageElement mpe : option(mp.getElementById(mpElemId))) {
-            for (InputStream stream : elementStore.get(spath(getOrgId(), mpId, version, mpElemId))) {
-              return some(new ArchivedMediaPackageElement(stream, mpe.getMimeType(), mpe.getSize()));
+      @Override public Option<ArchivedMediaPackageElement> xapply() throws Exception {
+        for (final Protected<Episode> p : persistence.getEpisode(mpId, version).map(protectEpisode(READ_PERMISSION))) {
+          if (p.isGranted()) {
+            final MediaPackage mp = p.getGranted().getMediaPackage();
+            for (MediaPackageElement mpe : option(mp.getElementById(mpElemId))) {
+              for (InputStream stream : elementStore.get(spath(getOrgId(), mpId, version, mpElemId))) {
+                return some(new ArchivedMediaPackageElement(stream, mpe.getMimeType(), mpe.getSize()));
+              }
             }
+            // mediapackage element does not exist
+            return none();
+          } else {
+            // episode is protected
+            throw new EpisodeServiceException(p.getRejected());
           }
         }
+        // episode cannot be found
         return none();
       }
     });
   }
 
   @Override
-  public SearchResult findForAdministrativeRead(final EpisodeQuery q) throws EpisodeServiceException {
+  public SearchResult findForAdministrativeRead(final EpisodeQuery q, final UriRewriter rewriter) throws EpisodeServiceException {
     return handleException(new Function0.X<SearchResult>() {
-      @Override
-      public SearchResult xapply() throws Exception {
+      @Override public SearchResult xapply() throws Exception {
         User user = secSvc.getUser();
         Organization organization = orgDir.getOrganization(user.getOrganization());
-        if (!user.hasRole(GLOBAL_ADMIN_ROLE) && !user.hasRole(organization.getAdminRole()))
+        if (!user.hasRole(GLOBAL_ADMIN_ROLE) && !user.hasRole(organization.getAdminRole())) {
           throw new UnauthorizedException(user, getClass().getName() + ".getForAdministrativeRead");
-
-        return solrRequester.find(q);
+        }
+        final SearchResult r = solrRequester.find(q);
+        for (SearchResultItem item : r.getItems()) {
+          // rewrite URIs in place
+          rewriteForDelivery(rewriter, item);
+        }
+        return r;
       }
     });
   }
@@ -296,7 +321,7 @@ public final class EpisodeServiceImpl implements EpisodeService {
    * location independend URNs these have to be rewritten to point to actual locations.
    */
   void populateIndex(UriRewriter uriRewriter) {
-    long instancesInSolr = 0L;
+    long instancesInSolr;
     try {
       instancesInSolr = solrIndex.count();
     } catch (Exception e) {
@@ -323,8 +348,7 @@ public final class EpisodeServiceImpl implements EpisodeService {
 
           final Organization organization = orgDir.getOrganization(episode.getOrganization());
           secSvc.setOrganization(organization);
-          secSvc.setUser(new User(organization.getName(), organization.getId(), new String[] { organization
-                  .getAdminRole() }));
+          secSvc.setUser(SecurityUtil.createSystemUser(systemUserName, organization));
           // The whole media package gets rewritten here. This is not the best approach since then
           // the media package is stored in the index with concrete URLs.
           // Just rewriting URLs on a per element basis does not work either since a media package element clone loses
@@ -350,6 +374,20 @@ public final class EpisodeServiceImpl implements EpisodeService {
     }
   }
 
+  /**
+   * Returns a single element list containing the SearchResultItem if access is granted for write action
+   * or an empty list if rejected.
+   */
+  private final Function<SearchResultItem, List<SearchResultItem>> filterUnprotectedItemsForWrite =
+          Protected.<SearchResultItem>getPassedAsListf().o(protectResultItem(WRITE_PERMISSION));
+
+  /**
+   * Returns a single element list containing the SearchResultItem if access is granted for read action
+   * or an empty list if rejected.
+   */
+  private final Function<SearchResultItem, List<SearchResultItem>> filterUnprotectedItemsForRead =
+          Protected.<SearchResultItem>getPassedAsListf().o(protectResultItem(READ_PERMISSION));
+
   public static Option<EpisodeServiceException> unwrapEpisodeServiceException(Throwable e) {
     if (e == null)
       return none();
@@ -367,7 +405,7 @@ public final class EpisodeServiceImpl implements EpisodeService {
     try {
       return f.apply();
     } catch (Exception e) {
-      logger.error(e.getMessage());
+      logger.error("An error occured", e);
       throw unwrapEpisodeServiceException(e).getOrElse(new EpisodeServiceException(e));
     }
   }
@@ -379,15 +417,15 @@ public final class EpisodeServiceImpl implements EpisodeService {
     for (final MediaPackageElement e : mp.getElements()) {
       logger.info("Archiving {} {} {}", array(e.getFlavor(), e.getMimeType(), e.getURI()));
       findElementInVersions(e).fold(new Option.Match<StoragePath, Void>() {
-        @Override
-        public Void some(StoragePath found) {
+        @Override public Void some(StoragePath found) {
           if (!elementStore.copy(found, spath(orgId, mpId, version, e.getIdentifier())))
-            throw new EpisodeServiceException("Could not copy asset " + found);
+            throw new EpisodeServiceException("An element with checksum " + e.getChecksum().toString() + " has"
+                                                      + " already been archived but trying to copy or link asset " + found
+                                                      + " failed");
           return null;
         }
 
-        @Override
-        public Void none() {
+        @Override public Void none() {
           elementStore.put(spath(orgId, mpId, version, e.getIdentifier()),
                   source(e.getURI(), Option.some(e.getSize()), option(e.getMimeType())));
           return null;
@@ -425,8 +463,7 @@ public final class EpisodeServiceImpl implements EpisodeService {
   /** Update a mediapackage element of a mediapackage. */
   public static Effect<MediaPackageElement> updateElement(final MediaPackage mp) {
     return new Effect<MediaPackageElement>() {
-      @Override
-      protected void run(MediaPackageElement e) {
+      @Override protected void run(MediaPackageElement e) {
         mp.removeElementById(e.getIdentifier());
         mp.add(e);
       }
@@ -461,21 +498,6 @@ public final class EpisodeServiceImpl implements EpisodeService {
     };
   }
 
-  /** Create a function to rewrite all media package element URIs for archival. */
-  public static Function<MediaPackage, MediaPackage> rewriteForArchival(final Version version) {
-    return new Function<MediaPackage, MediaPackage>() {
-      @Override
-      public MediaPackage apply(MediaPackage mp) {
-        return rewriteUris(mp, new Function<MediaPackageElement, URI>() {
-          @Override
-          public URI apply(MediaPackageElement mpe) {
-            return createUrn(mpe.getMediaPackage().getIdentifier().toString(), mpe.getIdentifier(), version);
-          }
-        });
-      }
-    };
-  }
-
   public static URI createUrn(String mpId, String mpElemId, Version version) {
     try {
       return new URI("urn", "matterhorn:" + mpId + ":" + version + ":" + mpElemId, null);
@@ -505,13 +527,13 @@ public final class EpisodeServiceImpl implements EpisodeService {
    * returns a single element list or the empty list.
    */
   private Function<SearchResultItem, List<WorkflowInstance>> applyWorkflow(final ConfiguredWorkflow workflow,
-          final UriRewriter rewriteUri) {
+          final UriRewriter rewriter) {
     return new Function<SearchResultItem, List<WorkflowInstance>>() {
       @Override
       public List<WorkflowInstance> apply(SearchResultItem item) {
         try {
-          final MediaPackage rewritten = rewriteUris(item.getMediaPackage(), rewriteUri.curry(item.getOcVersion()));
-          return list(workflowSvc.start(workflow.getWorkflowDefinition(), rewritten, workflow.getParameters()));
+          rewriteForDelivery(rewriter, item);
+          return list(workflowSvc.start(workflow.getWorkflowDefinition(), item.getMediaPackage(), workflow.getParameters()));
         } catch (WorkflowDatabaseException e) {
           logger.error("Error starting workflow", e);
         } catch (WorkflowParsingException e) {
@@ -522,47 +544,65 @@ public final class EpisodeServiceImpl implements EpisodeService {
     };
   }
 
+  /** Create a function to rewrite all media package element URIs for archival. */
+  public static Function<MediaPackage, MediaPackage> rewriteForArchival(final Version version) {
+    return new Function<MediaPackage, MediaPackage>() {
+      @Override
+      public MediaPackage apply(MediaPackage mp) {
+        return rewriteUris(mp, new Function<MediaPackageElement, URI>() {
+          @Override
+          public URI apply(MediaPackageElement mpe) {
+            return createUrn(mpe.getMediaPackage().getIdentifier().toString(), mpe.getIdentifier(), version);
+          }
+        });
+      }
+    };
+  }
+
+  /** In place rewriting of all media package element URLs. */
+  public static void rewriteForDelivery(UriRewriter rewriter, SearchResultItem item) {
+    uriRewriter(rewriter.curry(item.getOcVersion())).apply(item.getMediaPackage());
+  }
+
+  /** Query the latest version of a media package. */
+  private final Function<String, List<SearchResultItem>> queryLatestMediaPackageById = new Function.X<String, List<SearchResultItem>>() {
+    @Override
+    public List<SearchResultItem> xapply(String id) throws Exception {
+      return solrRequester.find(query(secSvc).id(id).onlyLastVersion()).getItems();
+    }
+  };
+
   /** Apply a function if the current user is authorized to perform the given actions. */
-  public <A> A protect(final AccessControlList acl, List<String> actions, Function0<A> f) {
+  private <A> Protected<A> protect(final AccessControlList acl, List<String> actions, Function0<A> f) {
     final User user = secSvc.getUser();
     final Organization org = secSvc.getOrganization();
-    final boolean authorized = mlist(actions).map(new Function<String, Boolean>() {
-      @Override
-      public Boolean apply(String action) {
+    final Function<String, Boolean> isAuthorized = new Function<String, Boolean>() {
+      @Override public Boolean apply(String action) {
         return AccessControlUtil.isAuthorized(acl, user, org, action);
       }
-    }).foldl(false, Booleans.or);
+    };
+    final boolean authorized = mlist(actions).map(isAuthorized).foldl(false, Booleans.or);
     if (authorized)
-      return f.apply();
+      return granted(f.apply());
     else
-      return chuck(new UnauthorizedException(user, mkString(actions, ",")));
+      return rejected(new UnauthorizedException(user, mkString(actions, ",")));
   }
 
   /** Protect access to the contained media package. */
-  private Function<SearchResultItem, SearchResultItem> protectResultItem(final String action) {
-    return new Function.X<SearchResultItem, SearchResultItem>() {
-      @Override
-      public SearchResultItem xapply(SearchResultItem item) throws Exception {
+  private Function<SearchResultItem, Protected<SearchResultItem>> protectResultItem(final String action) {
+    return new Function.X<SearchResultItem, Protected<SearchResultItem>>() {
+      @Override public Protected<SearchResultItem> xapply(SearchResultItem item) throws Exception {
         return protect(AccessControlParser.parseAcl(item.getOcAcl()), list(action), constant(item));
       }
     };
   }
 
   /** Protect access to the contained media package. */
-  private Function<Episode, Episode> protectEpisode(final String action) {
-    return new Function.X<Episode, Episode>() {
-      @Override
-      public Episode xapply(Episode e) throws Exception {
+  private Function<Episode, Protected<Episode>> protectEpisode(final String action) {
+    return new Function<Episode, Protected<Episode>>() {
+      @Override public Protected<Episode> apply(Episode e) {
         return protect(e.getAcl(), list(action), constant(e));
       }
     };
   }
-
-  /** Query for the latest version of a media package. */
-  private final Function<String, List<SearchResultItem>> queryForMediaPackage = new Function.X<String, List<SearchResultItem>>() {
-    @Override
-    public List<SearchResultItem> xapply(String id) throws Exception {
-      return solrRequester.find(query(secSvc).id(id).onlyLastVersion()).getItems();
-    }
-  };
 }

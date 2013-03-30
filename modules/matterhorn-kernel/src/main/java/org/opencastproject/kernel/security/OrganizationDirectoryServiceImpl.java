@@ -15,6 +15,9 @@
  */
 package org.opencastproject.kernel.security;
 
+import static org.opencastproject.util.data.Collections.getOrCreate;
+import static org.opencastproject.util.data.Tuple.tuple;
+
 import org.opencastproject.kernel.security.persistence.JpaOrganization;
 import org.opencastproject.kernel.security.persistence.OrganizationDatabase;
 import org.opencastproject.kernel.security.persistence.OrganizationDatabaseException;
@@ -22,6 +25,8 @@ import org.opencastproject.security.api.DefaultOrganization;
 import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.util.NotFoundException;
+import org.opencastproject.util.data.Function0;
+import org.opencastproject.util.data.Tuple;
 
 import org.apache.commons.lang.StringUtils;
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -76,17 +81,23 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
 
   protected OrganizationDatabase persistence;
 
-  /** The default organization */
+  /**
+   * The default organization. This is a hack needed by the capture agent implementation see MH-9363
+   */
   private final Organization defaultOrganization = new DefaultOrganization();
 
-  /** The list of organizations to handle later */
+  /**
+   * The list of organizations to handle later. This is a hack needed by the capture agent implementation see MH-9363
+   */
   private final Map<String, Dictionary> unhandledOrganizations = new HashMap<String, Dictionary>();
+
+  // Local caches. Organizations change rarely so a simple hash map is sufficient.
+  // No need to deal with soft references or an LRU map.
+  private final Map<Tuple<String, Integer>, Organization> orgsByHost = new HashMap<Tuple<String, Integer>, Organization>();
+  private final Map<String, Organization> orgsById = new HashMap<String, Organization>();
 
   /**
    * OSGi callback to set the security service.
-   * 
-   * @param securityService
-   *          the securityService to set
    */
   public void setOrgPersistence(OrganizationDatabase setOrgPersistence) {
     this.persistence = setOrgPersistence;
@@ -113,12 +124,19 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    * @see org.opencastproject.security.api.OrganizationDirectoryService#getOrganization(java.lang.String)
    */
   @Override
-  public Organization getOrganization(String id) throws NotFoundException {
+  public Organization getOrganization(final String id) throws NotFoundException {
     if (persistence == null) {
       logger.debug("No persistence available: Returning default organization for id {}", id);
       return defaultOrganization;
     }
-    return persistence.getOrganization(id);
+    synchronized (orgsById) {
+      return getOrCreate(orgsById, id, new Function0.X<Organization>() {
+        @Override
+        public Organization xapply() throws Exception {
+          return persistence.getOrganization(id);
+        }
+      });
+    }
   }
 
   /**
@@ -127,12 +145,21 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
    * @see org.opencastproject.security.api.OrganizationDirectoryService#getOrganization(java.net.URL)
    */
   @Override
-  public Organization getOrganization(URL url) throws NotFoundException {
+  public Organization getOrganization(final URL url) throws NotFoundException {
     if (persistence == null) {
       logger.debug("No persistence available: Returning default organization for url {}", url);
       return defaultOrganization;
     }
-    return persistence.getOrganizationByUrl(url);
+    final String host = url.getHost();
+    final int port = url.getPort();
+    synchronized (orgsByHost) {
+      return getOrCreate(orgsByHost, tuple(host, port), new Function0.X<Organization>() {
+        @Override
+        public Organization xapply() throws Exception {
+          return persistence.getOrganizationByHost(host, port);
+        }
+      });
+    }
   }
 
   /**
@@ -213,13 +240,20 @@ public class OrganizationDirectoryServiceImpl implements OrganizationDirectorySe
       orgProperties.put(key.substring(ORG_PROPERTY_PREFIX.length()), (String) properties.get(key));
     }
 
-    JpaOrganization org = null;
+    // Clear cache so it gets updated later
+    orgsByHost.clear();
+    orgsById.clear();
 
     // Load the existing organization or create a new one
     try {
+      JpaOrganization org;
       try {
         org = (JpaOrganization) persistence.getOrganization(id);
+        org.setName(name);
         org.addServer(server, port);
+        org.setAdminRole(adminRole);
+        org.setAnonymousRole(anonRole);
+        org.setProperties(orgProperties);
         logger.info("Registering organization '{}'", id);
       } catch (NotFoundException e) {
         org = new JpaOrganization(id, name, server, port, adminRole, anonRole, orgProperties);

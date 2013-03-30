@@ -30,8 +30,11 @@ import org.opencastproject.security.api.Organization;
 import org.opencastproject.security.api.OrganizationDirectoryService;
 import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.User;
+import org.opencastproject.security.util.SecurityUtil;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
+import org.opencastproject.serviceregistry.api.ServiceRegistryException;
 import org.opencastproject.solr.SolrServerFactory;
+import org.opencastproject.util.JobUtil;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.PathSupport;
 import org.opencastproject.util.SolrUtils;
@@ -222,7 +225,8 @@ public class WorkflowServiceSolrIndex implements WorkflowServiceIndex {
       logger.debug("Workflows will be added to the search index asynchronously");
       indexingExecutor = Executors.newSingleThreadExecutor();
     }
-    activate();
+    String systemUserName = cc.getBundleContext().getProperty(SecurityUtil.PROPERTY_KEY_SYS_USER);
+    activate(systemUserName);
   }
 
   private long count() throws WorkflowDatabaseException {
@@ -237,7 +241,7 @@ public class WorkflowServiceSolrIndex implements WorkflowServiceIndex {
   /**
    * Activates the index by configuring solr with the server url that must have been set previously.
    */
-  public void activate() {
+  public void activate(String systemUserName) {
     // Set up the solr server
     if (solrServerUrl != null) {
       solrServer = SolrServerFactory.newRemoteInstance(solrServerUrl);
@@ -258,33 +262,56 @@ public class WorkflowServiceSolrIndex implements WorkflowServiceIndex {
     } catch (WorkflowDatabaseException e) {
       throw new IllegalStateException(e);
     }
+
     if (instancesInSolr == 0) {
       // this may be a new index, so get all of the existing workflows and index them
-      long instancesInServiceRegistry;
+      List<Job> jobs = null;
       try {
-        instancesInServiceRegistry = serviceRegistry.count(WorkflowService.JOB_TYPE, null);
-        if (instancesInServiceRegistry > 0) {
-          logger.info("The workflow search index is empty.  Populating it now with {} workflows.",
-                  instancesInServiceRegistry);
-          for (Job job : serviceRegistry.getJobs(WorkflowService.JOB_TYPE, null)) {
-            if (job.getPayload() == null)
-              continue;
-            WorkflowInstance instance = WorkflowParser.parseWorkflowInstance(job.getPayload());
+        jobs = serviceRegistry.getJobs(WorkflowService.JOB_TYPE, null);
+      } catch (ServiceRegistryException e) {
+        logger.error("Unable to load the workflows jobs: {}", e.getMessage());
+        throw new ServiceException(e.getMessage());
+      }
 
+      if (jobs.size() > 0) {
+        logger.info("The workflow search index is empty. Populating it now with {} workflows.", jobs.size());
+        int errors = 0;
+        for (Job job : jobs) {
+          if (job.getPayload() == null)
+            continue;
+          WorkflowInstance instance = null;
+          boolean erroneousWorkflowJob = false;
+          try {
+            instance = WorkflowParser.parseWorkflowInstance(job.getPayload());
             Organization organization = orgDirectory.getOrganization(job.getOrganization());
             securityService.setOrganization(organization);
-            securityService.setUser(new User(organization.getName(), organization.getId(), new String[] { organization
-                    .getAdminRole() }));
+            securityService.setUser(SecurityUtil.createSystemUser(systemUserName, organization));
             index(instance);
+          } catch (WorkflowDatabaseException e) {
+            logger.warn("Skipping restoring of workflow {}: {}", instance.getId(), e.getMessage());
+            erroneousWorkflowJob = true;
+            errors++;
+          } catch (Throwable e) {
+            logger.warn("Skipping restoring of workflow {}: {}", instance.getId(), e.getMessage());
+            erroneousWorkflowJob = true;
+            errors++;
           }
-          logger.info("Finished populating the workflow search index with {} workflows.", instancesInServiceRegistry);
+
+          // Make sure this job is not being dispatched anymore
+          if (erroneousWorkflowJob && JobUtil.isReadyToDispatch(job)) {
+            job.setStatus(Job.Status.CANCELED);
+            try {
+              serviceRegistry.updateJob(job);
+              logger.info("Canceled job {} because unable to restore", job);
+            } catch (Exception e) {
+              logger.error("Error updating erroneous job {}: {}", job.getId(), e.getMessage());
+            }
+          }
         }
-      } catch (Exception e) {
-        logger.warn("Unable to index workflow instances: {}", e);
-        throw new ServiceException(e.getMessage());
-      } finally {
-        securityService.setUser(null);
-        securityService.setOrganization(null);
+
+        if (errors > 0)
+          logger.warn("Skipped {} erroneous workflows while populating the index", errors);
+        logger.info("Finished populating the workflow search index");
       }
     }
   }

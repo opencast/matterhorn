@@ -20,7 +20,9 @@ import org.opencastproject.feed.api.Feed;
 import org.opencastproject.feed.api.FeedGenerator;
 
 import com.sun.syndication.io.SyndFeedOutput;
+import com.sun.syndication.io.WireFeedOutput;
 
+import org.apache.commons.lang.StringUtils;
 import org.osgi.service.http.HttpContext;
 import org.osgi.service.http.HttpService;
 import org.osgi.service.http.NamespaceException;
@@ -48,15 +50,22 @@ import javax.servlet.http.HttpServletResponse;
  * like this: <code>/feeds/&lt;feed type&gt;/&lt;version&gt;/&lt;query&gt;</code>, e. g.
  * 
  * <pre>
- *     http://localhost/feeds/Atom/0.3/favorites
+ *     http://localhost/feeds/Atom/1.0/favorites
  * </pre>
  * 
- * which would indicate a requeste to an atom 0.3 feed with <tt>favourites</tt> being the query.
+ * which would indicate a requeste to an atom 1.0 feed with <tt>favourites</tt> being the query.
+ * 
+ * The servlet returns a HTTP status 200 with the feed data. 
+ * If the feed could not be found because the query is unknown a HTTP error 404 is returned
+ * If the feed could not be build (wrong RSS or Atom version, corrupt data, etc) an HTTP error 500 is returned. 
  */
 public class FeedServlet extends HttpServlet {
 
   /** The serial version uid */
   private static final long serialVersionUID = -4623160106007127801L;
+
+  /** Name of the size parameter */
+  private static final String PARAM_SIZE = "size";
 
   /** Logging facility */
   private static Logger logger = LoggerFactory.getLogger(FeedServlet.class);
@@ -95,7 +104,7 @@ public class FeedServlet extends HttpServlet {
    */
   protected void doGetWithBundleClassloader(HttpServletRequest request, HttpServletResponse response)
           throws ServletException, IOException {
-
+    logger.debug("Requesting RSS or Atom feed.");
     FeedInfo feedInfo = null;
 
     // Try to extract requested feed type and content
@@ -116,7 +125,7 @@ public class FeedServlet extends HttpServlet {
     Feed feed = null;
     for (FeedGenerator generator : feeds) {
       if (generator.accept(feedInfo.getQuery())) {
-        feed = generator.createFeed(feedInfo.getType(), feedInfo.getQuery());
+        feed = generator.createFeed(feedInfo.getType(), feedInfo.getQuery(), feedInfo.getSize());
         if (feed == null) {
           response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
           return;
@@ -127,6 +136,7 @@ public class FeedServlet extends HttpServlet {
 
     // Have we found a feed generator?
     if (feed == null) {
+      logger.debug("RSS/Atom feed could not be generated");
       response.sendError(HttpServletResponse.SC_NOT_FOUND);
       return;
     }
@@ -134,14 +144,26 @@ public class FeedServlet extends HttpServlet {
     // Set character encoding
     response.setCharacterEncoding(feed.getEncoding());
 
-    // Write back feed using Romeo
-    SyndFeedOutput output = new SyndFeedOutput();
+    // Write back feed using Rome
     Writer responseWriter = response.getWriter();
-    try {
-      output.output(new RomeFeed(feed, feedInfo), responseWriter);
-    } catch (Exception e) {
-      logger.error("Error serializing feed", e);
-      response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+    if (feedInfo.getType().equals(Feed.Type.RSS)) {
+      logger.debug("Creating RSS feed output.");
+      SyndFeedOutput output = new SyndFeedOutput();
+      try {
+        output.output(new RomeRssFeed(feed, feedInfo), responseWriter);
+      } catch (Exception e) {
+        logger.error("Error serializing RSS feed", e);
+        response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+      }
+    } else {
+      logger.debug("Creating Atom feed output.");
+      WireFeedOutput output = new WireFeedOutput();
+      try {
+        output.output(new RomeAtomFeed(feed, feedInfo), responseWriter);
+      } catch (Exception e) {
+        logger.error("Error serializing Atom feed", e);
+        response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+      }
     }
   }
 
@@ -181,7 +203,18 @@ public class FeedServlet extends HttpServlet {
     String[] query = new String[queryLength];
     for (int i = 0; i < queryLength; i++)
       query[i] = pathElements[i + 2];
-    return new FeedInfo(type, version, query);
+
+    String sizeParam = request.getParameter(PARAM_SIZE);
+    if (StringUtils.isNotBlank(sizeParam)) {
+      try {
+        return new FeedInfo(type, version, query, Integer.parseInt(sizeParam));
+      } catch (Exception e) {
+        logger.warn("Value of feed parameter 'size' is not an integer: '{}'", sizeParam);
+        return new FeedInfo(type, version, query);
+      }
+    } else {
+      return new FeedInfo(type, version, query);
+    }
   }
 
   /**

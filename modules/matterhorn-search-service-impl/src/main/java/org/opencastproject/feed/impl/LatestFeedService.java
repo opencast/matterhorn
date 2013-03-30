@@ -41,11 +41,12 @@ public class LatestFeedService extends AbstractFeedService implements FeedGenera
    *      java.lang.String[], int, int)
    */
   protected SearchResult loadFeedData(Type type, String[] query, int limit, int offset) {
+    logger.debug("Loading {} latest feed data starting from {}.",limit, offset);
     try {
       SearchQuery q = new SearchQuery();
       q.includeEpisodes(true).includeSeries(false);
       q.withLimit(limit).withOffset(offset);
-      q.withPublicationDateSort(true);
+      q.withCreationDateSort(true);
       return searchService.getByQuery(q);
     } catch (Exception e) {
       logger.error("Cannot retrieve result for feed 'recent episodes'", e);

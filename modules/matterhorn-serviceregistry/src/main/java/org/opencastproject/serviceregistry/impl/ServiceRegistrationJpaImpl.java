@@ -54,24 +54,25 @@ import javax.xml.bind.annotation.XmlType;
 @XmlRootElement(name = "service", namespace = "http://serviceregistry.opencastproject.org")
 @Entity(name = "ServiceRegistration")
 @Access(AccessType.PROPERTY)
-@Table(name = "service_registration", uniqueConstraints = @UniqueConstraint(columnNames = { "host_registration",
+@Table(name = "mh_service_registration", uniqueConstraints = @UniqueConstraint(columnNames = { "host_registration",
         "service_type" }))
 @NamedQueries({
         @NamedQuery(name = "ServiceRegistration.statistics", query = "SELECT job.processorServiceRegistration as serviceRegistration, job.status, "
                 + "count(job.status) as numJobs, "
                 + "avg(job.queueTime) as meanQueue, "
-                + "avg(job.runTime) as meanRun FROM Job job " + "group by job.processorServiceRegistration, job.status"),
+                + "avg(job.runTime) as meanRun FROM Job job group by job.processorServiceRegistration, job.status"),
         @NamedQuery(name = "ServiceRegistration.hostload", query = "SELECT job.processorServiceRegistration as serviceRegistration, job.status, count(job.status) as numJobs "
                 + "FROM Job job "
-                + "WHERE job.processorServiceRegistration.online=true and job.processorServiceRegistration.hostRegistration.maintenanceMode=false "
+                + "WHERE job.processorServiceRegistration.online=true and job.processorServiceRegistration.active=true and job.processorServiceRegistration.hostRegistration.maintenanceMode=false "
                 + "GROUP BY job.processorServiceRegistration, job.status"),
         @NamedQuery(name = "ServiceRegistration.getRegistration", query = "SELECT r from ServiceRegistration r "
                 + "where r.hostRegistration.baseUrl = :host and r.serviceType = :serviceType"),
-        @NamedQuery(name = "ServiceRegistration.getAll", query = "SELECT rh FROM ServiceRegistration rh"),
+        @NamedQuery(name = "ServiceRegistration.getAll", query = "SELECT rh FROM ServiceRegistration rh WHERE rh.hostRegistration.active = true"),
+        @NamedQuery(name = "ServiceRegistration.getAllOnline", query = "SELECT rh FROM ServiceRegistration rh WHERE rh.hostRegistration.online=true AND rh.hostRegistration.active = true"),
         @NamedQuery(name = "ServiceRegistration.getByHost", query = "SELECT rh FROM ServiceRegistration rh "
-                + "where rh.hostRegistration.baseUrl=:host"),
+                + "where rh.hostRegistration.baseUrl=:host AND rh.hostRegistration.active = true"),
         @NamedQuery(name = "ServiceRegistration.getByType", query = "SELECT rh FROM ServiceRegistration rh "
-                + "where rh.serviceType=:serviceType"),
+                + "where rh.serviceType=:serviceType AND rh.hostRegistration.active = true"),
         @NamedQuery(name = "ServiceRegistration.relatedservices.warning_error", query = "SELECT rh FROM ServiceRegistration rh "
                 + "WHERE rh.serviceType = :serviceType AND (rh.serviceState = org.opencastproject.serviceregistry.api.ServiceState.WARNING OR "
                 + "rh.serviceState = org.opencastproject.serviceregistry.api.ServiceState.ERROR)"),
@@ -164,7 +165,7 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
   }
 
   @Lob
-  @Column(name = "path", nullable = false, length = 65535)
+  @Column(name = "path", nullable = false, length = 255)
   @XmlElement(name = "path")
   @Override
   public String getPath() {
@@ -206,6 +207,13 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
 
   public void setErrorStateTrigger(int jobSignature) {
     this.errorStateTrigger = jobSignature;
+  }
+
+  @Column(name = "active", nullable = false)
+  @XmlElement(name = "active")
+  @Override
+  public boolean isActive() {
+    return super.isActive();
   }
 
   @Column(name = "online", nullable = false)
@@ -261,6 +269,8 @@ public class ServiceRegistrationJpaImpl extends JaxbServiceRegistration {
       super.maintenanceMode = hostRegistration.isMaintenanceMode();
       if (!hostRegistration.isOnline())
         super.online = false;
+      if (!hostRegistration.isActive())
+        super.active = false;
     }
   }
 

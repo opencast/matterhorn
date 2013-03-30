@@ -56,6 +56,11 @@ var ocScheduler = (function() {
     serializer: new ocAdmin.Serializer()
   });
   sched.catalogs.push(sched.capture);
+  sched.workflow = new ocAdmin.Catalog({ //Workflow Config Properties
+	  name: 'wfproperties',
+	  serializer: new ocAdmin.Serializer()
+  });
+  sched.catalogs.push(sched.workflow);
 
   sched.init = function init(){
 
@@ -68,7 +73,7 @@ var ocScheduler = (function() {
     this.registerCatalogs();
     this.registerEventHandlers();
 
-    ocWorkflow.init($('#workflowSelector'), $('#workflowConfigContainer'));
+    ocWorkflow.init($('#workflowSelector'), $('#workflowConfigContainer'), ['schedule']);
 
     if(this.type === SINGLE_EVENT){
       this.agentList = '#agent';
@@ -329,9 +334,21 @@ var ocScheduler = (function() {
       }
 
       $.extend(true, sched.capture.components, ocScheduler.workflowComponents);
-
+      ocWorkflowPanel.registerComponents(ocScheduler.workflow.components);
+      
+      $.each(sched.workflow.components, function(name, elem) {
+    	  if (name.indexOf("org.opencastproject.workflow.config") == 0) {
+    		  elem.key = elem.key.substring("org.opencastproject.workflow.config.".length);
+    	  }
+      });
+      
       var errors = [];
       for (var i in sched.catalogs) {
+      if (sched.catalogs[i].components.license){
+         if (sched.catalogs[i].components.license['key'] == "license") {
+            sched.catalogs[i].components.license.setValue($('#licenseField').val())
+         }
+      }
         var serializedCatalog = sched.catalogs[i].serialize();
         if (!serializedCatalog) {
           errors = errors.concat(sched.catalogs[i].getErrors());
@@ -801,6 +818,71 @@ var ocScheduler = (function() {
     dcComps.subject = new ocAdmin.Component(['subject'], {
       key: 'subject'
     });
+	dcComps.dc_abstract = new ocAdmin.Component([ 'abstract' ], {
+		key : 'abstract'
+	});
+	dcComps.accessRights = new ocAdmin.Component([ 'accessRights' ], {
+		key : 'accessRights'
+	});
+	dcComps.accessRights = new ocAdmin.Component([ 'available' ], {
+		key : 'available'
+	});
+	dcComps.coverage = new ocAdmin.Component([ 'coverage' ], {
+		key : 'coverage'
+	});
+	dcComps.created = new ocAdmin.Component([ 'created' ], {
+		key : 'created'
+	});
+	dcComps.date = new ocAdmin.Component([ 'date' ], {
+		key : 'date'
+	});
+	dcComps.extent = new ocAdmin.Component([ 'extent' ], {
+		key : 'extent'
+	});
+	dcComps.format = new ocAdmin.Component([ 'format' ], {
+		key : 'format'
+	});
+	dcComps.isReferencedBy = new ocAdmin.Component([ 'isReferencedBy' ], {
+		key : 'isReferencedBy'
+	});
+	dcComps.isReplacedBy = new ocAdmin.Component([ 'isReplacedBy' ], {
+		key : 'isReplacedBy'
+	});
+	dcComps.publisher = new ocAdmin.Component([ 'publisher' ], {
+		key : 'publisher'
+	});
+	dcComps.relation = new ocAdmin.Component([ 'relation' ], {
+		key : 'relation'
+	});
+	dcComps.replaces = new ocAdmin.Component([ 'replaces' ], {
+		key : 'replaces'
+	});
+	dcComps.rights = new ocAdmin.Component([ 'rights' ], {
+		key : 'rights'
+	});
+	dcComps.rightsHolder = new ocAdmin.Component([ 'rightsHolder' ], {
+		key : 'rightsHolder'
+	});
+	dcComps.source = new ocAdmin.Component([ 'source' ], {
+		key : 'source'
+	});
+	dcComps.type = new ocAdmin.Component([ 'type' ], {
+		key : 'type'
+	});
+	dcComps.license = new ocAdmin.Component(['licenseField'], {
+		label: 'licenseLabel', key: 'license', required: true,
+		errors: { missingRequired: new ocAdmin.Error('missingLicense', 'licenseLabel')	}
+	},{
+		getValue: function() { 
+		  return $('#licenseField').val();
+		},  
+		setValue: function(value) { 
+			if ($('#licenseField option[value="' + value + '"]').length == 0 ) {
+				$('#licenseField').append('<option value="' + value + '">' + value + '</option>');
+			} 
+			$("#licenseField option").each(function() { this.selected = (this.text == value); });
+		} 
+	});
     dcComps.language = new ocAdmin.Component(['language'], {
       key: 'language'
     });

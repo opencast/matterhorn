@@ -15,6 +15,8 @@
  */
 package org.opencastproject.scheduler.impl;
 
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
 import static net.fortuna.ical4j.model.Component.VEVENT;
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_AVAILABLE;
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_CONTRIBUTOR;
@@ -34,12 +36,20 @@ import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_SUBJEC
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TEMPORAL;
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TITLE;
 import static org.opencastproject.metadata.dublincore.DublinCore.PROPERTY_TYPE;
+import static org.opencastproject.util.EqualsUtil.eqMap;
+import static org.opencastproject.util.data.Collections.list;
+import static org.opencastproject.util.data.Collections.properties;
+import static org.opencastproject.util.data.Monadics.mlist;
+import static org.opencastproject.util.data.Option.none;
+import static org.opencastproject.util.data.Option.some;
+import static org.opencastproject.util.data.Tuple.tuple;
 
 import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.metadata.dublincore.DCMIPeriod;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalog;
+import org.opencastproject.metadata.dublincore.DublinCoreCatalogImpl;
 import org.opencastproject.metadata.dublincore.DublinCoreCatalogService;
 import org.opencastproject.metadata.dublincore.EncodingSchemeUtils;
 import org.opencastproject.metadata.dublincore.Precision;
@@ -50,6 +60,10 @@ import org.opencastproject.scheduler.impl.solr.SchedulerServiceSolrIndex;
 import org.opencastproject.series.api.SeriesService;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.util.PathSupport;
+import org.opencastproject.util.data.Function;
+import org.opencastproject.util.data.Monadics;
+import org.opencastproject.util.data.Option;
+import org.opencastproject.util.data.functions.Misc;
 import org.opencastproject.workflow.api.WorkflowDefinition;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowInstance.WorkflowState;
@@ -66,7 +80,9 @@ import junit.framework.Assert;
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.Calendar;
+import net.fortuna.ical4j.model.Component;
 import net.fortuna.ical4j.model.ComponentList;
+import net.fortuna.ical4j.model.Parameter;
 import net.fortuna.ical4j.model.Property;
 import net.fortuna.ical4j.model.PropertyList;
 import net.fortuna.ical4j.model.component.VEvent;
@@ -83,6 +99,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -99,8 +116,8 @@ import javax.ws.rs.core.Response;
 public class SchedulerServiceImplTest {
 
   private String persistenceStorage;
-  private SchedulerServiceImpl schedulerService;
-  private DublinCoreCatalogService dcService;
+  private SchedulerServiceImpl schedSvc;
+  private DublinCoreCatalogService dcSvc;
 
   // persistent properties
   private ComboPooledDataSource pooledDataSource;
@@ -112,15 +129,23 @@ public class SchedulerServiceImplTest {
 
   private String seriesIdentifier;
 
+  private Map<String, String> wfProperties = new HashMap<String, String>();
+  private Map<String, String> wfPropertiesUpdated = new HashMap<String, String>();
+
   @SuppressWarnings("unchecked")
   @Before
   public void setUp() throws Exception {
+    wfProperties.put("test", "true");
+    wfProperties.put("clear", "all");
+
+    wfPropertiesUpdated.put("test", "false");
+    wfPropertiesUpdated.put("skip", "true");
 
     long startTime = System.currentTimeMillis();
     indexStorage = PathSupport.concat("target", Long.toString(startTime));
     index = new SchedulerServiceSolrIndex(indexStorage);
-    dcService = new DublinCoreCatalogService();
-    index.setDublinCoreService(dcService);
+    dcSvc = new DublinCoreCatalogService();
+    index.setDublinCoreService(dcSvc);
     index.activate(null);
 
     pooledDataSource = new ComboPooledDataSource();
@@ -139,12 +164,12 @@ public class SchedulerServiceImplTest {
     schedulerDatabase = new SchedulerServiceDatabaseImpl();
     schedulerDatabase.setPersistenceProvider(new PersistenceProvider());
     schedulerDatabase.setPersistenceProperties(props);
-    dcService = new DublinCoreCatalogService();
-    schedulerDatabase.setDublinCoreService(dcService);
+    dcSvc = new DublinCoreCatalogService();
+    schedulerDatabase.setDublinCoreService(dcSvc);
     schedulerDatabase.activate(null);
 
     WorkflowInstance workflowInstance = getSampleWorkflowInstance();
-
+    // workflow service
     WorkflowService workflowService = EasyMock.createMock(WorkflowService.class);
     EasyMock.expect(
             workflowService.start((WorkflowDefinition) EasyMock.anyObject(), (MediaPackage) EasyMock.anyObject(),
@@ -156,7 +181,9 @@ public class SchedulerServiceImplTest {
     }).anyTimes();
     EasyMock.expect(workflowService.getWorkflowById(EasyMock.anyLong())).andReturn(workflowInstance).anyTimes();
     EasyMock.expect(workflowService.stop(EasyMock.anyLong())).andReturn(workflowInstance).anyTimes();
+    // update may be called multiple times
     workflowService.update((WorkflowInstance) EasyMock.anyObject());
+    EasyMock.expectLastCall().anyTimes();
 
     seriesIdentifier = Long.toString(System.currentTimeMillis());
     DublinCoreCatalog seriesCatalog = getSampleSeriesDublinCoreCatalog(seriesIdentifier);
@@ -168,19 +195,19 @@ public class SchedulerServiceImplTest {
 
     EasyMock.replay(workflowService, seriesService, ingestService);
 
-    schedulerService = new SchedulerServiceImpl();
-    schedulerService.setWorkflowService(workflowService);
-    schedulerService.setSeriesService(seriesService);
-    schedulerService.setIndex(index);
-    schedulerService.setPersistence(schedulerDatabase);
-    schedulerService.setIngestService(ingestService);
+    schedSvc = new SchedulerServiceImpl();
+    schedSvc.setWorkflowService(workflowService);
+    schedSvc.setSeriesService(seriesService);
+    schedSvc.setIndex(index);
+    schedSvc.setPersistence(schedulerDatabase);
+    schedSvc.setIngestService(ingestService);
 
-    schedulerService.activate(null);
+    schedSvc.activate(null);
   }
 
   @After
   public void tearDown() throws Exception {
-    schedulerService = null;
+    schedSvc = null;
     index.deactivate();
     index = null;
     FileUtils.deleteQuietly(new File(indexStorage));
@@ -207,7 +234,7 @@ public class SchedulerServiceImplTest {
   }
 
   protected DublinCoreCatalog getSampleSeriesDublinCoreCatalog(String seriesID) {
-    DublinCoreCatalog dc = dcService.newInstance();
+    DublinCoreCatalog dc = dcSvc.newInstance();
     dc.set(PROPERTY_IDENTIFIER, seriesID);
     dc.set(PROPERTY_TITLE, "Demo series");
     dc.set(PROPERTY_LICENSE, "demo");
@@ -228,9 +255,11 @@ public class SchedulerServiceImplTest {
     return dc;
   }
 
-  protected DublinCoreCatalog generateEvent(String captureDeviceID, Date startTime, Date endTime) {
-    DublinCoreCatalog dc = dcService.newInstance();
-    dc.set(PROPERTY_TITLE, "Demo event");
+  protected DublinCoreCatalog generateEvent(String captureDeviceID, Option<Long> eventId, Option<String> title,
+          Date startTime, Date endTime) {
+    DublinCoreCatalog dc = dcSvc.newInstance();
+    dc.set(PROPERTY_IDENTIFIER, Long.toString(eventId.getOrElse(1L)));
+    dc.set(PROPERTY_TITLE, title.getOrElse("Demo event"));
     dc.set(PROPERTY_CREATOR, "demo");
     dc.set(PROPERTY_SUBJECT, "demo");
     dc.set(PROPERTY_TEMPORAL, EncodingSchemeUtils.encodePeriod(new DCMIPeriod(startTime, endTime), Precision.Second));
@@ -240,6 +269,10 @@ public class SchedulerServiceImplTest {
     dc.set(PROPERTY_CONTRIBUTOR, "demo");
     dc.set(PROPERTY_DESCRIPTION, "demo");
     return dc;
+  }
+
+  protected DublinCoreCatalog generateEvent(String captureDeviceID, Date startTime, Date endTime) {
+    return generateEvent(captureDeviceID, none(0L), none(""), startTime, endTime);
   }
 
   protected Properties generateCaptureAgentMetadata(String captureDeviceID) {
@@ -254,20 +287,20 @@ public class SchedulerServiceImplTest {
 
     DublinCoreCatalog event = generateEvent("demo", new Date(), new Date(System.currentTimeMillis() + 60000));
 
-    Long id = schedulerService.addEvent(event);
+    Long id = schedSvc.addEvent(event, wfProperties);
     Assert.assertNotNull(id);
-    DublinCoreCatalog eventLoaded = schedulerService.getEventDublinCore(id);
-    Assert.assertEquals(event.getFirst(PROPERTY_TITLE), eventLoaded.getFirst(PROPERTY_TITLE));
+    DublinCoreCatalog eventLoaded = schedSvc.getEventDublinCore(id);
+    assertEquals(event.getFirst(PROPERTY_TITLE), eventLoaded.getFirst(PROPERTY_TITLE));
 
     eventLoaded.set(PROPERTY_TITLE, "Something more");
-    schedulerService.updateEvent(eventLoaded);
+    schedSvc.updateEvent(id, eventLoaded, wfPropertiesUpdated);
 
-    DublinCoreCatalog eventReloaded = schedulerService.getEventDublinCore(id);
-    Assert.assertEquals("Something more", eventReloaded.getFirst(PROPERTY_TITLE));
+    DublinCoreCatalog eventReloaded = schedSvc.getEventDublinCore(id);
+    assertEquals("Something more", eventReloaded.getFirst(PROPERTY_TITLE));
 
     Properties caProperties = generateCaptureAgentMetadata("demo");
-    schedulerService.updateCaptureAgentMetadata(caProperties, id);
-    Assert.assertNotNull(schedulerService.getEventCaptureAgentConfiguration(id));
+    schedSvc.updateCaptureAgentMetadata(caProperties, tuple(id, eventLoaded));
+    Assert.assertNotNull(schedSvc.getEventCaptureAgentConfiguration(id));
   }
 
   @Test
@@ -277,15 +310,15 @@ public class SchedulerServiceImplTest {
             new Date(System.currentTimeMillis() + 60000));
     event.set(PROPERTY_TITLE, "Demotitle");
     Properties caProperties = generateCaptureAgentMetadata("testdevice");
-    Long id = schedulerService.addEvent(event);
-    schedulerService.updateCaptureAgentMetadata(caProperties, id);
+    Long id = schedSvc.addEvent(event, wfProperties);
+    schedSvc.updateCaptureAgentMetadata(caProperties, tuple(id, schedSvc.getEventDublinCore(id)));
 
     // test iCalender export
     CalendarBuilder calBuilder = new CalendarBuilder();
     Calendar cal;
     SchedulerQuery filter = new SchedulerQuery().setSpatial("testdevice");
     try {
-      String icalString = schedulerService.getCalendar(filter);
+      String icalString = schedSvc.getCalendar(filter);
       cal = calBuilder.build(IOUtils.toInputStream(icalString, "UTF-8"));
       ComponentList vevents = cal.getComponents(VEVENT);
       for (int i = 0; i < vevents.size(); i++) {
@@ -310,30 +343,29 @@ public class SchedulerServiceImplTest {
     }
 
     // test for upcoming events (it should not be in there).
-    List<DublinCoreCatalog> upcoming = schedulerService.search(new SchedulerQuery().setStartsFrom(new Date()))
-            .getCatalogList();
+    List<DublinCoreCatalog> upcoming = schedSvc.search(new SchedulerQuery().setStartsFrom(new Date())).getCatalogList();
     Assert.assertTrue(upcoming.isEmpty());
 
-    List<DublinCoreCatalog> all = schedulerService.search(null).getCatalogList();
-    Assert.assertEquals(1, all.size());
+    List<DublinCoreCatalog> all = schedSvc.search(null).getCatalogList();
+    assertEquals(1, all.size());
 
-    all = schedulerService.search(new SchedulerQuery().setSpatial("somedevice")).getCatalogList();
+    all = schedSvc.search(new SchedulerQuery().setSpatial("somedevice")).getCatalogList();
     Assert.assertTrue(upcoming.isEmpty());
 
     // update event
     event.set(PROPERTY_TEMPORAL, EncodingSchemeUtils.encodePeriod(new DCMIPeriod(new Date(
             System.currentTimeMillis() + 180000), new Date(System.currentTimeMillis() + 600000)), Precision.Second));
 
-    schedulerService.updateEvent(event);
+    schedSvc.updateEvent(id, event, wfPropertiesUpdated);
 
     // test for upcoming events (now it should be there)
-    upcoming = schedulerService.search(new SchedulerQuery().setStartsFrom(new Date())).getCatalogList();
-    Assert.assertEquals(1, upcoming.size());
+    upcoming = schedSvc.search(new SchedulerQuery().setStartsFrom(new Date())).getCatalogList();
+    assertEquals(1, upcoming.size());
 
     // delete event
-    schedulerService.removeEvent(id);
+    schedSvc.removeEvent(id);
     try {
-      schedulerService.getEventDublinCore(id);
+      schedSvc.getEventDublinCore(id);
       Assert.fail();
     } catch (NotFoundException e) {
       // this is an expected exception
@@ -353,27 +385,26 @@ public class SchedulerServiceImplTest {
     DublinCoreCatalog eventD = generateEvent("Device D", new Date(currentTime + 10 * 1000), new Date(
             currentTime + 3610000));
 
-    schedulerService.addEvent(eventA);
-    schedulerService.addEvent(eventB);
-    schedulerService.addEvent(eventC);
-    schedulerService.addEvent(eventD);
+    schedSvc.addEvent(eventA, wfProperties);
+    schedSvc.addEvent(eventB, wfProperties);
+    schedSvc.addEvent(eventC, wfProperties);
+    schedSvc.addEvent(eventD, wfProperties);
 
-    List<DublinCoreCatalog> allEvents = schedulerService.search(null).getCatalogList();
-    Assert.assertEquals(4, allEvents.size());
+    List<DublinCoreCatalog> allEvents = schedSvc.search(null).getCatalogList();
+    assertEquals(4, allEvents.size());
 
     Date start = new Date(currentTime);
     Date end = new Date(currentTime + 60 * 60 * 1000);
 
-    List<DublinCoreCatalog> events = schedulerService.findConflictingEvents("Some Other Device", start, end)
-            .getCatalogList();
-    Assert.assertEquals(0, events.size());
+    List<DublinCoreCatalog> events = schedSvc.findConflictingEvents("Some Other Device", start, end).getCatalogList();
+    assertEquals(0, events.size());
 
-    events = schedulerService.findConflictingEvents("Device A", start, end).getCatalogList();
-    Assert.assertEquals(1, events.size());
+    events = schedSvc.findConflictingEvents("Device A", start, end).getCatalogList();
+    assertEquals(1, events.size());
 
-    events = schedulerService.findConflictingEvents("Device A", "FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH,FR,SA", start,
+    events = schedSvc.findConflictingEvents("Device A", "FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH,FR,SA", start,
             new Date(start.getTime() + (48 * 60 * 60 * 1000)), new Long(36000), "America/Chicago").getCatalogList();
-    Assert.assertEquals(2, events.size());
+    assertEquals(2, events.size());
   }
 
   @Test
@@ -384,15 +415,15 @@ public class SchedulerServiceImplTest {
     DublinCoreCatalog eventB = generateEvent("Device A", new Date(currentTime + (20 * 24 * 60 * 60 * 1000)), new Date(
             currentTime + (20 * 25 * 60 * 60 * 1000)));
 
-    schedulerService.addEvent(eventA);
-    schedulerService.addEvent(eventB);
+    schedSvc.addEvent(eventA, wfProperties);
+    schedSvc.addEvent(eventB, wfProperties);
 
     Date start = new Date(currentTime);
     Date end = new Date(currentTime + 60 * 60 * 1000);
 
     SchedulerQuery filter = new SchedulerQuery().setSpatial("Device A").setEndsFrom(start).setStartsTo(end);
-    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(1, events.size());
+    List<DublinCoreCatalog> events = schedSvc.search(filter).getCatalogList();
+    assertEquals(1, events.size());
   }
 
   /**
@@ -405,14 +436,14 @@ public class SchedulerServiceImplTest {
     Date startDate = new Date(currentTime - 10 * 1000);
     Date endDate = new Date(currentTime + (60 * 60 * 1000));
     DublinCoreCatalog eventA = generateEvent("Device A", startDate, endDate);
-    schedulerService.addEvent(eventA);
+    schedSvc.addEvent(eventA, wfProperties);
 
     Date start = new Date(currentTime);
     Date end = new Date(currentTime + 60 * 60 * 1000);
 
     SchedulerQuery filter = new SchedulerQuery().setSpatial("Device A").setEndsFrom(start).setStartsTo(end);
-    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(1, events.size());
+    List<DublinCoreCatalog> events = schedSvc.search(filter).getCatalogList();
+    assertEquals(1, events.size());
   }
 
   @Test
@@ -423,24 +454,24 @@ public class SchedulerServiceImplTest {
     DublinCoreCatalog eventB = generateEvent("Device B", new Date(currentTime + 10 * 1000), new Date(currentTime
             + (60 * 60 * 1000)));
 
-    schedulerService.addEvent(eventA);
-    schedulerService.addEvent(eventB);
+    schedSvc.addEvent(eventA, wfProperties);
+    schedSvc.addEvent(eventB, wfProperties);
 
     SchedulerQuery filter = new SchedulerQuery().setSpatial("Device");
-    List<DublinCoreCatalog> events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(0, events.size());
+    List<DublinCoreCatalog> events = schedSvc.search(filter).getCatalogList();
+    assertEquals(0, events.size());
 
     filter = new SchedulerQuery().setSpatial("Device A");
-    events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(1, events.size());
+    events = schedSvc.search(filter).getCatalogList();
+    assertEquals(1, events.size());
 
     filter = new SchedulerQuery().setSpatial("Device B");
-    events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(1, events.size());
+    events = schedSvc.search(filter).getCatalogList();
+    assertEquals(1, events.size());
 
     filter = new SchedulerQuery().setText("Device");
-    events = schedulerService.search(filter).getCatalogList();
-    Assert.assertEquals(2, events.size());
+    events = schedSvc.search(filter).getCatalogList();
+    assertEquals(2, events.size());
   }
 
   @Test
@@ -449,19 +480,19 @@ public class SchedulerServiceImplTest {
     EasyMock.replay(request);
 
     SchedulerRestService restService = new SchedulerRestService();
-    restService.setService(schedulerService);
-    restService.setDublinCoreService(dcService);
+    restService.setService(schedSvc);
+    restService.setDublinCoreService(dcSvc);
 
     String device = "Test Device";
 
     // Store an event
-    DublinCoreCatalog event = generateEvent(device, new Date(), new Date(System.currentTimeMillis() + 60000));
-    schedulerService.addEvent(event);
+    final DublinCoreCatalog event = generateEvent(device, new Date(), new Date(System.currentTimeMillis() + 60000));
+    final long eventId = schedSvc.addEvent(event, wfProperties);
 
     // Request the calendar without specifying an etag. We should get a 200 with the icalendar in the response body
     Response response = restService.getCalendar(device, null, null, request);
     Assert.assertNotNull(response.getEntity());
-    Assert.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+    assertEquals(HttpServletResponse.SC_OK, response.getStatus());
     final String etag = (String) response.getMetadata().getFirst(HttpHeaders.ETAG);
 
     EasyMock.reset(request);
@@ -475,19 +506,120 @@ public class SchedulerServiceImplTest {
 
     // Request using the etag from the first response. We should get a 304 (not modified)
     response = restService.getCalendar(device, null, null, request);
-    Assert.assertEquals(HttpServletResponse.SC_NOT_MODIFIED, response.getStatus());
+    assertEquals(HttpServletResponse.SC_NOT_MODIFIED, response.getStatus());
     Assert.assertNull(response.getEntity());
 
     // Update the event
-    schedulerService.updateEvent(event);
+    schedSvc.updateEvent(eventId, event, wfPropertiesUpdated);
 
     // Try using the same old etag. We should get a 200, since the event has changed
     response = restService.getCalendar(device, null, null, request);
-    Assert.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+    assertEquals(HttpServletResponse.SC_OK, response.getStatus());
     Assert.assertNotNull(response.getEntity());
     String secondEtag = (String) response.getMetadata().getFirst(HttpHeaders.ETAG);
 
     Assert.assertNotNull(secondEtag);
     Assert.assertFalse(etag.equals(secondEtag));
   }
+
+  @Test
+  public void testUpdateEvent() throws Exception {
+    final long currentTime = System.currentTimeMillis();
+    final String initialTitle = "Recording 1";
+    final DublinCoreCatalog initalEvent = generateEvent("Device A", none(0L), some(initialTitle), new Date(
+            currentTime + 10 * 1000), new Date(currentTime + 3610000));
+    final Long eventId = schedSvc.addEvent(initalEvent, wfProperties);
+    schedSvc.updateCaptureAgentMetadata(
+            properties(tuple("org.opencastproject.workflow.config.archiveOp", "true"),
+                    tuple("org.opencastproject.workflow.definition", "full")), tuple(eventId, initalEvent));
+    final Properties initalCaProps = schedSvc.getEventCaptureAgentConfiguration(eventId);
+    System.out.println("Added event " + eventId);
+    checkEvent(eventId, initalCaProps, initialTitle);
+    // do single update
+    final String updatedTitle1 = "Recording 2";
+    final DublinCoreCatalog updatedEvent1 = generateEvent("Device A", some(eventId), some(updatedTitle1), new Date(
+            currentTime + 10 * 1000), new Date(currentTime + 3610000));
+    schedSvc.updateEvent(eventId, updatedEvent1, wfPropertiesUpdated);
+    checkEvent(eventId, initalCaProps, updatedTitle1);
+    // do bulk update
+    final String updatedTitle2 = "Recording 3";
+    final String expectedTitle2 = "Recording 3 1";
+    final DublinCoreCatalog updatedEvent2 = generateEvent("Device A", none(0L), some(updatedTitle2), new Date(
+            currentTime + 10 * 1000), new Date(currentTime + 3610000));
+    schedSvc.updateEvents(list(eventId), updatedEvent2);
+    checkEvent(eventId, initalCaProps, expectedTitle2);
+  }
+
+  private void checkEvent(long eventId, Properties initialCaProps, String title) throws Exception {
+    final Properties updatedCaProps = (Properties) initialCaProps.clone();
+    updatedCaProps.setProperty("event.title", title);
+    assertTrue("CA properties", eqMap(updatedCaProps, schedSvc.getEventCaptureAgentConfiguration(eventId)));
+    assertEquals(Long.toString(eventId), schedSvc.getEventDublinCore(eventId).getFirst(PROPERTY_IDENTIFIER));
+    assertEquals("DublinCore title", title, schedSvc.getEventDublinCore(eventId).getFirst(PROPERTY_TITLE));
+    checkIcalFeed(updatedCaProps, title);
+  }
+
+  private void checkIcalFeed(Properties caProps, String title) throws Exception {
+    final String cs = schedSvc.getCalendar(new SchedulerQuery());
+    final Calendar cal = new CalendarBuilder().build(new StringReader(cs));
+    assertEquals("number of entries", 1, cal.getComponents().size());
+    for (Object co : cal.getComponents()) {
+      final Component c = (Component) co;
+      assertEquals("SUMMARY property should contain the DC title", title, c.getProperty(Property.SUMMARY).getValue());
+      final Monadics.ListMonadic<Property> attachments = mlist(c.getProperties(Property.ATTACH)).map(
+              Misc.<Object, Property> cast());
+      // episode dublin core
+      final List<DublinCoreCatalog> dcsIcal = attachments
+              .filter(byParamNameAndValue("X-APPLE-FILENAME", "episode.xml")).map(parseDc.o(decodeBase64).o(getValue))
+              .value();
+      assertEquals("number of episode DCs", 1, dcsIcal.size());
+      assertEquals("dcterms:title", title, dcsIcal.get(0).getFirst(PROPERTY_TITLE));
+      // capture agent properties
+      final List<Properties> caPropsIcal = attachments
+              .filter(byParamNameAndValue("X-APPLE-FILENAME", "org.opencastproject.capture.agent.properties"))
+              .map(parseProperties.o(decodeBase64).o(getValue)).value();
+      assertEquals("number of CA property sets", 1, caPropsIcal.size());
+      assertTrue("CA properties", eqMap(caProps, caPropsIcal.get(0)));
+    }
+  }
+
+  private Function<Property, Boolean> byParamNameAndValue(final String name, final String value) {
+    return new Function<Property, Boolean>() {
+      @Override
+      public Boolean apply(Property p) {
+        final Parameter param = p.getParameter(name);
+        return param != null && param.getValue().equals(value);
+      }
+    };
+  }
+
+  private static Function<Property, String> getValue = new Function<Property, String>() {
+    @Override
+    public String apply(Property property) {
+      return property.getValue();
+    }
+  };
+
+  private static Function<String, String> decodeBase64 = new Function<String, String>() {
+    @Override
+    public String apply(String base64) {
+      return new String(Base64.decodeBase64(base64));
+    }
+  };
+
+  private static Function<String, DublinCoreCatalog> parseDc = new Function<String, DublinCoreCatalog>() {
+    @Override
+    public DublinCoreCatalog apply(String s) {
+      return new DublinCoreCatalogImpl(IOUtils.toInputStream(s));
+    }
+  };
+
+  private static Function<String, Properties> parseProperties = new Function.X<String, Properties>() {
+    @Override
+    public Properties xapply(String s) throws Exception {
+      final Properties p = new Properties();
+      p.load(new StringReader(s));
+      return p;
+    }
+  };
 }

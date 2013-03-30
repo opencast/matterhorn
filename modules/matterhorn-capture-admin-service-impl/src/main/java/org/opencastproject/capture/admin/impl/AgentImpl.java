@@ -46,7 +46,7 @@ import javax.persistence.Transient;
  * An in-memory construct to represent the state of a capture agent, and when it was last heard from.
  */
 @Entity
-@Table(name = "capture_agent_state")
+@Table(name = "mh_capture_agent_state")
 @NamedQueries({
   @NamedQuery(name = "Agent.get", query = "select a from AgentImpl a where a.name = :id and a.organization = :org"),
   @NamedQuery(name = "Agent.byOrganization", query = "SELECT a FROM AgentImpl a where a.organization = :org")
@@ -90,7 +90,7 @@ public class AgentImpl implements Agent {
   /** The roles allowed to schedule this agent */
   @ElementCollection
   @Column(name = "role")
-  @CollectionTable(name = "capture_agent_role", joinColumns = { @JoinColumn(name = "id", referencedColumnName = "id"),
+  @CollectionTable(name = "mh_capture_agent_role", joinColumns = { @JoinColumn(name = "id", referencedColumnName = "id"),
           @JoinColumn(name = "organization", referencedColumnName = "organization") })
   protected Set<String> schedulerRoles = new HashSet<String>();
 
@@ -269,15 +269,16 @@ public class AgentImpl implements Agent {
       log.warn("Unable to store agent " + "'s capabilities to the database, IO exception occurred.", e);
     }
 
-    // Figure out the capabiltiies variables
+    // Figure out the capabilities variables
 
     capabilitiesProperties = new Properties();
 
     String names = configuration.getProperty(CaptureParameters.CAPTURE_DEVICE_NAMES);
     if (names == null) {
-      log.warn("Null friendly name list for agent " + name + ".  Capabilities filtering aborted.");
+      log.debug("Capture agent '{}' failed to provide device names ({})", name, CaptureParameters.CAPTURE_DEVICE_NAMES);
       return;
     }
+
     capabilitiesProperties.put(CaptureParameters.CAPTURE_DEVICE_NAMES, names);
     // Get the names and setup a hash map of them
     String[] friendlyNames = names.split(",");

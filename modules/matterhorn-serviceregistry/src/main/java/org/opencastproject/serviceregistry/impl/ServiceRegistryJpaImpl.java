@@ -400,6 +400,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       }
       if (creatingService.getHostRegistration().isMaintenanceMode()) {
         logger.warn("Creating a job from {}, which is currently in maintenance mode.", creatingService.getHost());
+      } else if (!creatingService.getHostRegistration().isActive()) {
+        logger.warn("Creating a job from {}, which is currently inactive.", creatingService.getHost());
       }
       JobJpaImpl job = new JobJpaImpl(currentUser, currentOrganization, creatingService, operation, arguments, payload,
               dispatchable);
@@ -856,6 +858,93 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /**
    * {@inheritDoc}
    * 
+   * @see org.opencastproject.serviceregistry.api.ServiceRegistry#enableHost(String)
+   */
+  @Override
+  public void enableHost(String host) throws ServiceRegistryException, NotFoundException {
+    EntityManager em = null;
+    EntityTransaction tx = null;
+    try {
+      em = emf.createEntityManager();
+      tx = em.getTransaction();
+      tx.begin();
+      // Find the existing registrations for this host and if it exists, update it
+      HostRegistrationJpaImpl hostRegistration = fetchHostRegistration(em, host);
+      if (hostRegistration == null) {
+        throw new NotFoundException("Host '" + host + "' is currently not registered, so it can not be enabled");
+      } else {
+        hostRegistration.setActive(true);
+        em.merge(hostRegistration);
+      }
+      logger.info("Enabling {}", host);
+      tx.commit();
+      tx.begin();
+      for (ServiceRegistration serviceRegistration : getServiceRegistrationsByHost(host)) {
+        ServiceRegistrationJpaImpl registration = (ServiceRegistrationJpaImpl) serviceRegistration;
+        registration.setActive(true);
+        em.merge(registration);
+        servicesStatistics.updateService(registration);
+      }
+      tx.commit();
+      hostsStatistics.updateHost(hostRegistration);
+    } catch (NotFoundException e) {
+      throw e;
+    } catch (Exception e) {
+      if (tx != null && tx.isActive()) {
+        tx.rollback();
+      }
+      throw new ServiceRegistryException(e);
+    } finally {
+      if (em != null)
+        em.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
+   * @see org.opencastproject.serviceregistry.api.ServiceRegistry#disableHost(String)
+   */
+  @Override
+  public void disableHost(String host) throws ServiceRegistryException, NotFoundException {
+    EntityManager em = null;
+    EntityTransaction tx = null;
+    try {
+      em = emf.createEntityManager();
+      tx = em.getTransaction();
+      tx.begin();
+      HostRegistrationJpaImpl hostRegistration = fetchHostRegistration(em, host);
+      if (hostRegistration == null) {
+        throw new NotFoundException("Host '" + host + "' is not currently registered, so it can not be disabled");
+      } else {
+        hostRegistration.setActive(false);
+        for (ServiceRegistration serviceRegistration : getServiceRegistrationsByHost(host)) {
+          ServiceRegistrationJpaImpl registration = (ServiceRegistrationJpaImpl) serviceRegistration;
+          registration.setActive(false);
+          em.merge(registration);
+          servicesStatistics.updateService(registration);
+        }
+        em.merge(hostRegistration);
+      }
+      logger.info("Disabling {}", host);
+      tx.commit();
+      hostsStatistics.updateHost(hostRegistration);
+    } catch (NotFoundException e) {
+      throw e;
+    } catch (Exception e) {
+      if (tx != null && tx.isActive()) {
+        tx.rollback();
+      }
+      throw new ServiceRegistryException(e);
+    } finally {
+      if (em != null)
+        em.close();
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   * 
    * @see org.opencastproject.serviceregistry.api.ServiceRegistry#registerService(java.lang.String, java.lang.String,
    *      java.lang.String)
    */
@@ -1039,7 +1128,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    *          the entity manager
    */
   private void cancelAllChildren(JobJpaImpl job, EntityManager em) {
-    for (JobJpaImpl child : job.getChildrenJobs()) {
+    for (JobJpaImpl child : job.getChildJobs()) {
       em.refresh(child);
       if (Status.CANCELED.equals(job.getStatus()))
         continue;
@@ -1092,6 +1181,18 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     try {
       em = emf.createEntityManager();
       return getServiceRegistrations(em);
+    } finally {
+      if (em != null)
+        em.close();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<ServiceRegistration> getOnlineServiceRegistrations() {
+    EntityManager em = null;
+    try {
+      em = emf.createEntityManager();
+      return em.createNamedQuery("ServiceRegistration.getAllOnline").getResultList();
     } finally {
       if (em != null)
         em.close();
@@ -2152,11 +2253,19 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         List<Job> jobsToDispatch = getDispatchableJobs(em);
         Map<String, Integer> hostLoads = getHostLoads(em, true);
         List<ServiceRegistration> serviceRegistrations = getServiceRegistrations(em);
+        List<String> undispatchableJobTypes = new ArrayList<String>();
 
         jobsStatistics.updateAvg(getAvgOperations(em));
         jobsStatistics.updateJobCount(getCountPerHostService(em));
 
         for (Job job : jobsToDispatch) {
+
+          // Skip jobs that we already know can't be dispatched
+          String jobSiganture = new StringBuilder(job.getJobType()).append('@').append(job.getOperation()).toString();
+          if (undispatchableJobTypes.contains(jobSiganture)) {
+            logger.trace("Skipping dispatching of job {} with type '{}'", job.getId(), job.getJobType());
+            continue;
+          }
 
           // Set the job's user and organization prior to dispatching
           String creator = job.getCreator();
@@ -2185,6 +2294,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             String hostAcceptingJob = dispatchJob(em, job,
                     filterAndSortServiceRegistrations(serviceRegistrations, job.getJobType(), hostLoads));
             if (hostAcceptingJob == null) {
+              undispatchableJobTypes.add(jobSiganture);
               ServiceRegistryJpaImpl.logger.debug("Job {} could not be dispatched and is put back into queue",
                       job.getId());
             } else {
@@ -2230,7 +2340,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     public void run() {
 
       logger.debug("Checking for unresponsive services");
-      List<ServiceRegistration> serviceRegistrations = getServiceRegistrations();
+      List<ServiceRegistration> serviceRegistrations = getOnlineServiceRegistrations();
 
       for (ServiceRegistration service : serviceRegistrations) {
         hostsStatistics.updateHost(((ServiceRegistrationJpaImpl) service).getHostRegistration());
