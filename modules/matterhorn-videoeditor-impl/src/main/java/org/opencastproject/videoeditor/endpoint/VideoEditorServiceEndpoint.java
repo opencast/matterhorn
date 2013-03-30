@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
  */
 @Path("/")
 @RestService(name = "VideoEditorServiceEndpoint", title = "Video Editor Service REST Endpoint",
-        abstractText = "Process smil documents (trimm media files).", 
+        abstractText = "Process smil documents (trim media files).", 
         notes = {"Video Editor Service consumes a smil document with media segments and creates an video." })
 public class VideoEditorServiceEndpoint extends AbstractJobProducerEndpoint {
 

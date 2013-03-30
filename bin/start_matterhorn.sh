@@ -17,8 +17,8 @@ fi
 if [ ! -z "$M2_REPO" ]; then
   M2_REPO="$M2_REPO"
 else
-    echo "Error: M2_REPO is not set."
-    exit 2
+    echo "M2_REPO is not set."
+    exit 1 
 fi
 
 if [ ! -z "$OPENCAST_LOGDIR" ]; then

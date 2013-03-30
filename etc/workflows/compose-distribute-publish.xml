@@ -194,7 +194,7 @@
       </configurations>
     </operation>
     
-    <!-- encode trimm preview as webm video -->
+    <!-- encode trim preview as webm video -->
     <operation
       id="compose"
       if="${videoPreview}"
