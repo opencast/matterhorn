@@ -38,7 +38,12 @@ public class VideoEditorPipelineTest extends GstreamerAbstractTest {
   
   @BeforeClass
   public static void setUpClass() throws Exception {
-    GstreamerAbstractTest.setUpClass();
+    try {
+      GstreamerAbstractTest.setUpClass();
+    } catch (Error e) {
+      gstreamerInstalled = false;
+      logger.info("Unable to initialize gstreamer: {}", e.getMessage());
+    }
     
     /* gstreamer-core */
     if (gstreamerInstalled  && !testGstreamerElementInstalled(GstreamerElements.FILESRC)) {
