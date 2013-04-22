@@ -24,6 +24,7 @@ public interface SmilMeta extends SmilObject {
     String SMIL_META_NAME_MEDIA_PACKAGE_ID = "media-package-id";
     String SMIL_META_NAME_CATALOG_ID = "catalog-id";
     String SMIL_META_NAME_TRACK_ID = "track-id";
+	String SMIL_META_NAME_TRACK_DURATION = "track-duration";
     
 	/**
 	 * Returns meta content.

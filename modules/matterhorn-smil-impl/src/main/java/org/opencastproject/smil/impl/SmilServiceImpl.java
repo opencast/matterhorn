@@ -131,6 +131,25 @@ public class SmilServiceImpl implements SmilService {
 			((SmilHeadImpl)smil.getHead()).addParamGroup(trackParamGroup);
 		}
 
+		SmilMeta durationMeta = null;
+		for (SmilMeta meta : smil.getHead().getMetas()) {
+			if (SmilMeta.SMIL_META_NAME_TRACK_DURATION.equals(meta.getName())) {
+				durationMeta = meta;
+				break;
+			}
+		}
+		// set track-duration meta if not set or the trackduration is longer than old value
+		if (durationMeta == null) {
+			((SmilHeadImpl)smil.getHead()).addMeta(SmilMeta.SMIL_META_NAME_TRACK_DURATION,
+					String.format("%dms", track.getDuration()));
+		} else {
+			long durationOld = Long.parseLong(durationMeta.getContent().replace("ms", ""));
+			if (track.getDuration() > durationOld) {
+				((SmilHeadImpl)smil.getHead()).addMeta(SmilMeta.SMIL_META_NAME_TRACK_DURATION,
+					String.format("%dms", track.getDuration()));
+			}
+		}
+
 		SmilMediaElementImpl media = null;
 		if (track.hasVideo()) {
 			media = new SmilMediaVideoImpl(track.getURI(), start, start + duration);
@@ -143,6 +162,8 @@ public class SmilServiceImpl implements SmilService {
 		if (parentId == null || "".equals(parentId)) {
 			parentId = smil.getBody().getId();
 		}
+
+		// add new media element
 		((SmilBodyImpl)smil.getBody()).addMediaElement(media, parentId);
 		if (newTrack) {
 			return new SmilResponseImpl(smil, new SmilObject[] { media, trackParamGroup });
