@@ -15,6 +15,7 @@
  */
 package org.opencastproject.smil.entity;
 
+import java.util.List;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlID;
 import org.opencastproject.mediapackage.identifier.IdBuilder;
@@ -77,6 +78,13 @@ public abstract class SmilObjectImpl implements SmilObject {
 	 * @return element with given elementId or null
 	 */
 	public abstract SmilObject getElementOrNull(String elementId);
+
+	/**
+	 * Put all containing elements into {@link List} given as parameter.
+	 *
+	 * @param a {@link List} where to pul child elements to
+	 */
+	public abstract void putAllChilds(List<SmilObject> elements);
 
 	/**
 	 * Remove element with given Id and returns it.

@@ -71,7 +71,6 @@
 							org.opencastproject.smil.endpoint.*;version=${project.version}
                         </Export-Package>
                         <Service-Component>
-                            OSGI-INF/smil-service-rest.xml,
                             OSGI-INF/smil-service.xml
                         </Service-Component>
                     </instructions>

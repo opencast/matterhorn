@@ -197,10 +197,10 @@
     <!-- encode trim preview as webm video -->
     <operation
       id="compose"
-      if="${videoPreview}"
+      if="${trimHold}"
       fail-on-error="true"
       exception-handler-workflow="error"
-      description="Encoding presenter (camera) video for preview">
+      description="Encoding presenter (camera) video for videoeditor preview">
       <configurations>
         <configuration key="source-flavor">*/work</configuration>
         <configuration key="target-flavor">*/preview</configuration>
@@ -242,6 +242,7 @@
       description="Executing SilenceDetection">
       <configurations>
         <configuration key="source-flavor">audio/waveform</configuration>
+	<configuration key="target-flavor">smil/smil</configuration>
       </configurations>
     </operation>
 
@@ -256,6 +257,8 @@
       description="Waiting for user to review / video edit recording">
       <configurations>
         <configuration key="source-flavor">*/work</configuration>
+	<configuration key="preview-flavor">*/preview</configuration>
+	<configuration key="smil-flavor">smil/smil</configuration>
         <configuration key="target-flavor-subtype">trimmed</configuration>
       </configurations>
     </operation>

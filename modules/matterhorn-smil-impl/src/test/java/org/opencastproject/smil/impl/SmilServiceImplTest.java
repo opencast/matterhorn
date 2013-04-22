@@ -19,6 +19,7 @@ import java.net.URI;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.*;
+import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.mediapackage.track.AudioStreamImpl;
 import org.opencastproject.mediapackage.track.TrackImpl;
@@ -47,25 +48,29 @@ public class SmilServiceImplTest {
 
 	/** Test SMIL document */
 	private static final String TEST_SMIL = "<!DOCTYPE smil PUBLIC \"-//W3C//DTD SMIL 3.0 Language//EN\" \"http://www.w3.org/2008/SMIL30/SMIL30Language.dtd\">\n"
-		+ "<smil baseProfile=\"Language\" version=\"3.0\" xml:id=\"s-1\" xmlns=\"http://www.w3.org/ns/SMIL\">\n"
-		+ "    <head xml:id=\"h-1\">\n"
-		+ "        <paramGroup xml:id=\"pg-1\">\n"
-		+ "            <param value=\"track-1\" name=\"track-id\" valuetype=\"data\" xml:id=\"p-1\"/>\n"
-		+ "        </paramGroup>\n"
-		+ "        <paramGroup xml:id=\"pg-2\">\n"
-		+ "            <param value=\"track-2\" name=\"track-id\" valuetype=\"data\" xml:id=\"p-2\"/>\n"
-		+ "        </paramGroup>\n"
-		+ "    </head>\n"
-		+ "    <body xml:id=\"b-1\">\n"
-		+ "        <par xml:id=\"par-1\">\n"
-		+ "            <video src=\"http://hostname/video.mp4\" paramGroup=\"pg-1\" clipEnd=\"1001.000000s\" clipBegin=\"1.000000s\" xml:id=\"v-1\"/>\n"
-		+ "            <audio src=\"http://hostname/audio.mp3\" paramGroup=\"pg-2\" clipEnd=\"1001.000000s\" clipBegin=\"1.000000s\" xml:id=\"a-1\"/>\n"
-		+ "        </par>\n"
-		+ "        <par xml:id=\"par-2\">\n"
-		+ "            <audio src=\"http://hostname/audio.mp3\" paramGroup=\"pg-2\" clipEnd=\"16.000000s\" clipBegin=\"15.000000s\" xml:id=\"a-2\"/>\n"
-		+ "            <video src=\"http://hostname/video.mp4\" paramGroup=\"pg-1\" clipEnd=\"16.000000s\" clipBegin=\"15.000000s\" xml:id=\"v-2\"/>\n"
-		+ "        </par>\n"
-		+ "    </body>\n"
+		+ "<smil xmlns=\"http://www.w3.org/ns/SMIL\" baseProfile=\"Language\" version=\"3.0\" xml:id=\"s-c4af7197-8496-46ae-a80b-bc15ead58c87\">\n"
+		+ "  <head xml:id=\"h-37abdf0c-95e8-4d39-a574-a71c927e7381\">\n"
+		+ "    <paramGroup xml:id=\"pg-19fc18d1-e94b-401a-91a7-08f8242642a8\">\n"
+		+ "      <param value=\"track-1\" name=\"track-id\" valuetype=\"data\" xml:id=\"param-04677935-3868-404c-bf1e-0f0559d718b3\"/>\n"
+		+ "      <param value=\"http://hostname/video.mp4\" name=\"track-src\" valuetype=\"data\" xml:id=\"param-08f9c91c-7593-4073-b0c5-82148468b03d\"/>\n"
+		+ "      <param value=\"source/presentation\" name=\"track-flavor\" valuetype=\"data\" xml:id=\"param-fe788faa-96c1-4c10-b3bd-a2dc5f6c5516\"/>\n"
+		+ "    </paramGroup>\n"
+		+ "    <paramGroup xml:id=\"pg-4a65ad2b-5380-4722-8a41-a82597a490a2\">\n"
+		+ "      <param value=\"track-2\" name=\"track-id\" valuetype=\"data\" xml:id=\"param-e4e55e4f-1432-4bf7-b7fa-3377b6337a2a\"/>\n"
+		+ "      <param value=\"http://hostname/audio.mp3\" name=\"track-src\" valuetype=\"data\" xml:id=\"param-313a5bff-f93a-41e2-b191-8c173d5d965a\"/>\n"
+		+ "      <param value=\"source/presenter\" name=\"track-flavor\" valuetype=\"data\" xml:id=\"param-073b2769-391c-42bd-a740-c30b75abbf12\"/>\n"
+		+ "    </paramGroup>\n"
+		+ "  </head>\n"
+		+ "  <body xml:id=\"b-135a51f4-0849-48ee-89d1-c420825ff73d\">\n"
+		+ "    <par xml:id=\"par-701ba9dc-d96e-404c-b286-6670f572e804\">\n"
+		+ "      <video src=\"http://hostname/video.mp4\" paramGroup=\"pg-19fc18d1-e94b-401a-91a7-08f8242642a8\" clipEnd=\"1001000ms\" clipBegin=\"1000ms\" xml:id=\"v-321fd617-15ed-4a05-8c62-fd1332cb66d8\"/>\n"
+		+ "      <audio src=\"http://hostname/audio.mp3\" paramGroup=\"pg-4a65ad2b-5380-4722-8a41-a82597a490a2\" clipEnd=\"1001000ms\" clipBegin=\"1000ms\" xml:id=\"a-65999c74-b713-4fc0-bab3-c45f4fc22280\"/>\n"
+		+ "    </par>\n"
+		+ "    <par xml:id=\"par-e9d14e26-cf32-45a1-8c4f-e986db9005b1\">\n"
+		+ "      <audio src=\"http://hostname/audio.mp3\" paramGroup=\"pg-4a65ad2b-5380-4722-8a41-a82597a490a2\" clipEnd=\"16000ms\" clipBegin=\"15000ms\" xml:id=\"a-f661b039-3b77-4c64-ae1d-e5f3afeaf174\"/>\n"
+		+ "      <video src=\"http://hostname/video.mp4\" paramGroup=\"pg-19fc18d1-e94b-401a-91a7-08f8242642a8\" clipEnd=\"16000ms\" clipBegin=\"15000ms\" xml:id=\"v-56880f2b-2d29-4717-aba6-491eea06a2c0\"/>\n"
+		+ "    </par>\n"
+		+ "  </body>\n"
 		+ "</smil>";
 
 	/** SmilService to test with */
@@ -142,6 +147,7 @@ public class SmilServiceImplTest {
 	public void testAddClip() throws Exception {
 		TrackImpl videoTrack = new TrackImpl();
 		videoTrack.setIdentifier("track-1");
+		videoTrack.setFlavor(new MediaPackageElementFlavor("source", "presentation"));
 		videoTrack.setURI(new URI("http://hostname/video.mp4"));
 		videoTrack.addStream(new VideoStreamImpl());
 		videoTrack.setDuration(1000000000000L);
@@ -173,6 +179,7 @@ public class SmilServiceImplTest {
 
 		TrackImpl audioTrack = new TrackImpl();
 		audioTrack.setIdentifier("track-2");
+		audioTrack.setFlavor(new MediaPackageElementFlavor("source", "presenter"));
 		audioTrack.setURI(new URI("http://hostname/audio.mp3"));
 		audioTrack.addStream(new AudioStreamImpl());
 		audioTrack.setDuration(1000000000000L);

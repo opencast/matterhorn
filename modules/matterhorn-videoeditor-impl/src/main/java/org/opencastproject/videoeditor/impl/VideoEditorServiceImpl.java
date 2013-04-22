@@ -17,8 +17,10 @@ package org.opencastproject.videoeditor.impl;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Enumeration;
@@ -34,7 +36,7 @@ import org.opencastproject.inspection.api.MediaInspectionService;
 import org.opencastproject.job.api.AbstractJobProducer;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobBarrier;
-import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.Track;
@@ -45,9 +47,15 @@ import org.opencastproject.security.api.SecurityService;
 import org.opencastproject.security.api.UserDirectoryService;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
 import org.opencastproject.serviceregistry.api.ServiceRegistryException;
-import org.opencastproject.smil.entity.MediaElement;
-import org.opencastproject.smil.entity.ParallelElement;
-import org.opencastproject.smil.entity.Smil;
+import org.opencastproject.smil.api.SmilException;
+import org.opencastproject.smil.api.SmilService;
+import org.opencastproject.smil.entity.api.Smil;
+import org.opencastproject.smil.entity.media.api.SmilMediaObject;
+import org.opencastproject.smil.entity.media.container.api.SmilMediaContainer;
+import org.opencastproject.smil.entity.media.element.api.SmilMediaElement;
+import org.opencastproject.smil.entity.media.param.api.SmilMediaParam;
+import org.opencastproject.smil.entity.media.param.api.SmilMediaParamGroup;
+import org.opencastproject.util.NotFoundException;
 import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.api.VideoEditorService;
 import org.opencastproject.videoeditor.gstreamer.VideoEditorPipeline;
@@ -71,6 +79,7 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceImpl.class);
     private static final String JOB_TYPE = "org.opencastproject.videoeditor";
     private static final String COLLECTION_ID = "videoeditor";
+	private static final String SINK_FLAVOR_SUBTYPE = "trimmed";
     
     private static enum Operation {
         PROCESS_SMIL
@@ -103,6 +112,10 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * The user directory service
      */
     protected UserDirectoryService userDirectoryService = null;
+	/**
+	 * The smil service.
+	 */
+	protected SmilService smilService = null;
     /**
      * Bundle properties
      */
@@ -126,10 +139,41 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
      * @return processed track
      * @throws ProcessFailedException if an error occured
      */
-    protected synchronized Track processSmil(Job job, Smil smil, Track track) throws ProcessFailedException {
-		logger.info("Start processing track {}", track.getIdentifier());
+    protected synchronized Track processSmil(Job job, Smil smil, String trackParamGroupId) throws ProcessFailedException {
+
+		SmilMediaParamGroup trackParamGroup;
+		try {
+			trackParamGroup = (SmilMediaParamGroup) smil.get(trackParamGroupId);
+		} catch (SmilException ex) {
+			// can't be thrown, because we found the Id in processSmil(Smil)
+			throw new ProcessFailedException("Smil does not contain a paramGroup element with Id " + trackParamGroupId);
+		}
+		String sourceTrackId = null;
+		MediaPackageElementFlavor sourceTrackFlavor = null;
+		String sourceTrackUri = null;
+		// get source track metadata
+		for (SmilMediaParam param : trackParamGroup.getParams()) {
+			if (SmilMediaParam.PARAM_NAME_TRACK_ID.equals(param.getName())) {
+				sourceTrackId = param.getValue();
+			} else if (SmilMediaParam.PARAM_NAME_TRACK_SRC.equals(param.getName())) {
+				sourceTrackUri = param.getValue();
+			} else if (SmilMediaParam.PARAM_NAME_TRACK_FLAVOR.equals(param.getName())) {
+				sourceTrackFlavor = MediaPackageElementFlavor.parseFlavor(param.getValue());
+			}
+		}
+		logger.info("Start processing track {}", sourceTrackId);
 		
         // get output file extension
+		File sourceFile = null;
+		try {
+			sourceFile = workspace.get(new URI(sourceTrackUri));
+		} catch (IOException ex) {
+			throw new ProcessFailedException("Can't read " + sourceTrackUri);
+		} catch (NotFoundException ex) {
+			throw new ProcessFailedException("Workspace does not contain a track " + sourceTrackUri);
+		} catch (URISyntaxException ex) {
+			throw new ProcessFailedException("Source URI " + sourceTrackUri + " is not valid.");
+		}
         String outputFileExtension = properties.getProperty(VideoEditorProperties.OUTPUT_FILE_EXTENSION, 
 				VideoEditorPipeline.DEFAULT_OUTPUT_FILE_EXTENSION);
         if (!outputFileExtension.startsWith(".")) {
@@ -137,9 +181,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
         }
 
         // create working directory
-        String sourceFlavor = track.getFlavor().getType();
         File outputPath = new File(storageDir + "/" + job.getId(),
-                sourceFlavor + "_" + track.getIdentifier() + outputFileExtension);
+                sourceTrackFlavor + "_" + sourceFile.getName() + outputFileExtension);
 
         if (!outputPath.getParentFile().exists()) {
             outputPath.getParentFile().mkdirs();
@@ -149,20 +192,34 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
         URI newTrackURI = null;
         // create source bins
         try {
-            for (ParallelElement pe : smil.getBody().getSequence().getElements()) {
-                for (MediaElement me : pe.getElements()) {
-                    if (!track.getIdentifier().equals(me.getMhElement())) {
-                        continue;
-                    }
-
-                    long begin = me.getClipBeginMS();
-                    long end = me.getClipEndMS();
-                    long duration = end - begin;
-                    String srcFilePath = me.getSrc();
-
-                    sourceBins.addFileSource(srcFilePath, begin, duration);
-                }
-            }
+			// parse body elements
+			for (SmilMediaObject element : smil.getBody().getMediaElements()) {
+				// body should contain par elements
+				if (element.isContainer()) {
+					SmilMediaContainer container = (SmilMediaContainer) element;
+					if (SmilMediaContainer.ContainerType.PAR == container.getContainerType()) {
+						// par element should contain media elements
+						for (SmilMediaObject elementChild : container.getElements()) {
+							if (!elementChild.isContainer()) {
+								SmilMediaElement media = (SmilMediaElement) elementChild;
+								if (trackParamGroupId.equals(media.getParamGroup())) {
+									long begin = media.getClipBeginMS();
+									long end = media.getClipEndMS();
+									long duration = end - begin;
+									sourceBins.addFileSource(sourceFile.getAbsolutePath(), begin, duration);
+								}
+							} else {
+								throw new ProcessFailedException("Smil container '"
+										+ ((SmilMediaContainer)elementChild).getContainerType().toString()
+										+ "'is not supportet yet");
+							}
+						}
+					} else {
+						throw new ProcessFailedException("Smil container '" 
+								+ container.getContainerType().toString() + "'is not supportet yet");
+					}
+				}
+			}
 
             // create and run editing pipeline
             runningPipeline = new VideoEditorPipeline(properties);
@@ -181,7 +238,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             String newTrackId = idBuilder.createNew().toString();
             InputStream in = new FileInputStream(outputPath);
             try {
-                newTrackURI = workspace.putInCollection(COLLECTION_ID, sourceFlavor + "-" + newTrackId + outputFileExtension, in);
+                newTrackURI = workspace.putInCollection(COLLECTION_ID, 
+						String.format("%s-%s%s", sourceTrackFlavor.getType(), newTrackId, outputFileExtension), in);
             } catch (IllegalArgumentException ex) {
                 throw new ProcessFailedException("Copy track into workspace failed! " + ex.getMessage());
             } finally {
@@ -200,10 +258,9 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             }
             Track editedTrack = (Track) MediaPackageElementParser.getFromXml(inspectionJob.getPayload());
             editedTrack.setIdentifier(newTrackId);
-            editedTrack.setFlavor(track.getFlavor());
-            editedTrack.referTo(track);
+            editedTrack.setFlavor(new MediaPackageElementFlavor(sourceTrackFlavor.getType(), SINK_FLAVOR_SUBTYPE));
 
-			logger.info("Processing track {} finished", track.getIdentifier());
+			logger.info("Processing track {} finished", sourceTrackId);
             return editedTrack;
 
         } catch (MediaInspectionException ex) {
@@ -239,23 +296,27 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
             throw new ProcessFailedException("Smil document is null!");
         }
 
-        MediaPackage mp = smil.getMediaPackage();
+//		String mediaPackageId = null;
+//		for (SmilMeta meta : smil.getHead().getMetas()) {
+//			if (SmilMeta.SMIL_META_NAME_MEDIA_PACKAGE_ID.equals(meta.getName())) {
+//				mediaPackageId = meta.getContent();
+//				break;
+//			}
+//		}
+        
         List<Job> jobs = new LinkedList<Job>();
-
-        Track track = null;
         try {
-            for (MediaElement me : smil.getBody().getSequence().getElements().get(0).getElements()) {
-                track = mp.getTrack(me.getMhElement());
-
-                jobs.add(serviceRegistry.createJob(getJobType(), Operation.PROCESS_SMIL.toString(),
-                        Arrays.asList(smil.toXML(), MediaPackageElementParser.getAsXml(track))));
-            }
-
+			for (SmilMediaParamGroup paramGroup : smil.getHead().getParamGroups()) {
+				for (SmilMediaParam param : paramGroup.getParams()) {
+					if (SmilMediaParam.PARAM_NAME_TRACK_ID.equals(param.getName())) {
+						jobs.add(serviceRegistry.createJob(getJobType(), Operation.PROCESS_SMIL.toString(),
+							Arrays.asList(smil.toXML(), paramGroup.getId())));
+					}
+				}
+			}
             return jobs;
         } catch (JAXBException ex) {
             throw new ProcessFailedException("Failed to serialize smil " + smil.getId());
-        } catch (MediaPackageException ex) {
-            throw new ProcessFailedException("Failed to serialize track " + track.getIdentifier());
         } catch (ServiceRegistryException ex) {
             throw new ProcessFailedException("Failed to create job: " + ex.getMessage());
         } catch (Exception ex) {
@@ -266,12 +327,12 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     @Override
     protected String process(Job job) throws Exception {
         if (Operation.PROCESS_SMIL.toString().equals(job.getOperation())) {
-            Smil smil = Smil.fromXML(job.getArguments().get(0));
+            Smil smil = smilService.fromXml(job.getArguments().get(0)).getSmil();
             if (smil == null) {
                 throw new ProcessFailedException("Smil document is null!");
             }
-            Track sourceTrack = (Track) MediaPackageElementParser.getFromXml(job.getArguments().get(1));
-            Track editedTrack = processSmil(job, smil, sourceTrack);
+			
+            Track editedTrack = processSmil(job, smil, job.getArguments().get(1));
             return MediaPackageElementParser.getAsXml(editedTrack);
         }
 
@@ -344,4 +405,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
     public void setOrganizationDirectoryService(OrganizationDirectoryService organizationDirectoryService) {
         this.organizationDirectoryService = organizationDirectoryService;
     }
+
+	public void setSmilService(SmilService smilService) {
+		this.smilService = smilService;
+	}
 }

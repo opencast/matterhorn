@@ -15,6 +15,7 @@
  */
 package org.opencastproject.smil.entity.media.param;
 
+import java.util.List;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlRootElement;
 import org.opencastproject.smil.entity.SmilObjectImpl;
@@ -112,5 +113,13 @@ public class SmilMediaParamImpl extends SmilObjectImpl implements SmilMediaParam
 	public SmilObject getElementOrNull(String elementId) {
 		if (getId().equals(elementId)) return this;
 		return null;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		// param does not have any elements inside
 	}
 }

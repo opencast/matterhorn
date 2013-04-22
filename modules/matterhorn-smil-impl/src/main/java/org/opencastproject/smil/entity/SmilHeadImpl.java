@@ -249,4 +249,19 @@ public class SmilHeadImpl extends SmilObjectImpl implements SmilHead {
 		}
 		return null;
 	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		for (SmilObject meta : getMetas()) {
+			elements.add(meta);
+			((SmilObjectImpl)meta).putAllChilds(elements);
+		}
+		for (SmilObject paramGroup : getParamGroups()) {
+			elements.add(paramGroup);
+			((SmilObjectImpl)paramGroup).putAllChilds(elements);
+		}
+	}
 }

@@ -22,7 +22,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.xml.bind.JAXBException;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
@@ -31,7 +30,6 @@ import org.opencastproject.mediapackage.Track;
 import org.opencastproject.smil.api.SmilException;
 import org.opencastproject.smil.api.SmilResponse;
 import org.opencastproject.smil.api.SmilService;
-import org.opencastproject.smil.impl.SmilServiceImpl;
 import org.opencastproject.util.doc.rest.RestParameter;
 import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
@@ -53,13 +51,8 @@ public class SmilServiceRest {
 	private static final Logger logger = LoggerFactory.getLogger(SmilServiceRest.class);
 
 	/** SmilService to interact with */
-	private SmilService smilService = new SmilServiceImpl();
-	
-	/**
-	 *
-	 * @param mediaPackage
-	 * @return
-	 */
+	private SmilService smilService;
+
 	@POST
 	@Path("create")
 	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
@@ -71,7 +64,7 @@ public class SmilServiceRest {
 			reponses = {
 				@RestResponse(responseCode = 200, description = "create new SMIL successfull"),
 				@RestResponse(responseCode = 400, description = "given mediaPackage is not valid"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response createNewSmil(@FormParam("mediaPackage") String mediaPackage) {
 		SmilResponse smilResponse = null;
@@ -84,10 +77,7 @@ public class SmilServiceRest {
 				smilResponse = smilService.createNewSmil();
 			}
 
-			return Response.ok(smilResponse.toXml()).build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
+			return Response.ok(smilResponse).build();
 		} catch (MediaPackageException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("MediaPackage not valid.").build();
@@ -96,6 +86,7 @@ public class SmilServiceRest {
 
 	@POST
 	@Path("addPar")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "addPar", description = "Add an parallel element to SMIL (into SMIL body or an element with given parentId).",
 			restParameters = {
 				@RestParameter(name = "smil", description = "SMIL document where to add a par-element.",
@@ -108,7 +99,7 @@ public class SmilServiceRest {
 				@RestResponse(responseCode = 200, description = "add par to SMIL successfull"),
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
 				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response addParallel(@FormParam("smil") String smil, @FormParam("parentId") String parentId) {
 		SmilResponse smilResponse = null;
@@ -124,18 +115,16 @@ public class SmilServiceRest {
 			} else {
 				smilResponse = smilService.addParallel(smilResponse.getSmil());
 			}
-			return Response.ok(smilResponse.toXml()).build();
+			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
 		}
 	}
 
 	@POST
 	@Path("addSeq")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "addSeq", description = "Add an sequence element to SMIL (into SMIL body or an element with given parentId).",
 			restParameters = {
 				@RestParameter(name = "smil", description = "SMIL document where to add a seq-element.",
@@ -148,7 +137,7 @@ public class SmilServiceRest {
 				@RestResponse(responseCode = 200, description = "add seq to SMIL successfull"),
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
 				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response addSequence(@FormParam("smil") String smil, @FormParam("parentId") String parentId) {
 		SmilResponse smilResponse = null;
@@ -165,18 +154,16 @@ public class SmilServiceRest {
 			} else {
 				smilResponse = smilService.addSequence(smilResponse.getSmil());
 			}
-			return Response.ok(smilResponse.toXml()).build();
+			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
 		}
 	}
 
 	@POST
 	@Path("addClip")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "addClip", description = "Add new media element based on given Track information and start / duration parameters. "
 				+ "ParentId specifies where to put the new media.",
 			restParameters = {
@@ -197,7 +184,7 @@ public class SmilServiceRest {
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
 				@RestResponse(responseCode = 400, description = "Track not valid"),
 				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response addClip(@FormParam("smil") String smil, @FormParam("parentId") String parentId, @FormParam("track") String track,
 			@FormParam("start") long start, @FormParam("duration") long duration) {
@@ -213,18 +200,16 @@ public class SmilServiceRest {
 		}
 		try {
 			smilResponse = smilService.addClip(smilResponse.getSmil(), parentId, trackObj, start, duration);
-			return Response.ok(smilResponse.toXml()).build();
+			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
 		}
 	}
 
 	@POST
 	@Path("addClips")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "addClips", description = "Add new media elements based on given Tracks information and start / duration parameters. "
 				+ "ParentId specifies where to put the new media.",
 			restParameters = {
@@ -245,7 +230,7 @@ public class SmilServiceRest {
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
 				@RestResponse(responseCode = 400, description = "Tracks are not valid"),
 				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response addClips(@FormParam("smil") String smil, @FormParam("parentId") String parentId, @FormParam("tracks") String tracks,
 			@FormParam("start") long start, @FormParam("duration") long duration) {
@@ -266,18 +251,16 @@ public class SmilServiceRest {
 		tracksArr = tracksList.toArray(tracksArr);
 		try {
 			smilResponse = smilService.addClips(smilResponse.getSmil(), parentId, tracksArr, start, duration);
-			return Response.ok(smilResponse.toXml()).build();
+			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
 		}
 	}
 
 	@POST
 	@Path("addMeta")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "addMeta", description = "Add a meta element to SMIL head.",
 			restParameters = {
 				@RestParameter(name = "smil", description = "SMIL document where to add an meta-element.",
@@ -291,7 +274,7 @@ public class SmilServiceRest {
 			reponses = {
 				@RestResponse(responseCode = 200, description = "add par to SMIL successfull"),
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response addMeta(@FormParam("smil") String smil, @FormParam("name") String metaName, @FormParam("content") String metaContent) {
 		SmilResponse smilResponse = null;
@@ -300,18 +283,13 @@ public class SmilServiceRest {
 		} catch (SmilException ex) {
 			return Response.status(400).entity("SMIL document invalid.").build();
 		}
-
-		try {
-			smilResponse = smilService.addMeta(smilResponse.getSmil(), metaName, metaContent);
-			return Response.ok(smilResponse.toXml()).build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
-		}
+		smilResponse = smilService.addMeta(smilResponse.getSmil(), metaName, metaContent);
+		return Response.ok(smilResponse).build();
 	}
 
 	@POST
 	@Path("remove")
+	@Produces({ MediaType.APPLICATION_XML, MediaType.TEXT_XML })
 	@RestQuery(name = "remove", description = "Remove an element with given Id from SMIL.",
 			restParameters = {
 				@RestParameter(name = "smil", description = "SMIL document.",
@@ -323,20 +301,25 @@ public class SmilServiceRest {
 			reponses = {
 				@RestResponse(responseCode = 200, description = "removing element from SMIL successfull"),
 				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
-				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
+//				@RestResponse(responseCode = 500, description = "serializing SmilResponse failed")
 			})
 	public Response removeSmilElement(@FormParam("smil") String smil, @FormParam("elementId") String elementId) {
 		SmilResponse smilResponse = null;
 		try {
 			smilResponse = smilService.fromXml(smil);
 			smilResponse = smilService.removeSmilElement(smilResponse.getSmil(), elementId);
-			return Response.ok(smilResponse.toXml()).build();
+			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(400).entity("SMIL document invalid.").build();
-		} catch (JAXBException ex) {
-			logger.error(ex.getMessage(), ex);
-			return Response.serverError().entity("Serializing SmilResponse failed.").build();
 		}
+	}
+
+	/**
+	 * Set {@link SmilService}.
+	 * @param smilService {@link SmilService} to set
+	 */
+	public void setSmilService(SmilService smilService) {
+		this.smilService = smilService;
 	}
 }

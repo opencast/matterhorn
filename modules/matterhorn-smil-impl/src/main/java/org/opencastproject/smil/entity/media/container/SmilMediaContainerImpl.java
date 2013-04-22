@@ -123,6 +123,17 @@ public abstract class SmilMediaContainerImpl extends SmilMediaObjectImpl impleme
 	}
 
 	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		for (SmilObject child : getElements()) {
+			elements.add(child);
+			((SmilObjectImpl)child).putAllChilds(elements);
+		}
+	}
+
+	/**
 	 * {@inheritDoc }
 	 */
 	@Override

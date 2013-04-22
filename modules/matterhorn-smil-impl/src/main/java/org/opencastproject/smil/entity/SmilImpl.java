@@ -19,6 +19,8 @@ import java.io.File;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
+import java.util.LinkedList;
+import java.util.List;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -34,6 +36,7 @@ import org.opencastproject.smil.entity.api.Smil;
 import org.opencastproject.smil.entity.api.SmilBody;
 import org.opencastproject.smil.entity.api.SmilHead;
 import org.opencastproject.smil.entity.api.SmilObject;
+import org.opencastproject.smil.entity.media.element.api.SmilMediaElement;
 import org.xml.sax.SAXException;
 
 /**
@@ -123,6 +126,26 @@ public class SmilImpl extends SmilObjectImpl implements Smil {
 		child = ((SmilObjectImpl)head).removeElement(elementId);
 		if (child != null) return child;
 		child = ((SmilObjectImpl)body).removeElement(elementId);
+		if (child != null && child instanceof SmilMediaElement) {
+			// media elements can reference paramGroup element
+			// remove linked paramGroup, if it is not referenced by another element
+			String paramGroupId = ((SmilMediaElement)child).getParamGroup();
+			if (paramGroupId != null && !paramGroupId.isEmpty()) {
+				List<SmilObject> childs = new LinkedList<SmilObject>();
+				putAllChilds(childs);
+				for (SmilObject c : childs) {
+					if (c instanceof SmilMediaElement 
+							&& paramGroupId.equals(((SmilMediaElement)c).getParamGroup())) {
+						// set paramGroup to null, to prevent delete operation
+						paramGroupId = null;
+						break;
+					}
+				}
+				if (paramGroupId != null) {
+					removeElement(paramGroupId);
+				}
+			}
+		}
 		return child;
 	}
 	
@@ -197,8 +220,18 @@ public class SmilImpl extends SmilObjectImpl implements Smil {
 		SmilObject element = ((SmilHeadImpl)getHead()).getElementOrNull(elementId);
 		if (element != null) return element;
 
-		element = ((SmilBodyImpl)getBody()).getElementOrNull(elementId);
-		return null;
+		return ((SmilBodyImpl)getBody()).getElementOrNull(elementId);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		elements.add(getHead());
+		((SmilObjectImpl)getHead()).putAllChilds(elements);
+		elements.add(getBody());
+		((SmilObjectImpl)getBody()).putAllChilds(elements);
 	}
 
 	/**

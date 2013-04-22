@@ -283,4 +283,15 @@ public abstract class SmilMediaElementImpl extends SmilMediaObjectImpl implement
 
 		return unit.toMillis(time);
 	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		for (SmilObject child : getParams()) {
+			elements.add(child);
+			((SmilObjectImpl)child).putAllChilds(elements);
+		}
+	}
 }

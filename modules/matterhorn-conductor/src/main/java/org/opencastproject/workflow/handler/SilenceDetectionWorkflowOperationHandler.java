@@ -15,18 +15,17 @@
  */
 package org.opencastproject.workflow.handler;
 
-
-import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import org.apache.commons.io.IOUtils;
+import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.MediaPackage;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.smil.api.SmilService;
-import org.opencastproject.smil.entity.MediaElement;
-import org.opencastproject.smil.entity.ParallelElement;
-import org.opencastproject.videoeditor.silencedetection.api.MediaSegment;
-import org.opencastproject.videoeditor.silencedetection.api.MediaSegments;
+import org.opencastproject.smil.entity.api.Smil;
 import org.opencastproject.videoeditor.silencedetection.api.SilenceDetectionService;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowInstance;
@@ -44,109 +43,110 @@ import org.slf4j.LoggerFactory;
  */
 public class SilenceDetectionWorkflowOperationHandler extends AbstractWorkflowOperationHandler {
 
-  private static final Logger logger = LoggerFactory
-      .getLogger(SilenceDetectionWorkflowOperationHandler.class);
+	/** Logger */
+	private static final Logger logger = LoggerFactory.getLogger(SilenceDetectionWorkflowOperationHandler.class);
 
-  /**
-   * the silence detection service
-   */
-  private SilenceDetectionService detetionService;
-  /**
-   * the smil service
-   */
-  private SmilService smilService;
-  /**
-   * the workflowService for retrieving the workflow
-   */
-  private WorkflowService workflowService;
+	/**
+	 * Name of the configuration option that provides the source flavors we are
+	 * looking for
+	 */
+	private static final String SOURCE_FLAVOR_PROPERTY = "source-flavor";
+	/**
+	 * Name of the configuration option that provides the target flavor we will produce
+	 */
+	private static final String TARGET_FLAVOR_PROPERTY = "target-flavor";
+	/**
+	 * Name of the configuration option that provides the smil file name
+	 */
+	private static final String TARGET_FILE_NAME = "smil.smil";
 
-  private static final String SOURCE_FLAVOR = "source-flavor";
+	/** The configuration options for this handler */
+	private static final SortedMap<String, String> CONFIG_OPTIONS;
+	static {
+		CONFIG_OPTIONS = new TreeMap<String, String>();
+		CONFIG_OPTIONS.put(SOURCE_FLAVOR_PROPERTY, "The flavor for source files (tracks containing audio stream).");
+		CONFIG_OPTIONS.put(TARGET_FLAVOR_PROPERTY, "The flavor for smil files.");
+	}
+	
+	/**
+	 * The silence detection service.
+	 */
+	private SilenceDetectionService detetionService;
+	/**
+	 * The smil service for smil parsing.
+	 */
+	private SmilService smilService;
+	/**
+	 * The ingest service for ingest new smil.
+	 */
+	private IngestService ingestService;
+	/**
+	 * The workflow service for retrieving the workflow.
+	 */
+	private WorkflowService workflowService;
 
-  @Override
-  public WorkflowOperationResult start(WorkflowInstance workflowInstance, JobContext context)
-      throws WorkflowOperationException {
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @see org.opencastproject.workflow.api.WorkflowOperationHandler#getConfigurationOptions()
+	 */
+	@Override
+	public SortedMap<String, String> getConfigurationOptions() {
+		return CONFIG_OPTIONS;
+	}
 
-    String flavor = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR);
-    MediaPackage mp = workflowInstance.getMediaPackage();
-    Track[] tracks = mp.getTracks(MediaPackageElementFlavor.parseFlavor(flavor));
-    logger.debug("number of source-tracks ", tracks.length);
-    
-    if (tracks.length > 0) {
-      try {
-        Track t = tracks[0];
-        logger.info("Executing silence detection on track: {}", t.getURI());
-        Job detectionJob = detetionService.detect(t);
-        if (!waitForStatus(detectionJob).isSuccess()) {
-          throw new WorkflowOperationException("Silence Detection failed!");
-        }
-        
-        MediaSegments segments = MediaSegments.fromXml(detectionJob.getPayload());
-        List<MediaSegment> mediaSegments = segments.getMediaSegments();
-        logger.debug("creating new SMIL");
-        smilService.createNewSmil(workflowInstance.getId());
-        mp = workflowService.getWorkflowById(workflowInstance.getId()).getMediaPackage();
+	@Override
+	public WorkflowOperationResult start(WorkflowInstance workflowInstance, JobContext context)
+		throws WorkflowOperationException {
 
-        MediaSegment lastSegment = null;
-        
-        for (MediaSegment ms : segments.getMediaSegments()) {
-          // checking whether first item starts at 0
-          if (lastSegment == null && ms.getSegmentStart() != 0) {
-            ParallelElement p = new ParallelElement();
-            p.addElement(new MediaElement("", "0", String.valueOf(ms.getSegmentStart() / 1000.0)));
-            smilService.addParallelElement(workflowInstance.getId(), p);
-          }
-          
-          // create placeholder sequence
-          if (lastSegment != null &&  lastSegment.getSegmentStop() < ms.getSegmentStart()) {
-            ParallelElement p = new ParallelElement();
-            p.addElement(new MediaElement("", String.valueOf(lastSegment.getSegmentStop() / 1000.0), String.valueOf(ms.getSegmentStart() / 1000.0)));
-            smilService.addParallelElement(workflowInstance.getId(), p);
-          }
+		MediaPackage mp = workflowInstance.getMediaPackage();
+		String flavor = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR_PROPERTY);
+		Track[] tracks = mp.getTracks(MediaPackageElementFlavor.parseFlavor(flavor));
 
-          // add found non silent sequence
-          logger.debug("adding segment with  ({},{})", ms.getSegmentStart() / 1000.0,
-              ms.getSegmentStop() / 1000.0);
-          ParallelElement p = new ParallelElement();
-          p.addElement(new MediaElement("", String.valueOf(ms.getSegmentStart() / 1000.0), String
-              .valueOf(ms.getSegmentStop() / 1000.0)));
-          smilService.addParallelElement(workflowInstance.getId(), p);
+		if (tracks.length > 0) {
+			try {
+				Track t = tracks[0];
+				logger.info("Executing silence detection on track: {}", t.getURI());
+				Job detectionJob = detetionService.detect(t);
+				if (!waitForStatus(detectionJob).isSuccess()) {
+				  throw new WorkflowOperationException("Silence Detection failed!");
+				}
+				Smil smil = smilService.fromXml(detectionJob.getPayload()).getSmil();
+				String targetFlavor = workflowInstance.getCurrentOperation().getConfiguration(TARGET_FLAVOR_PROPERTY);
+				mp = ingestService.addCatalog(IOUtils.toInputStream(smil.toXML(), "UTF-8"), TARGET_FILE_NAME,
+						MediaPackageElementFlavor.parseFlavor(targetFlavor), mp);
+				workflowInstance.setMediaPackage(mp);
+				workflowService.update(workflowInstance);
+			} catch (Exception e) {
+				logger.error(e.getMessage(), e);
+				throw new WorkflowOperationException(e);
+			}
+		} else {
+			throw new WorkflowOperationException("MediaPackage does not contain any Tracks with flavor " + flavor);
+		}
 
-          lastSegment = ms;
-        }
-        
-        // checking whether last item end at media duration
-        if (lastSegment != null && lastSegment.getSegmentStop() < mp.getDuration()) {
-          logger.debug("adding new last item, because old last item doesn't end with duration of media");
-          ParallelElement p = new ParallelElement();
-          p.addElement(new MediaElement("", String.valueOf(lastSegment.getSegmentStop() / 1000.0), String.valueOf(mp.getDuration() / 1000.0)));
-          smilService.addParallelElement(workflowInstance.getId(), p);
-        }
-        
-      } catch (Exception e) {
-        logger.error(e.getMessage(), e);
-        throw new WorkflowOperationException(e);
-      }
-    }
-    
-    return createResult(mp, Action.CONTINUE);
-  }
-  
-  @Override
-  public void activate(ComponentContext cc) {
-    super.activate(cc);
-    logger.debug("Activating SilenceDetectionService");
-  }
+		return createResult(mp, Action.CONTINUE);
+	}
 
-  public void setDetectionService(SilenceDetectionService detectionService) {
-    this.detetionService = detectionService;
-  }
+	@Override
+	public void activate(ComponentContext cc) {
+		super.activate(cc);
+		logger.debug("Activating SilenceDetectionService");
+	}
 
-  public void setSmilService(SmilService smilService) {
-    this.smilService = smilService;
-  }
+	public void setDetectionService(SilenceDetectionService detectionService) {
+		this.detetionService = detectionService;
+	}
 
-  public void setWorkflowService(WorkflowService workflowService) {
-    this.workflowService = workflowService;
-  }
+	public void setSmilService(SmilService smilService) {
+	  this.smilService = smilService;
+	}
 
+	public void setIngestService(IngestService ingestService) {
+		this.ingestService = ingestService;
+	}
+
+	public void setWorkflowService(WorkflowService workflowService) {
+	  this.workflowService = workflowService;
+	}
 }

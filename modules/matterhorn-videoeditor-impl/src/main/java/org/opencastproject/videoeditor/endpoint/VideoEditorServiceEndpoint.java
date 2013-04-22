@@ -13,14 +13,13 @@
  *  permissions and limitations under the License.
  *
  */
-
 package org.opencastproject.videoeditor.endpoint;
 
 import java.util.List;
+import javax.ws.rs.FormParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.opencastproject.job.api.JaxbJobList;
@@ -28,7 +27,8 @@ import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobProducer;
 import org.opencastproject.rest.AbstractJobProducerEndpoint;
 import org.opencastproject.serviceregistry.api.ServiceRegistry;
-import org.opencastproject.smil.entity.Smil;
+import org.opencastproject.smil.api.SmilService;
+import org.opencastproject.smil.entity.api.Smil;
 import org.opencastproject.util.doc.rest.RestParameter;
 import org.opencastproject.util.doc.rest.RestQuery;
 import org.opencastproject.util.doc.rest.RestResponse;
@@ -42,55 +42,62 @@ import org.slf4j.LoggerFactory;
  */
 @Path("/")
 @RestService(name = "VideoEditorServiceEndpoint", title = "Video Editor Service REST Endpoint",
-        abstractText = "Process smil documents (trim media files).", 
-        notes = {"Video Editor Service consumes a smil document with media segments and creates an video." })
+		abstractText = "Process smil documents (trim media files).",
+		notes = {"Video Editor Service consumes a smil document with media segments and creates an video."})
 public class VideoEditorServiceEndpoint extends AbstractJobProducerEndpoint {
 
-  private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceEndpoint.class);
-  
-  private ServiceRegistry serviceRegistry;
-  private VideoEditorService videoEditorService;
-  
-  @POST
-  @Path("/process-smil")
-  @Produces({ MediaType.APPLICATION_XML })
-  @RestQuery(name = "processsmil", description = "Create smil processing jobs.", 
-          returnDescription = "Smil processing jobs.",
-          restParameters = {
-            @RestParameter(name = "smil", type = RestParameter.Type.TEXT,
-              description = "Smil document to process.", isRequired = true)
-          },
-          reponses = {
-            @RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
-            @RestResponse(description = "Internal server error.", responseCode = 500)
-          })
-  public Response processSmilElements(@QueryParam("smil") Smil smil) {
-    try {
-      List<Job> jobs = videoEditorService.processSmil(smil);
-      return Response.ok(new JaxbJobList(jobs)).build();
-    } catch (Exception ex) {
-      return Response.serverError().entity(ex.getMessage()).build();
-    }
-  }
-  
-  @Override
-  public JobProducer getService() {
-    if (videoEditorService instanceof JobProducer)
-      return (JobProducer) videoEditorService;
-    else 
-      return null;
-  }
+	private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceEndpoint.class);
+	private ServiceRegistry serviceRegistry;
+	private VideoEditorService videoEditorService;
+	private SmilService smilService;
 
-  @Override
-  public ServiceRegistry getServiceRegistry() {
-    return serviceRegistry;
-  }
+	@POST
+	@Path("/process-smil")
+	@Produces({MediaType.APPLICATION_XML})
+	@RestQuery(name = "processsmil", description = "Create smil processing jobs.",
+			returnDescription = "Smil processing jobs.",
+			restParameters = {
+		@RestParameter(name = "smil", type = RestParameter.Type.TEXT,
+				description = "Smil document to process.", isRequired = true)
+	},
+			reponses = {
+		@RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
+		@RestResponse(description = "Internal server error.", responseCode = 500)
+	})
+	public Response processSmil(@FormParam("smil") String smilStr) {
+		Smil smil;
+		try {
+			smil = smilService.fromXml(smilStr).getSmil();
+			List<Job> jobs = videoEditorService.processSmil(smil);
+			return Response.ok(new JaxbJobList(jobs)).build();
+		} catch (Exception ex) {
+			return Response.serverError().entity(ex.getMessage()).build();
+		}
+	}
 
-  public void setVideoEditorService(VideoEditorService videoEditorService) {
-    this.videoEditorService = videoEditorService;
-  }
-  
-  public void setServiceRegistry(ServiceRegistry serviceRegistry) {
-    this.serviceRegistry = serviceRegistry;
-  }
+	@Override
+	public JobProducer getService() {
+		if (videoEditorService instanceof JobProducer) {
+			return (JobProducer) videoEditorService;
+		} else {
+			return null;
+		}
+	}
+
+	@Override
+	public ServiceRegistry getServiceRegistry() {
+		return serviceRegistry;
+	}
+
+	public void setVideoEditorService(VideoEditorService videoEditorService) {
+		this.videoEditorService = videoEditorService;
+	}
+
+	public void setServiceRegistry(ServiceRegistry serviceRegistry) {
+		this.serviceRegistry = serviceRegistry;
+	}
+
+	public void setSmilService(SmilService smilService) {
+		this.smilService = smilService;
+	}
 }

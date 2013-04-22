@@ -17,7 +17,7 @@ package org.opencastproject.videoeditor.api;
 
 import java.util.List;
 import org.opencastproject.job.api.Job;
-import org.opencastproject.smil.entity.Smil;
+import org.opencastproject.smil.entity.api.Smil;
 
 public interface VideoEditorService {
     

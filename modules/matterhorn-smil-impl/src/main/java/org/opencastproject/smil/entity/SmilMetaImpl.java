@@ -15,6 +15,7 @@
  */
 package org.opencastproject.smil.entity;
 
+import java.util.List;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlRootElement;
 import org.opencastproject.smil.entity.api.SmilMeta;
@@ -103,5 +104,10 @@ public class SmilMetaImpl extends SmilObjectImpl implements SmilMeta {
 		if (getId().equals(elementId)) {
 			return this;
 		} else return null;
+	}
+
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		// Meta elements has no child
 	}
 }

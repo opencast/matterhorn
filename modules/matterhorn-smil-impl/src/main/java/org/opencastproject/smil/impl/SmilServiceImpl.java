@@ -126,6 +126,8 @@ public class SmilServiceImpl implements SmilService {
 			// add paramgroup for new Track
 			trackParamGroup = new SmilMediaParamGroupImpl();
 			((SmilMediaParamGroupImpl)trackParamGroup).addParam(SmilMediaParam.PARAM_NAME_TRACK_ID, track.getIdentifier());
+			((SmilMediaParamGroupImpl)trackParamGroup).addParam(SmilMediaParam.PARAM_NAME_TRACK_SRC, track.getURI().toString());
+			((SmilMediaParamGroupImpl)trackParamGroup).addParam(SmilMediaParam.PARAM_NAME_TRACK_FLAVOR, track.getFlavor().toString());
 			((SmilHeadImpl)smil.getHead()).addParamGroup(trackParamGroup);
 		}
 
@@ -138,6 +140,9 @@ public class SmilServiceImpl implements SmilService {
 			media = new SmilMediaReferenceImpl(track.getURI(), start, start + duration);
 		}
 		media.setParamGroup(trackParamGroup.getId());
+		if (parentId == null || "".equals(parentId)) {
+			parentId = smil.getBody().getId();
+		}
 		((SmilBodyImpl)smil.getBody()).addMediaElement(media, parentId);
 		if (newTrack) {
 			return new SmilResponseImpl(smil, new SmilObject[] { media, trackParamGroup });

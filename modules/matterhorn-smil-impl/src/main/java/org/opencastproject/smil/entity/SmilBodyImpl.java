@@ -135,4 +135,15 @@ public class SmilBodyImpl extends SmilObjectImpl implements SmilBody {
 		}
 		return null;
 	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void putAllChilds(List<SmilObject> elements) {
+		for (SmilObject child : getMediaElements()) {
+			elements.add(child);
+			((SmilObjectImpl)child).putAllChilds(elements);
+		}
+	}
 }

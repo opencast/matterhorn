@@ -88,7 +88,7 @@
     </dependency>
     <dependency>
       <groupId>org.opencastproject</groupId>
-      <artifactId>matterhorn-smil</artifactId>
+      <artifactId>matterhorn-smil-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
