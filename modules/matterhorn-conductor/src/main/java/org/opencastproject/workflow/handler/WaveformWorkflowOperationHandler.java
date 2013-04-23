@@ -26,6 +26,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import javax.imageio.ImageIO;
 import org.apache.commons.io.IOUtils;
 import org.opencastproject.ingest.api.IngestException;
@@ -47,53 +49,59 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- *
- * @author wsmirnow
- */
 public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationHandler {
 	
 	static final Logger logger = LoggerFactory.getLogger(WaveformWorkflowOperationHandler.class);
-    
-    /**
-     * Waveform image width.
-     */
-	static final int IMAGE_WIDTH = 5000;
-    /**
-     * Waveform image height.
-     */
-	static final int IMAGE_HEIGHT = 500;
-	
+  
 	/**
-	* the workspace
-	*/
+	 * Source flavor configuration property name.
+	 */
+	private static final String SOURCE_FLAVOR_PROPERTY = "source-flavor";
+  /**
+   * Target flavor configuration property name.
+   */
+  private static final String TARGET_FLAVOR_PROPERTY = "target-flavor";
+	/** The configuration options for this handler */
+	private static final SortedMap<String, String> CONFIG_OPTIONS;
+	static {
+		CONFIG_OPTIONS = new TreeMap<String, String>();
+		CONFIG_OPTIONS.put(SOURCE_FLAVOR_PROPERTY, "The source wave file flavor.");
+		CONFIG_OPTIONS.put(TARGET_FLAVOR_PROPERTY, "The target png file output flavor.");
+	}
+
+  /**
+   * Waveform image width.
+   */
+	static final int IMAGE_WIDTH = 5000;
+  /**
+   * Waveform image height.
+   */
+	static final int IMAGE_HEIGHT = 500;
+
+	/**
+	 * The workspace.
+	 */
 	private Workspace workspace;
 	/**
-	* the ingestservice
-	*/
+	 * The ingestservice.
+	 */
 	private IngestService ingestService;
-	/**
-	* the flavor string for the audio source
-	*/
-	private static final String audioFlavorString = "audio/waveform";
-	/**
-	* the resulting MediaPackageElementFlavor
-	*/
-	private static final MediaPackageElementFlavor audioFlavor = MediaPackageElementFlavor
-	   .parseFlavor(audioFlavorString);
-	/**
-	* the flavor string for the resulting image
-	*/
-	private static final String waveformFlavorString = "image/waveform";
-	/**
-	* the resulting MediaPackageElementFlavor
-	*/
-	private static final MediaPackageElementFlavor waveformFlavor = MediaPackageElementFlavor
-	   .parseFlavor(waveformFlavorString);
 
+
+  @Override
 	public void activate(ComponentContext cc) {
 	 super.activate(cc);
 	 logger.info("activating waveform workflow operation handler");
+	}
+  
+  /**
+	 * {@inheritDoc}
+	 *
+	 * @see org.opencastproject.workflow.api.WorkflowOperationHandler#getConfigurationOptions()
+	 */
+	@Override
+	public SortedMap<String, String> getConfigurationOptions() {
+		return CONFIG_OPTIONS;
 	}
 
 	@Override
@@ -102,15 +110,19 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 		
 		MediaPackage mediaPackage = workflowInstance.getMediaPackage();
 
-		logger.debug("source-flavor{}", workflowInstance.getConfiguration("source-flavor"));
-		logger.info("generating waveform png from mediapackage {}", mediaPackage.getIdentifier()
-			.compact());
+    String sourceFlavorProperty = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR_PROPERTY);
+    MediaPackageElementFlavor sourceFlavor = MediaPackageElementFlavor.parseFlavor(sourceFlavorProperty);
 
-		Track[] tracks = mediaPackage.getTracks(audioFlavor);
+    String targetFlavorProperty = workflowInstance.getCurrentOperation().getConfiguration(TARGET_FLAVOR_PROPERTY);
+    MediaPackageElementFlavor targetFlavor = MediaPackageElementFlavor.parseFlavor(targetFlavorProperty);
+
+		Track[] tracks = mediaPackage.getTracks(sourceFlavor);
 		if (tracks.length == 0) {
-		  logger.info("Skipping Waveform generation because no wave file is present in the mediapackage");
+		  logger.info("Skipping Waveform generation because no wave file is present in the mediapackage {}",
+              mediaPackage.getIdentifier().compact());
 		  return createResult(Action.SKIP);
 		}
+		logger.info("Generating waveform png from {}", tracks[0].getURI().toString());
 		
 		WaveUtils waveUtils = null;
 		BufferedImage bufferedImage = null;
@@ -127,12 +139,14 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 			ImageIO.write(bufferedImage, "png", os);
 			is = new ByteArrayInputStream(os.toByteArray());
 			logger.debug("adding waveform as an attachment to mediapackage");
-			mediaPackage = ingestService.addAttachment(is, "waveform.png", waveformFlavor, mediaPackage);
-        
+			mediaPackage = ingestService.addAttachment(is, "waveform.png", targetFlavor, mediaPackage);
+      workflowInstance.setMediaPackage(mediaPackage);
+
+      logger.info("Generation waveform png for {} finished.", tracks[0].getURI().toString());
 			return createResult(mediaPackage, Action.CONTINUE);
 			
 		} catch (MediaPackageException ex) {
-			logger.error("failed to pu waveform image to mediapackage", ex);
+			logger.error("failed to put waveform image to mediapackage", ex);
 		} catch (IngestException ex) {
 			logger.error("failed to ingest waveform image", ex);
 		} catch (WaveException ex) {
@@ -196,7 +210,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 		 * @throws IOException if reading wave audio file failed
 		 */
 		public BufferedImage generateWaveformImage(boolean verticalScale) throws IOException {
-			reamWaveFile();
+			readWaveFile();
 
 			BufferedImage image = new BufferedImage(IMAGE_WIDTH, IMAGE_HEIGHT, 
 					BufferedImage.TYPE_INT_ARGB);
@@ -229,7 +243,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 			return image;
 		}
 
-		private void reamWaveFile() throws IOException {
+		private void readWaveFile() throws IOException {
 			int framesCount = 0;
 
 			WaveHeader header = wave.getWaveHeader();

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import javax.xml.bind.JAXBException;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.opencastproject.ingest.api.IngestService;
@@ -41,8 +42,6 @@ import org.opencastproject.smil.entity.api.Smil;
 import org.opencastproject.smil.entity.media.api.SmilMediaObject;
 import org.opencastproject.smil.entity.media.container.api.SmilMediaContainer;
 import org.opencastproject.smil.entity.media.element.api.SmilMediaElement;
-import org.opencastproject.smil.entity.media.param.api.SmilMediaParam;
-import org.opencastproject.smil.entity.media.param.api.SmilMediaParamGroup;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.videoeditor.api.ProcessFailedException;
 import org.opencastproject.videoeditor.api.VideoEditorService;
@@ -55,6 +54,7 @@ import org.opencastproject.workspace.api.Workspace;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.SAXException;
 
 public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperationHandlerBase {
 
@@ -166,51 +166,15 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 				// ingest new smil
 				mp = ingestService.addCatalog(IOUtils.toInputStream(smil.toXML(), "UTF-8"),
 						SMIL_FILE_NAME, smilFlavor, mp);
-				workflowInstance.setMediaPackage(mp);
-				// TODO update workflowservice ?
-				smilCatalogs = mp.getCatalogs(smilFlavor);
+        workflowInstance.setMediaPackage(mp);
 			} else {
 				// mediapackage contain a smil, test preview tracks set
 				File smilFile = workspace.get(smilCatalogs[0].getURI());
 				smilResponse = smilService.fromXml(smilFile);
-//				Smil targetSmil = smilService.fromXml(smil.toXML()).getSmil();
-//
-//				// iterate over all media containers
-//				for (SmilMediaObject containerElement : smil.getBody().getMediaElements()) {
-//					if (containerElement.isContainer()) {
-//						SmilMediaContainer container = (SmilMediaContainer) containerElement;
-//						if (SmilMediaContainer.ContainerType.PAR != container.getContainerType()) {
-//							throw new WorkflowOperationException("Container type "
-//									+ container.getContainerType().toString() + " not supportet yet.");
-//						}
-//
-//						long start = -1;
-//						long end = -1;
-//
-//						// remove all elements inside
-//						for (SmilMediaObject mediaElement : container.getElements()) {
-//							if (mediaElement.isContainer()) {
-//								//throw new WorkflowOperationException("Smil should wrap media elements inside par container.");
-//								logger.warn("Smil container inside another is not supported yet.");
-//								continue;
-//							}
-//							SmilMediaElement media = (SmilMediaElement) mediaElement;
-//							start = media.getClipBeginMS();
-//							end = media.getClipEndMS();
-//							targetSmil = smilService.removeSmilElement(targetSmil, mediaElement.getId()).getSmil();
-//						}
-//						// put preview tracks as media elements instead
-//						if (start != -1 && end != -1) {
-//							targetSmil = smilService.addClips(targetSmil, container.getId(),
-//									previewTracks, start, end - start).getSmil();
-//						}
-//					}
-//				}
-//				smil = targetSmil;
 				smil = replaceAllTracksWith(smilResponse.getSmil(), previewTracks);
-			}
-			workspace.put(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier(),
-					SMIL_FILE_NAME, IOUtils.toInputStream(smil.toXML(), "UTF-8"));
+        workspace.put(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier(),
+                SMIL_FILE_NAME, IOUtils.toInputStream(smil.toXML(), "UTF-8"));
+      }
 		} catch (Exception e) {
 			throw new WorkflowOperationException(e.getMessage(), e);
 		}
@@ -278,13 +242,19 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 			smilFile = workspace.get(catalogs[0].getURI());
 			smil = smilService.fromXml(smilFile).getSmil();
 			smil = replaceAllTracksWith(smil, sourceTracks);
+      workspace.put(mp.getIdentifier().compact(), catalogs[0].getIdentifier(),
+              SMIL_FILE_NAME, IOUtils.toInputStream(smil.toXML(), "UTF-8"));
 		} catch (NotFoundException ex) {
 			throw new WorkflowOperationException("MediaPackage does not contain a smil catalog.");
 		} catch (IOException ex) {
 			throw new WorkflowOperationException("Failed to read smil catalog.", ex);
 		} catch (SmilException ex) {
 			throw new WorkflowOperationException(ex);
-		}
+		} catch (JAXBException ex) {
+      throw new WorkflowOperationException("Unable to serialize SMIL working version.", ex);
+    } catch (SAXException ex) {
+      throw new WorkflowOperationException("Unable to serialize SMIL working version.", ex);
+    }
 
 		// create video edit jobs and run them
 		List<Job> jobs = null;
@@ -350,13 +320,15 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 		return MediaPackageElementFlavor.parseFlavor(flavor);
 	}
 
-	protected String getTrackIdFromParamGroup(SmilMediaParamGroup paramGroup) {
-		for (SmilMediaParam param : paramGroup.getParams()) {
-			if (SmilMediaParam.PARAM_NAME_TRACK_ID.equals(param.getName())) {
-				return param.getValue();
+	protected Track[] getTracksFromFlavor(MediaPackage mediaPackage, MediaPackageElementFlavor flavor) {
+		List<Track> tracks = new LinkedList<Track>();
+		for (Track track : mediaPackage.getTracks()) {
+			MediaPackageElementFlavor trackFlavor = track.getFlavor();
+			if (trackFlavor.matches(flavor)) {
+				tracks.add(track);
 			}
 		}
-		return null;
+		return tracks.toArray(new Track[tracks.size()]);
 	}
 
 	protected Smil replaceAllTracksWith(Smil smil, Track[] otherTracks) throws SmilException {
@@ -396,17 +368,6 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 			}
 		}
 		return smilResponse.getSmil();
-	}
-
-	protected Track[] getTracksFromFlavor(MediaPackage mediaPackage, MediaPackageElementFlavor flavor) {
-		List<Track> tracks = new LinkedList<Track>();
-		for (Track track : mediaPackage.getTracks()) {
-			MediaPackageElementFlavor trackFlavor = track.getFlavor();
-			if (trackFlavor.matches(flavor)) {
-				tracks.add(track);
-			}
-		}
-		return tracks.toArray(new Track[tracks.size()]);
 	}
 
 	public void setSmilService(SmilService smilService) {

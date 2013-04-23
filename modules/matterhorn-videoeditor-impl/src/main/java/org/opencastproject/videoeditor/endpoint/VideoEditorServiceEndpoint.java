@@ -42,62 +42,62 @@ import org.slf4j.LoggerFactory;
  */
 @Path("/")
 @RestService(name = "VideoEditorServiceEndpoint", title = "Video Editor Service REST Endpoint",
-		abstractText = "Process smil documents (trim media files).",
-		notes = {"Video Editor Service consumes a smil document with media segments and creates an video."})
+        abstractText = "Process smil documents (trim media files).",
+        notes = {"Video Editor Service consumes a smil document with media segments and creates an video."})
 public class VideoEditorServiceEndpoint extends AbstractJobProducerEndpoint {
 
-	private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceEndpoint.class);
-	private ServiceRegistry serviceRegistry;
-	private VideoEditorService videoEditorService;
-	private SmilService smilService;
+  private static final Logger logger = LoggerFactory.getLogger(VideoEditorServiceEndpoint.class);
+  private ServiceRegistry serviceRegistry;
+  private VideoEditorService videoEditorService;
+  private SmilService smilService;
 
-	@POST
-	@Path("/process-smil")
-	@Produces({MediaType.APPLICATION_XML})
-	@RestQuery(name = "processsmil", description = "Create smil processing jobs.",
-			returnDescription = "Smil processing jobs.",
-			restParameters = {
-		@RestParameter(name = "smil", type = RestParameter.Type.TEXT,
-				description = "Smil document to process.", isRequired = true)
-	},
-			reponses = {
-		@RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
-		@RestResponse(description = "Internal server error.", responseCode = 500)
-	})
-	public Response processSmil(@FormParam("smil") String smilStr) {
-		Smil smil;
-		try {
-			smil = smilService.fromXml(smilStr).getSmil();
-			List<Job> jobs = videoEditorService.processSmil(smil);
-			return Response.ok(new JaxbJobList(jobs)).build();
-		} catch (Exception ex) {
-			return Response.serverError().entity(ex.getMessage()).build();
-		}
-	}
+  @POST
+  @Path("/process-smil")
+  @Produces({MediaType.APPLICATION_XML})
+  @RestQuery(name = "processsmil", description = "Create smil processing jobs.",
+          returnDescription = "Smil processing jobs.",
+          restParameters = {
+    @RestParameter(name = "smil", type = RestParameter.Type.TEXT,
+            description = "Smil document to process.", isRequired = true)
+  },
+          reponses = {
+    @RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
+    @RestResponse(description = "Internal server error.", responseCode = 500)
+  })
+  public Response processSmil(@FormParam("smil") String smilStr) {
+    Smil smil;
+    try {
+      smil = smilService.fromXml(smilStr).getSmil();
+      List<Job> jobs = videoEditorService.processSmil(smil);
+      return Response.ok(new JaxbJobList(jobs)).build();
+    } catch (Exception ex) {
+      return Response.serverError().entity(ex.getMessage()).build();
+    }
+  }
 
-	@Override
-	public JobProducer getService() {
-		if (videoEditorService instanceof JobProducer) {
-			return (JobProducer) videoEditorService;
-		} else {
-			return null;
-		}
-	}
+  @Override
+  public JobProducer getService() {
+    if (videoEditorService instanceof JobProducer) {
+      return (JobProducer) videoEditorService;
+    } else {
+      return null;
+    }
+  }
 
-	@Override
-	public ServiceRegistry getServiceRegistry() {
-		return serviceRegistry;
-	}
+  @Override
+  public ServiceRegistry getServiceRegistry() {
+    return serviceRegistry;
+  }
 
-	public void setVideoEditorService(VideoEditorService videoEditorService) {
-		this.videoEditorService = videoEditorService;
-	}
+  public void setVideoEditorService(VideoEditorService videoEditorService) {
+    this.videoEditorService = videoEditorService;
+  }
 
-	public void setServiceRegistry(ServiceRegistry serviceRegistry) {
-		this.serviceRegistry = serviceRegistry;
-	}
+  public void setServiceRegistry(ServiceRegistry serviceRegistry) {
+    this.serviceRegistry = serviceRegistry;
+  }
 
-	public void setSmilService(SmilService smilService) {
-		this.smilService = smilService;
-	}
+  public void setSmilService(SmilService smilService) {
+    this.smilService = smilService;
+  }
 }
