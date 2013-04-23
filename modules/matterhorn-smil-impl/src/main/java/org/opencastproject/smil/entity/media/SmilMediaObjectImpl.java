@@ -24,12 +24,12 @@ import org.opencastproject.smil.entity.media.element.SmilMediaElementImpl;
 /**
  * {@link SmilMediaObject} implementation.
  */
-@XmlSeeAlso({ SmilMediaContainerImpl.class, SmilMediaElementImpl.class })
+@XmlSeeAlso({SmilMediaContainerImpl.class, SmilMediaElementImpl.class})
 public abstract class SmilMediaObjectImpl extends SmilObjectImpl implements SmilMediaObject {
 
-	/**
-	 * {@inheritDoc }
-	 */
-	@Override
-    public abstract boolean isContainer();
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  public abstract boolean isContainer();
 }

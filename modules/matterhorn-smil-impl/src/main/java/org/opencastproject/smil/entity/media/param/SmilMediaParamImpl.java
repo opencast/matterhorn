@@ -28,98 +28,108 @@ import org.opencastproject.smil.entity.media.param.api.SmilMediaParam;
 @XmlRootElement(name = "param")
 public class SmilMediaParamImpl extends SmilObjectImpl implements SmilMediaParam {
 
-    // allowed valuetypes: data, ref, object
-    // http://www.w3.org/TR/smil/smil-extended-media-object.html#smilMediaNS-MediaParam
-	/** SMIL valueType attribute (constant: data) */
-    @XmlAttribute(name = "valuetype")
-    private final String valueType = "data";
+  // allowed valuetypes: data, ref, object
+  // http://www.w3.org/TR/smil/smil-extended-media-object.html#smilMediaNS-MediaParam
+  /**
+   * SMIL valueType attribute (constant: data)
+   */
+  @XmlAttribute(name = "valuetype")
+  private final String valueType = "data";
+  /**
+   * SMIL param name attribute
+   */
+  private String name;
+  /**
+   * SMIL param value attribute
+   */
+  private String value;
 
-	/** SMIL param name attribute */
-    private String name;
-	/** SMIL param value attribute */
-    private String value;
+  /**
+   * Empty constructor (needed for JAXB).
+   */
+  private SmilMediaParamImpl() {
+    this(null, null);
+  }
 
-	/**
-	 * Empty constructor (needed for JAXB).
-	 */
-    private SmilMediaParamImpl() {
-        this(null, null);
+  /**
+   * Constructor.
+   *
+   * @param name param name
+   * @param value param value
+   */
+  public SmilMediaParamImpl(String name, String value) {
+    this.name = name;
+    this.value = value;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @XmlAttribute(required = true)
+  @Override
+  public String getName() {
+    return name;
+  }
+
+  /**
+   * Set param name.
+   *
+   * @param name the name to set
+   */
+  protected void setName(String name) {
+    this.name = name;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @XmlAttribute(required = true)
+  @Override
+  public String getValue() {
+    return value;
+  }
+
+  /**
+   * Set param value.
+   *
+   * @param value the value to set
+   */
+  public void setValue(String value) {
+    this.value = value;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "param";
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  public SmilObject removeElement(String elementId) {
+    return null;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  public SmilObject getElementOrNull(String elementId) {
+    if (getId().equals(elementId)) {
+      return this;
     }
+    return null;
+  }
 
-	/**
-	 * Constructor.
-	 * @param name param name
-	 * @param value param value
-	 */
-    public SmilMediaParamImpl(String name, String value) {
-        this.name = name;
-        this.value = value;
-    }
-
-    /**
-     * {@inheritDoc }
-     */
-    @XmlAttribute(required = true)
-	@Override
-    public String getName() {
-        return name;
-    }
-
-    /**
-	 * Set param name.
-     * @param name the name to set
-     */
-    protected void setName(String name) {
-        this.name = name;
-    }
-
-    /**
-     * {@inheritDoc }
-     */
-    @XmlAttribute(required = true)
-	@Override
-    public String getValue() {
-        return value;
-    }
-
-    /**
-	 * Set param value.
-     * @param value the value to set
-     */
-    public void setValue(String value) {
-        this.value = value;
-    }
-
-	/**
-	 * {@inheritDoc }
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "param";
-	}
-
-	/**
-	 * {@inheritDoc }
-	 */
-	@Override
-	public SmilObject removeElement(String elementId) {
-		return null;
-	}
-
-	/**
-	 * {@inheritDoc }
-	 */
-	@Override
-	public SmilObject getElementOrNull(String elementId) {
-		if (getId().equals(elementId)) return this;
-		return null;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public void putAllChilds(List<SmilObject> elements) {
-		// param does not have any elements inside
-	}
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void putAllChilds(List<SmilObject> elements) {
+    // param does not have any elements inside
+  }
 }

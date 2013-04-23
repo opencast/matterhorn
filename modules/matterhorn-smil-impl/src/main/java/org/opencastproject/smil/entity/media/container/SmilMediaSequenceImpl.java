@@ -23,21 +23,21 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "seq")
 public class SmilMediaSequenceImpl extends SmilMediaContainerImpl {
 
-	/**
-	 * Returns {@link ContainerType}.SEQ
-	 * @return container type SEQ
-	 */
-    @Override
-    public ContainerType getContainerType() {
-        return ContainerType.SEQ;
-    }
+  /**
+   * Returns {@link ContainerType}.SEQ
+   *
+   * @return container type SEQ
+   */
+  @Override
+  public ContainerType getContainerType() {
+    return ContainerType.SEQ;
+  }
 
-	/**
-	 * {@inheritDoc }
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "seq";
-	}
-    
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "seq";
+  }
 }

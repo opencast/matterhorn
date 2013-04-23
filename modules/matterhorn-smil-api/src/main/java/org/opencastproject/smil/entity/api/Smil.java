@@ -25,31 +25,34 @@ import org.xml.sax.SAXException;
  */
 public interface Smil extends SmilObject {
 
-    /**
-	 * Returns body of the SMIL.
-     * @return the body of the SMIL.
-     */
-    SmilBody getBody();
+  /**
+   * Returns body of the SMIL.
+   *
+   * @return the body of the SMIL.
+   */
+  SmilBody getBody();
 
-    /**
-	 * Returns head of the SMIL.
-     * @return the head of the SMIL.
-     */
-    SmilHead getHead();
+  /**
+   * Returns head of the SMIL.
+   *
+   * @return the head of the SMIL.
+   */
+  SmilHead getHead();
 
-    /**
-     * Serialize this object.
-     *
-     * @return the XML representation of the {@link Smil} object
-     * @throws JAXBException if serializing fail
-     */
-    String toXML() throws JAXBException, SAXException, MalformedURLException;
+  /**
+   * Serialize this object.
+   *
+   * @return the XML representation of the {@link Smil} object
+   * @throws JAXBException if serializing fail
+   */
+  String toXML() throws JAXBException, SAXException, MalformedURLException;
 
-	/**
-	 * Returns element with given Id.
-	 * @param elementId element Id
-	 * @throws SmilException if there is no element with the same Id
-	 * @returnelement with given Id
-	 */
-	SmilObject get(String elementId) throws SmilException;
+  /**
+   * Returns element with given Id.
+   *
+   * @param elementId element Id
+   * @throws SmilException if there is no element with the same Id
+   * @returnelement with given Id
+   */
+  SmilObject get(String elementId) throws SmilException;
 }

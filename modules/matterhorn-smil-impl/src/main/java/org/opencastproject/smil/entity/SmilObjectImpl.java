@@ -27,70 +27,79 @@ import org.opencastproject.smil.entity.api.SmilObject;
  */
 public abstract class SmilObjectImpl implements SmilObject {
 
-	/** Id builder */
-	private static final IdBuilder idBuilder = IdBuilderFactory.newInstance().newIdBuilder();
-	/** Smil object Id */
-    private String id;
+  /**
+   * Id builder
+   */
+  private static final IdBuilder idBuilder = IdBuilderFactory.newInstance().newIdBuilder();
+  /**
+   * Smil object Id
+   */
+  private String id;
 
-	/**
-	 * Constructor.
-	 * Generate a new Id.
-	 */
-    public SmilObjectImpl() {
-		id = String.format("%s-%s", getIdPrefix(), idBuilder.createNew().compact());
-    }
+  /**
+   * Constructor. Generate a new Id.
+   */
+  public SmilObjectImpl() {
+    id = String.format("%s-%s", getIdPrefix(), idBuilder.createNew().compact());
+  }
 
-	/**
-	 * Constructor.
-	 * @param id Id to set
-	 */
-    public SmilObjectImpl(String id) {
-        this.id = id;
-    }
+  /**
+   * Constructor.
+   *
+   * @param id Id to set
+   */
+  public SmilObjectImpl(String id) {
+    this.id = id;
+  }
 
-	/**
-	 * {@inheritDoc }
-	 */
-    @XmlAttribute(namespace = "http://www.w3.org/XML/1998/namespace")
-    @XmlID
-	@Override
-    public String getId() {
-        return id;
-    }
+  /**
+   * {@inheritDoc }
+   */
+  @XmlAttribute(namespace = "http://www.w3.org/XML/1998/namespace")
+  @XmlID
+  @Override
+  public String getId() {
+    return id;
+  }
 
-	/**
-	 * Set Id.
-	 * @param id Id to set
-	 */
-	private void setId(String id) {
-		this.id = id;
-	}
+  /**
+   * Set Id.
+   *
+   * @param id Id to set
+   */
+  private void setId(String id) {
+    this.id = id;
+  }
 
-	/**
-	 * Returns {@link SmilObject} Id prefix (must begin with alphanumeric charackter).
-	 * @return Id prefix
-	 */
-	protected abstract String getIdPrefix();
+  /**
+   * Returns {@link SmilObject} Id prefix (must begin with alphanumeric
+   * charackter).
+   *
+   * @return Id prefix
+   */
+  protected abstract String getIdPrefix();
 
-	/**
-	 * Returns element with given elementId or null.
-	 * @param elementId element Id
-	 * @return element with given elementId or null
-	 */
-	public abstract SmilObject getElementOrNull(String elementId);
+  /**
+   * Returns element with given elementId or null.
+   *
+   * @param elementId element Id
+   * @return element with given elementId or null
+   */
+  public abstract SmilObject getElementOrNull(String elementId);
 
-	/**
-	 * Put all containing elements into {@link List} given as parameter.
-	 *
-	 * @param a {@link List} where to pul child elements to
-	 */
-	public abstract void putAllChilds(List<SmilObject> elements);
+  /**
+   * Put all containing elements into {@link List} given as parameter.
+   *
+   * @param a {@link List} where to pul child elements to
+   */
+  public abstract void putAllChilds(List<SmilObject> elements);
 
-	/**
-	 * Remove element with given Id and returns it.
-	 * Returns null if there is no element with given Id.
-	 * @param elementId element Id
-	 * @return removed element or null
-	 */
-	public abstract SmilObject removeElement(String elementId);
+  /**
+   * Remove element with given Id and returns it. Returns null if there is no
+   * element with given Id.
+   *
+   * @param elementId element Id
+   * @return removed element or null
+   */
+  public abstract SmilObject removeElement(String elementId);
 }

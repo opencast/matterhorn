@@ -23,32 +23,34 @@ import org.opencastproject.smil.entity.media.api.SmilMediaObject;
  */
 public interface SmilMediaContainer extends SmilMediaObject {
 
-	/**
-	 * SMIL media container type.
-	 */
-	enum ContainerType {
-        PAR, SEQ
-    }
+  /**
+   * SMIL media container type.
+   */
+  enum ContainerType {
+    PAR, SEQ
+  }
 
-	/**
-	 * Returns the type of the container.
-	 * @return container type
-	 */
-	ContainerType getContainerType();
+  /**
+   * Returns the type of the container.
+   *
+   * @return container type
+   */
+  ContainerType getContainerType();
 
-	/**
-	 * Returns media elements or containers inside as {@link List} of {@link SmilMediaObject}s.
-	 * The {@link List} is immutable, use {@link SmilService} to modify it.
-	 *
-	 * @return
-	 */
-	List<SmilMediaObject> getElements();
+  /**
+   * Returns media elements or containers inside as {@link List} of
+   * {@link SmilMediaObject}s. The {@link List} is immutable, use
+   * {@link SmilService} to modify it.
+   *
+   * @return
+   */
+  List<SmilMediaObject> getElements();
 
-	/**
-	 * Returns true, if has a child element with same Id.
-	 *
-	 * @param childId child Id
-	 * @return true if has a child with same Id
-	 */
-	boolean isParentOf(String childId);
+  /**
+   * Returns true, if has a child element with same Id.
+   *
+   * @param childId child Id
+   * @return true if has a child with same Id
+   */
+  boolean isParentOf(String childId);
 }

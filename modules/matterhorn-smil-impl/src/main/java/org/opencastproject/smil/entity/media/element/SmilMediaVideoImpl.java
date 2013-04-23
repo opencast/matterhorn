@@ -24,69 +24,74 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "video")
 public class SmilMediaVideoImpl extends SmilMediaElementImpl {
 
-	/**
-	 * Empty constructor, needed for JAXB.
-	 */
-    private SmilMediaVideoImpl() {
-        this(null, null, null);
-    }
+  /**
+   * Empty constructor, needed for JAXB.
+   */
+  private SmilMediaVideoImpl() {
+    this(null, null, null);
+  }
 
-	/**
-	 * Constructor.
-	 * @param src video URI
-	 * @param clipBegin clip begin position
-	 * @param clipEnd clip end position
-	 */
-    public SmilMediaVideoImpl(URI src, String clipBegin, String clipEnd) {
-        super(src, clipBegin, clipEnd);
-    }
+  /**
+   * Constructor.
+   *
+   * @param src video URI
+   * @param clipBegin clip begin position
+   * @param clipEnd clip end position
+   */
+  public SmilMediaVideoImpl(URI src, String clipBegin, String clipEnd) {
+    super(src, clipBegin, clipEnd);
+  }
 
-	/**
-	 * Constructor.
-	 * @param src video URI
-	 * @param clipBegin clip begin position
-	 * @param clipEnd clip end position
-	 * @param paramGroupId paramGroup element Id
-	 */
-    public SmilMediaVideoImpl(URI src, String clipBegin, String clipEnd, String paramGroupId) {
-        super(src, clipBegin, clipEnd, paramGroupId);
-    }
+  /**
+   * Constructor.
+   *
+   * @param src video URI
+   * @param clipBegin clip begin position
+   * @param clipEnd clip end position
+   * @param paramGroupId paramGroup element Id
+   */
+  public SmilMediaVideoImpl(URI src, String clipBegin, String clipEnd, String paramGroupId) {
+    super(src, clipBegin, clipEnd, paramGroupId);
+  }
 
-	/**
-	 * Constructor.
-	 * @param src video URI
-	 * @param clipBeginMS clip begin position in milliseconds
-	 * @param clipEndMS clip end position in milliseconds
-	 */
-    public SmilMediaVideoImpl(URI src, long clipBeginMS, long clipEndMS) {
-        super(src, clipBeginMS + "ms", clipEndMS + "ms");
-    }
+  /**
+   * Constructor.
+   *
+   * @param src video URI
+   * @param clipBeginMS clip begin position in milliseconds
+   * @param clipEndMS clip end position in milliseconds
+   */
+  public SmilMediaVideoImpl(URI src, long clipBeginMS, long clipEndMS) {
+    super(src, clipBeginMS + "ms", clipEndMS + "ms");
+  }
 
-	/**
-	 * Constructor.
-	 * @param src video URI
-	 * @param clipBeginMS clip begin position in milliseconds
-	 * @param clipEndMS clip end position in milliseconds
-	 * @param paramGroupId paramGroup element Id
-	 */
-    public SmilMediaVideoImpl(URI src, long clipBeginMS, long clipEndMS, String paramGroupId) {
-        super(src, clipBeginMS + "ms", clipEndMS + "ms", paramGroupId);
-    }
-    /**
-	 * Returns {@link MediaType}.VIDEO
-	 * @return media type video
-	 */
-    @Override
-    public MediaType getMediaType() {
-        return MediaType.VIDEO;
-    }
+  /**
+   * Constructor.
+   *
+   * @param src video URI
+   * @param clipBeginMS clip begin position in milliseconds
+   * @param clipEndMS clip end position in milliseconds
+   * @param paramGroupId paramGroup element Id
+   */
+  public SmilMediaVideoImpl(URI src, long clipBeginMS, long clipEndMS, String paramGroupId) {
+    super(src, clipBeginMS + "ms", clipEndMS + "ms", paramGroupId);
+  }
 
-	/**
-	 * {@inheritDocs}
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "v";
-	}
-    
+  /**
+   * Returns {@link MediaType}.VIDEO
+   *
+   * @return media type video
+   */
+  @Override
+  public MediaType getMediaType() {
+    return MediaType.VIDEO;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "v";
+  }
 }

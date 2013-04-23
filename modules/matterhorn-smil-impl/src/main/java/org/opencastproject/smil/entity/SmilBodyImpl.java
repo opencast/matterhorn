@@ -35,115 +35,124 @@ import org.opencastproject.smil.entity.media.element.api.SmilMediaElement;
 @XmlRootElement(name = "body")
 public class SmilBodyImpl extends SmilObjectImpl implements SmilBody {
 
-	/** Media Elements */
-    private List<SmilMediaObject> mediaElements = new LinkedList<SmilMediaObject>();
-    
-    /**
-     * {@inheritDoc}
-     */
-	@Override
-    public List<SmilMediaObject> getMediaElements() {
-		return Collections.unmodifiableList(mediaElements);
+  /**
+   * Media Elements
+   */
+  private List<SmilMediaObject> mediaElements = new LinkedList<SmilMediaObject>();
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public List<SmilMediaObject> getMediaElements() {
+    return Collections.unmodifiableList(mediaElements);
+  }
+
+  /**
+   * Returns SMIL media elements.
+   *
+   * @return the media elements
+   */
+  @XmlElementRef(type = SmilMediaObjectImpl.class)
+  protected List<SmilMediaObject> getMediaObjects() {
+    return mediaElements;
+  }
+
+  /**
+   * Set SMIL media elements.
+   *
+   * @param mediaElements the mediae lements to set
+   */
+  protected void setMediaObjects(List<SmilMediaObject> mediaElements) {
+    this.mediaElements = mediaElements;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "b";
+  }
+
+  /**
+   * Add given {@link SmilMediaObject} to the element with given Id.
+   *
+   * @param mediaObject to add
+   * @param parentId where to add new media
+   * @throws SmilException if there is no element inside with given Id
+   */
+  public void addMediaElement(SmilMediaObject mediaObject, String parentId) throws SmilException {
+    if (getId().equals(parentId)) {
+      mediaElements.add(mediaObject);
+    } else {
+      SmilMediaElement parent = null;
+      for (SmilMediaObject element : mediaElements) {
+        if (element.isContainer() && (element.getId().equals(parentId)
+                || ((SmilMediaContainer) element).isParentOf(parentId))) {
+          ((SmilMediaContainerImpl) element).addMediaObject(mediaObject, parentId);
+          return;
+        }
+      }
+      throw new SmilException("There is no element with id " + parentId);
     }
+  }
 
-	/**
-	 * Returns SMIL media elements.
-	 * @return the media elements
-	 */
-	@XmlElementRef(type = SmilMediaObjectImpl.class)
-	protected List<SmilMediaObject> getMediaObjects() {
-		return mediaElements;
-	}
-
-    /**
-     * Set SMIL media elements.
-     * @param mediaElements the mediae lements to set
-     */
-    protected void setMediaObjects(List<SmilMediaObject> mediaElements) {
-        this.mediaElements = mediaElements;
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public SmilObject removeElement(String elementId) {
+    SmilMediaObject child = null;
+    for (SmilMediaObject element : mediaElements) {
+      if (element.getId().equals(elementId)) {
+        child = element;
+        break;
+      } else {
+        SmilObject removed = ((SmilObjectImpl) element).removeElement(elementId);
+        if (removed != null) {
+          return removed;
+        }
+      }
     }
-
-	/**
-	 * {@inheritDoc}
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "b";
-	}
-
-	/**
-	 * Add given {@link SmilMediaObject} to the element with given Id.
-	 * @param mediaObject to add
-	 * @param parentId where to add new media
-	 * @throws SmilException if there is no element inside with given Id
-	 */
-    public void addMediaElement(SmilMediaObject mediaObject, String parentId) throws SmilException {
-        if (getId().equals(parentId)) {
-            mediaElements.add(mediaObject);
-        } else {
-			SmilMediaElement parent = null;
-			for (SmilMediaObject element : mediaElements) {
-				if (element.isContainer() && (element.getId().equals(parentId) 
-						|| ((SmilMediaContainer)element).isParentOf(parentId))) {
-					((SmilMediaContainerImpl)element).addMediaObject(mediaObject, parentId);
-					return;
-				} 
-			}
-			throw new SmilException("There is no element with id " + parentId);
-		}
+    if (child != null) {
+      mediaElements.remove(child);
     }
+    return child;
+  }
 
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public SmilObject removeElement(String elementId) {
-		SmilMediaObject child = null;
-		for (SmilMediaObject element : mediaElements) {
-			if (element.getId().equals(elementId)) {
-				child = element;
-				break;
-			} else {
-				SmilObject removed = ((SmilObjectImpl)element).removeElement(elementId);
-				if (removed != null) {
-					return removed;
-				}
-			}
-		}
-		if (child != null) {
-			mediaElements.remove(child);
-		}
-		return child;
-	}
+  /**
+   * Remove all media Elements inside.
+   */
+  public void clear() {
+    mediaElements.clear();
+  }
 
-	/**
-	 * Remove all media Elements inside.
-	 */
-	public void clear() {
-		mediaElements.clear();
-	}
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public SmilObject getElementOrNull(String elementId) {
+    if (getId().equals(elementId)) {
+      return this;
+    }
+    for (SmilMediaObject media : getMediaElements()) {
+      SmilObject element = ((SmilMediaObjectImpl) media).getElementOrNull(elementId);
+      if (element != null) {
+        return element;
+      }
+    }
+    return null;
+  }
 
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public SmilObject getElementOrNull(String elementId) {
-		if (getId().equals(elementId)) return this;
-		for (SmilMediaObject media : getMediaElements()) {
-			SmilObject element = ((SmilMediaObjectImpl)media).getElementOrNull(elementId);
-			if (element != null) return element;
-		}
-		return null;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public void putAllChilds(List<SmilObject> elements) {
-		for (SmilObject child : getMediaElements()) {
-			elements.add(child);
-			((SmilObjectImpl)child).putAllChilds(elements);
-		}
-	}
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public void putAllChilds(List<SmilObject> elements) {
+    for (SmilObject child : getMediaElements()) {
+      elements.add(child);
+      ((SmilObjectImpl) child).putAllChilds(elements);
+    }
+  }
 }

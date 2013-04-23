@@ -26,62 +26,69 @@ import org.opencastproject.smil.entity.media.param.api.SmilMediaParam;
  */
 public interface SmilMediaElement extends SmilMediaObject {
 
-	/**
-	 * SMIL media element type.
-	 */
-	public enum MediaType {
-        AUDIO, VIDEO, IMAGE, REF
-    }
-	
-	/**
-	 * Returns clip start position.
-	 * 
-	 * @return the clipBegin
-	 */
-	String getClipBegin();
+  /**
+   * SMIL media element type.
+   */
+  public enum MediaType {
+    AUDIO, VIDEO, IMAGE, REF
+  }
 
-	/**
-	 * Returns clip end position.
-	 * @return the clipEnd
-	 */
-	String getClipEnd();
+  /**
+   * Returns clip start position.
+   *
+   * @return the clipBegin
+   */
+  String getClipBegin();
 
-	/**
-	 * Returns media element type.
-	 * @return this media element type
-	 */
-	MediaType getMediaType();
+  /**
+   * Returns clip end position.
+   *
+   * @return the clipEnd
+   */
+  String getClipEnd();
 
-	/**
-	 * Returns {@link SmilMediaParamGroup} Id given with this element.
-	 * @return the paramGroup Id
-	 */
-	String getParamGroup();
+  /**
+   * Returns media element type.
+   *
+   * @return this media element type
+   */
+  MediaType getMediaType();
 
-	/**
-	 * Returns {@link SmilMediaParam}s for this media element.
-	 * The {@link List} is immutable, use {@link SmilService} to modify it.
-	 * @return the {@link List} with {@link SmilMediaParam}s
-	 */
-	List<SmilMediaParam> getParams();
+  /**
+   * Returns {@link SmilMediaParamGroup} Id given with this element.
+   *
+   * @return the paramGroup Id
+   */
+  String getParamGroup();
 
-	/**
-	 * Returns media source URI.
-	 * @return the media src URI
-	 */
-	URI getSrc();
-	
-	/**
-	 * Returns clip start position in milliseconds.
-	 * @throws SmilException if clip begin position can't parsed.
-	 * @return clip start position in milliseconds
-	 */
-	long getClipBeginMS() throws SmilException;
+  /**
+   * Returns {@link SmilMediaParam}s for this media element. The {@link List} is
+   * immutable, use {@link SmilService} to modify it.
+   *
+   * @return the {@link List} with {@link SmilMediaParam}s
+   */
+  List<SmilMediaParam> getParams();
 
-	/**
-	 * Returns clip end position in milliseconds.
-	 * @throws SmilException if clip end position can't parsed.
-	 * @return clip end position in milliseconds
-	 */
-	long getClipEndMS() throws SmilException;
+  /**
+   * Returns media source URI.
+   *
+   * @return the media src URI
+   */
+  URI getSrc();
+
+  /**
+   * Returns clip start position in milliseconds.
+   *
+   * @throws SmilException if clip begin position can't parsed.
+   * @return clip start position in milliseconds
+   */
+  long getClipBeginMS() throws SmilException;
+
+  /**
+   * Returns clip end position in milliseconds.
+   *
+   * @throws SmilException if clip end position can't parsed.
+   * @return clip end position in milliseconds
+   */
+  long getClipEndMS() throws SmilException;
 }

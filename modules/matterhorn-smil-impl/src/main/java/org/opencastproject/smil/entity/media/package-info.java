@@ -14,17 +14,14 @@
  *
  */
 @XmlSchema(
-           elementFormDefault = XmlNsForm.QUALIFIED,
-           attributeFormDefault = XmlNsForm.UNQUALIFIED,
-           namespace = "http://www.w3.org/ns/SMIL",
-           location = "http://www.w3.org/2008/SMIL30/SMIL30Language.dtd",
-           xmlns = {
-               @XmlNs(namespaceURI = "http://www.w3.org/ns/SMIL",
-                      prefix = ""),
-               @XmlNs(namespaceURI = "http://smil.opencastproject.org",
-                      prefix = "oc")
-           })
-
+  elementFormDefault = XmlNsForm.QUALIFIED,
+  attributeFormDefault = XmlNsForm.UNQUALIFIED,
+  namespace = "http://www.w3.org/ns/SMIL",
+  location = "http://www.w3.org/2008/SMIL30/SMIL30Language.dtd",
+  xmlns = {
+    @XmlNs(namespaceURI = "http://www.w3.org/ns/SMIL", prefix = ""),
+    @XmlNs(namespaceURI = "http://smil.opencastproject.org", prefix = "oc")
+})
 package org.opencastproject.smil.entity.media;
 
 import javax.xml.bind.annotation.XmlSchema;

@@ -23,20 +23,21 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "par")
 public class SmilMediaParallelImpl extends SmilMediaContainerImpl {
 
-	/**
-	 * Returns {@link ContainerType}.PAR
-	 * @return container type PAR
-	 */
-    @Override
-    public ContainerType getContainerType() {
-        return ContainerType.PAR;
-    }
+  /**
+   * Returns {@link ContainerType}.PAR
+   *
+   * @return container type PAR
+   */
+  @Override
+  public ContainerType getContainerType() {
+    return ContainerType.PAR;
+  }
 
-	/**
-	 * {@inheritDoc }
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "par";
-	}
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "par";
+  }
 }

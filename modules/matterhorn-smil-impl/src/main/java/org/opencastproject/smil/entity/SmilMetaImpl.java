@@ -27,87 +27,95 @@ import org.opencastproject.smil.entity.api.SmilObject;
 @XmlRootElement(name = "meta")
 public class SmilMetaImpl extends SmilObjectImpl implements SmilMeta {
 
-	/** SMIL meta name */
-    private String name;
-	/** SMIL meta content */
-    private String content;
+  /**
+   * SMIL meta name
+   */
+  private String name;
+  /**
+   * SMIL meta content
+   */
+  private String content;
 
-	/**
-	 * Empty constructor.
-	 */
-    private SmilMetaImpl() {
-        this("", "");
+  /**
+   * Empty constructor.
+   */
+  private SmilMetaImpl() {
+    this("", "");
+  }
+
+  /**
+   * Constructor.
+   *
+   * @param name meta name
+   * @param content meta content
+   */
+  public SmilMetaImpl(String name, String content) {
+    this.name = name;
+    this.content = content;
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @XmlAttribute(name = "name", required = true)
+  @Override
+  public String getName() {
+    return name;
+  }
+
+  /**
+   * @param name the name to set
+   */
+  protected void setName(String name) {
+    this.name = name;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @XmlAttribute(name = "content", required = true)
+  @Override
+  public String getContent() {
+    return content;
+  }
+
+  /**
+   * @param content the content to set
+   */
+  protected void setContent(String content) {
+    this.content = content;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  protected String getIdPrefix() {
+    return "meta";
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  public SmilObject removeElement(String elementId) {
+    return null;
+  }
+
+  /**
+   * {@inheritDoc }
+   */
+  @Override
+  public SmilObject getElementOrNull(String elementId) {
+    if (getId().equals(elementId)) {
+      return this;
+    } else {
+      return null;
     }
+  }
 
-	/**
-	 * Constructor.
-	 * @param name meta name
-	 * @param content meta content
-	 */
-    public SmilMetaImpl(String name, String content) {
-        this.name = name;
-        this.content = content;
-    }
-    /**
-     * {@inheritDoc}
-     */
-    @XmlAttribute(name = "name", required = true)
-	@Override
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * @param name the name to set
-     */
-    protected void setName(String name) {
-        this.name = name;
-    }
-
-    /**
-     * {@inheritDoc }
-     */
-    @XmlAttribute(name = "content", required = true)
-	@Override
-    public String getContent() {
-        return content;
-    }
-
-    /**
-     * @param content the content to set
-     */
-    protected void setContent(String content) {
-        this.content = content;
-    }
-
-	/**
-	 * {@inheritDoc }
-	 */
-    @Override
-    protected String getIdPrefix() {
-		return "meta";
-	}
-
-	/**
-	 * {@inheritDoc }
-	 */
-	@Override
-	public SmilObject removeElement(String elementId) {
-		return null;
-	}
-
-	/**
-	 * {@inheritDoc }
-	 */
-	@Override
-	public SmilObject getElementOrNull(String elementId) {
-		if (getId().equals(elementId)) {
-			return this;
-		} else return null;
-	}
-
-	@Override
-	public void putAllChilds(List<SmilObject> elements) {
-		// Meta elements has no child
-	}
+  @Override
+  public void putAllChilds(List<SmilObject> elements) {
+    // Meta elements hasn't childs
+  }
 }
