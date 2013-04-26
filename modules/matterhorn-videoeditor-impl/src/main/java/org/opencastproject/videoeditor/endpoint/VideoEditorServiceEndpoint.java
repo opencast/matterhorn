@@ -16,6 +16,7 @@
 package org.opencastproject.videoeditor.endpoint;
 
 import java.util.List;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -61,8 +62,8 @@ public class VideoEditorServiceEndpoint extends AbstractJobProducerEndpoint {
             description = "Smil document to process.", isRequired = true)
   },
           reponses = {
-    @RestResponse(description = "Smil processing jobs created successfully.", responseCode = 200),
-    @RestResponse(description = "Internal server error.", responseCode = 500)
+    @RestResponse(description = "Smil processing jobs created successfully.", responseCode = HttpServletResponse.SC_OK),
+    @RestResponse(description = "Internal server error.", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
   })
   public Response processSmil(@FormParam("smil") String smilStr) {
     Smil smil;

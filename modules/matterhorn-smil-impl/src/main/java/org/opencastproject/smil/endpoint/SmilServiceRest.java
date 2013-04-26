@@ -16,6 +16,7 @@
 package org.opencastproject.smil.endpoint;
 
 import java.util.List;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -23,9 +24,9 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.opencastproject.mediapackage.MediaPackage;
-import org.opencastproject.mediapackage.MediaPackageBuilderFactory;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageException;
+import org.opencastproject.mediapackage.MediaPackageParser;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.smil.api.SmilException;
 import org.opencastproject.smil.api.SmilResponse;
@@ -62,15 +63,14 @@ public class SmilServiceRest {
 					isRequired = false, type = RestParameter.Type.TEXT)},
 			returnDescription = "Returns new SmilResponse with SMIL document inside.",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Create new SMIL successfull"),
-				@RestResponse(responseCode = 400, description = "Given mediaPackage is not valid")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Create new SMIL successfull"),
+        @RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Given mediaPackage is not valid")
 			})
 	public Response createNewSmil(@FormParam("mediaPackage") String mediaPackage) {
 		SmilResponse smilResponse = null;
 		try {
 			if (mediaPackage != null && !mediaPackage.isEmpty()) {
-				MediaPackage mp = MediaPackageBuilderFactory.newInstance()
-						.newMediaPackageBuilder().loadFromXml(mediaPackage);
+        MediaPackage mp = MediaPackageParser.getFromXml(mediaPackage);
 				smilResponse = smilService.createNewSmil(mp);
 			} else {
 				smilResponse = smilService.createNewSmil();
@@ -79,7 +79,7 @@ public class SmilServiceRest {
 			return Response.ok(smilResponse).build();
 		} catch (MediaPackageException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("MediaPackage not valid.").build();
+      return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("MediaPackage not valid.").build();
 		}
 	}
 
@@ -95,16 +95,16 @@ public class SmilServiceRest {
 			returnDescription = "Returns SmilResponse with a parallel element inside "
 				+ "(the new par will be returned as response entity).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Add par to SMIL successfull."),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid."),
-				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId.")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Add par to SMIL successfull."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document doesn't contain an element with given parentId.")
 			})
 	public Response addParallel(@FormParam("smil") String smil, @FormParam("parentId") String parentId) {
 		SmilResponse smilResponse = null;
 		try {
 			smilResponse = smilService.fromXml(smil);
 		} catch (SmilException ex) {
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 
 		try {
@@ -116,7 +116,7 @@ public class SmilServiceRest {
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
 
@@ -132,9 +132,9 @@ public class SmilServiceRest {
 			returnDescription = "Returns SmilResponse with a sequence element inside "
 				+ "(the new seq will be returned as response entity).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Add seq to SMIL successfull"),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid"),
-				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Add seq to SMIL successfull"),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid"),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document doesn't contain an element with given parentId")
 			})
 	public Response addSequence(@FormParam("smil") String smil, @FormParam("parentId") String parentId) {
 		SmilResponse smilResponse = null;
@@ -142,7 +142,7 @@ public class SmilServiceRest {
 			smilResponse = smilService.fromXml(smil);
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 
 		try {
@@ -154,7 +154,7 @@ public class SmilServiceRest {
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
 
@@ -179,11 +179,11 @@ public class SmilServiceRest {
 			returnDescription = "Returns new Smil with an media element inside "
 				+ "(the new media and metadata elements will be returned as response entities).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Add media element to SMIL successfull."),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid."),
-				@RestResponse(responseCode = 400, description = "Track not valid."),
-				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId."),
-        @RestResponse(responseCode = 400, description = "Start plus duration is bigger than Track length.")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Add media element to SMIL successfull."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Track not valid."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document doesn't contain an element with given parentId."),
+        @RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Start plus duration is bigger than Track length.")
 			})
 	public Response addClip(@FormParam("smil") String smil, @FormParam("parentId") String parentId, @FormParam("track") String track,
 			@FormParam("start") long start, @FormParam("duration") long duration) {
@@ -193,16 +193,16 @@ public class SmilServiceRest {
 			smilResponse = smilService.fromXml(smil);
 			trackObj = (Track) MediaPackageElementParser.getFromXml(track);
 		} catch (SmilException ex) {
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		} catch (MediaPackageException ex) {
-			return Response.status(400).entity("Track is not valid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("Track is not valid.").build();
 		}
 		try {
 			smilResponse = smilService.addClip(smilResponse.getSmil(), parentId, trackObj, start, duration);
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
 
@@ -229,11 +229,11 @@ public class SmilServiceRest {
 			returnDescription = "Returns new Smil with new media elements inside "
 				+ "(the new media and metadata elements will be returned as response entities).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Add media elements to SMIL successfull."),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid."),
-				@RestResponse(responseCode = 400, description = "Tracks are not valid."),
-				@RestResponse(responseCode = 400, description = "SMIL document doesn't contain an element with given parentId."),
-        @RestResponse(responseCode = 400, description = "Start plus duration is bigger than Track length.")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Add media elements to SMIL successfull."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Tracks are not valid."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document doesn't contain an element with given parentId."),
+        @RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "Start plus duration is bigger than Track length.")
 			})
 	public Response addClips(@FormParam("smil") String smil, @FormParam("parentId") String parentId, @FormParam("tracks") String tracks,
 			@FormParam("start") long start, @FormParam("duration") long duration) {
@@ -244,10 +244,10 @@ public class SmilServiceRest {
 			tracksList = (List<Track>) MediaPackageElementParser.getArrayFromXml(tracks);
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		} catch (MediaPackageException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("Tracks are not valid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("Tracks are not valid.").build();
 		}
 
 		Track[] tracksArr = new Track[tracksList.size()];
@@ -257,7 +257,7 @@ public class SmilServiceRest {
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document doesn't contain an element with given parentId.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
 
@@ -275,15 +275,15 @@ public class SmilServiceRest {
 			returnDescription = "Returns SmilResponse with a new meta element inside "
 				+ "(the new meta will be returned as response entity).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Add par to SMIL successfull."),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid.")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Add par to SMIL successfull."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid.")
 			})
 	public Response addMeta(@FormParam("smil") String smil, @FormParam("name") String metaName, @FormParam("content") String metaContent) {
 		SmilResponse smilResponse = null;
 		try {
 			smilResponse = smilService.fromXml(smil);
 		} catch (SmilException ex) {
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 		smilResponse = smilService.addMeta(smilResponse.getSmil(), metaName, metaContent);
 		return Response.ok(smilResponse).build();
@@ -301,8 +301,8 @@ public class SmilServiceRest {
 			returnDescription = "Returns SMIL document without an element with given Id "
 				+ "(if SMIL document contains an element with given Id, this will be returned as entity).",
 			reponses = {
-				@RestResponse(responseCode = 200, description = "Removing element from SMIL successfull."),
-				@RestResponse(responseCode = 400, description = "SMIL document not valid.")
+				@RestResponse(responseCode = HttpServletResponse.SC_OK, description = "Removing element from SMIL successfull."),
+				@RestResponse(responseCode = HttpServletResponse.SC_BAD_REQUEST, description = "SMIL document not valid.")
 			})
 	public Response removeSmilElement(@FormParam("smil") String smil, @FormParam("elementId") String elementId) {
 		SmilResponse smilResponse = null;
@@ -312,7 +312,7 @@ public class SmilServiceRest {
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
 			logger.error(ex.getMessage(), ex);
-			return Response.status(400).entity("SMIL document invalid.").build();
+			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 	}
 

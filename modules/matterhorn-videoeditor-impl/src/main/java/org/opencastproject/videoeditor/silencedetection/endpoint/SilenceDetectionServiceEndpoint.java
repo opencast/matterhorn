@@ -15,6 +15,7 @@
  */
 package org.opencastproject.videoeditor.silencedetection.endpoint;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -56,8 +57,8 @@ public class SilenceDetectionServiceEndpoint extends AbstractJobProducerEndpoint
 				description = "Track where to run silence detection.", isRequired = true)
 	},
 			reponses = {
-		@RestResponse(description = "Silence detection job created successfully.", responseCode = 200),
-		@RestResponse(description = "Create silence detection job failed.", responseCode = 500)
+		@RestResponse(description = "Silence detection job created successfully.", responseCode = HttpServletResponse.SC_OK),
+		@RestResponse(description = "Create silence detection job failed.", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
 	})
 	public Response detect(@QueryParam("track") String trackXml) {
 		try {
