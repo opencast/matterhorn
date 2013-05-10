@@ -50,6 +50,7 @@ ocStatistics = new (function() {
     "org_opencastproject_distribution_itunesu"   : "Media distribution (iTunes)",
     "org_opencastproject_publication_youtube"    : "Media publication (YouTube)",
     "org_opencastproject_gstreamer"              : "GStreamer Launch Service",
+    "org_opencastproject_sox"                    : "SoX (sound processing)",
     "org_opencastproject_inspection"             : "Media inspection",
     "org_opencastproject_workflow"               : "Workflow",
     "org_opencastproject_search"                 : "Engage"
