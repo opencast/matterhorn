@@ -508,15 +508,7 @@ function getTimeString(val0, val1, val2) {
   }
 }
 
-/**
- * Continues the Workflow
- */
-function continueWorkflow() {
-
-  editor.saveSplitList();
-  return false;
-  // TODO
-
+function continueWorkflowHelper() {
   // if metadata was changed update DC catalog and mediapackage instance
   if (metadataChanged) {
     if ($('#meta-title').val()) {
@@ -640,7 +632,13 @@ function continueWorkflow() {
     // alert(mp);
   }
   parent.ocRecordings.continueWorkflow(postData);
+}
 
+/**
+ * Continues the Workflow
+ */
+function continueWorkflow() {
+    editor.saveSplitList(continueWorkflowHelper);
 }
 
 function cancel() {

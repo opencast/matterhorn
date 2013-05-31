@@ -335,13 +335,6 @@ editor.addPar = function (currParIndex) {
 			    var start = parseInt(editor.splitData.splits[currParIndex].clipBegin * 1000);
 			    var duration = parseInt((editor.splitData.splits[currParIndex].clipEnd - editor.splitData.splits[currParIndex].clipBegin) * 1000);
 
-                            ocUtils.log("POST request parameters:");
-                            ocUtils.log("parID: " + par.parID);
-                            ocUtils.log("start: " + start);
-                            ocUtils.log("duration: " + duration);
-                            ocUtils.log("track: " + strs[i]);
-                            ocUtils.log("smil: " + editor.smil);
-
                             ocUtils.log("Adding track no " + (i + 1) + " / " + strs.length);
                             $.ajax({
                                 type: "POST",
@@ -349,7 +342,7 @@ editor.addPar = function (currParIndex) {
                                 dataType: "text", // get it as "text", don't use jQuery smart guess!
                                 url: SMIL_PATH + SMIL_ADDCLIP_PATH,
                                 data: {
-                                    parentID: par.parID,
+                                    parentId: par.parID,
                                     smil: editor.smil,
                                     track: strs[i],
                                     start: start,
@@ -388,7 +381,7 @@ editor.addPar = function (currParIndex) {
 /**
  * save smil helper
  */
-editor.saveSplitListHelper = function (startAtIndex) {
+editor.saveSplitListHelper = function (startAtIndex, func) {
     if (!editor.error) {
 	startAtIndex = (startAtIndex && (startAtIndex >= 0)) ? startAtIndex : 0;
 	if (startAtIndex == 0) {
@@ -407,38 +400,50 @@ editor.saveSplitListHelper = function (startAtIndex) {
 	    if(!editor.error) {
 		ocUtils.log("Sending smil...");
 
-		// generate a random mediapackage element ID
-		// var mpElementID = editor.mediapackageParser.smil_id + "-000-" + Math.floor((Math.random()*1000)+0) + "-000-" + Math.floor((Math.random()*1000)+0);
-		var mpElementID = Math.floor((Math.random()*1000)+1);
-
-		ocUtils.log("POST request parameters:");
-		ocUtils.log("Mediapackage ID: " + editor.mediapackageParser.id);
-		ocUtils.log("Mediapackage element ID: " + mpElementID);
-		ocUtils.log("Smil: " + editor.smil);
-
-		// Continue processing --  TODO!
+		// Continue processing
 		// POST files/mediapackage/{mediaPackageID}/{mediaPackageElementID}
 		// Path params:
 		//   mediaPackageID: the mediapackage identifier 
 		//   mediaPackageElementID: the mediapackage element identifier
 		// Form params:
 		//   file: the file
+
+		// generate a random mediapackage element ID
+		var mpElementID = Math.floor((Math.random()*1000)+1);
+
+		// define a boundary -- stole this from Chrome
+		var boundary = "----WebKitFormBoundaryvasZVBiO9iHRlTvY";
+		// define the request payload
+		var body = '--' + boundary + '\r\n'
+		    + 'Content-Disposition: form-data; name="mediaPackageID"\r\n'
+		    + '\r\n'
+		    + editor.mediapackageParser.id + '\r\n'
+		    + boundary + '\r\n';
+		body += 
+		    'Content-Disposition: form-data; name="mediaPackageElementID"\r\n'
+		    + '\r\n'
+		    + mpElementID + '\r\n'
+		    + '--' + boundary + '\r\n';
+		body += 
+		    // parameter name "file", local filename "smil.smil"
+		    'Content-Disposition: form-data; name="file"; filename="smil.smil"\r\n'
+		    + 'Content-Type: application/smil\r\n'
+		    + '\r\n'
+		    + editor.smil + '\r\n'
+		    + '--' + boundary + '--' + '\r\n';
+
 		$.ajax({
 			type: "POST",
-			dataType: "text", // get it as "text", don't use jQuery smart guess!
+			contentType: "multipart/form-data; boundary="+boundary,
+			data: body,
 			url: FILE_PATH +
 			    FILE_MEDIAPACKAGE_PATH +
 			    "/" + editor.mediapackageParser.id +
-			    "/" + mpElementID,
-			data: {
-			    mediaPackageID: editor.mediapackageParser.id,
-			    mediaPackageElementID: editor.mediapackageParser.smil_id,
-			    filename: "smil.smil",
-			    file: editor.smil
-			}
+			    "/" + mpElementID
 		    }).done(function(data) {
 			ocUtils.log("Done");
-			ocUtils.log(data);
+			ocUtils.log("Continuing workflow...");
+			editor.continueWorkflowFunction();
 		    }).fail(function (e) {
 			ocUtils.log("Error: Error submitting smil file: ");
 			ocUtils.log(e);
@@ -453,7 +458,8 @@ editor.saveSplitListHelper = function (startAtIndex) {
 /**
  * save smil
  */
-editor.saveSplitList = function () {
+editor.saveSplitList = function (func) {
+    editor.continueWorkflowFunction = func;
     if (!editor.error) {
 	$('#continueButton').attr("disabled", "disabled");
 	editor.createNewSmil(function () {
