@@ -122,7 +122,8 @@ public class SmilServiceImpl implements SmilService {
       throw new SmilException("Duration should be positive.");
     }
     if (start + duration > track.getDuration()) {
-      throw new SmilException("Start plus duration is bigger than track length.");
+      duration = track.getDuration() - start;
+      //throw new SmilException("Start plus duration is bigger than track length.");
     }
 
     SmilMediaParamGroup trackParamGroup = null;
