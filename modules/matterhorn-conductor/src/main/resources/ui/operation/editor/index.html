@@ -19,6 +19,11 @@
 <script type="text/javascript" src="jquery.mhPlayer.js"></script>
 <script type="text/javascript" src="main.js"></script>
 <script type="text/javascript" src="editor.js"></script>
+<script type="text/javascript" src="ObjTree.js"></script>
+<script type="text/javascript" src="jquery.workflowParser.js"></script>
+<script type="text/javascript" src="jquery.mediapackageParser.js"></script>
+<script type="text/javascript" src="jquery.smilParser.js"></script>
+<script type="text/javascript" src="jquery.smilResponseParser.js"></script>
 </head>
 <body>
   <div>
@@ -60,24 +65,24 @@
 
     <script type="text/x-jqote-template" id="splitSegmentTemplate">
         <![CDATA[
-          <% $.each(data[j].splits, function(key, split ) {
-            split.id = key;
-            var duration = previewTracks[0].duration / 1000;
-            var begin = split.clipBegin;
-            var end = split.clipEnd;
-            var perc = ((end - begin) / duration) * 99.75;
-            var percStr = perc + "";
-            if(percStr.indexOf(".") == 1) {
-              percStr = percStr.substr(0, 5);
-            } else if(percStr.indexOf(".") == 2) {
-              percStr = percStr.substr(0, 6);
-            }
-            perc = parseFloat(percStr);
+          <% $.each(data[j].splits, function(index, split ) {
+              split.id = index;
+              var duration = previewTracks[0].duration / 1000;
+              var begin = split.clipBegin;
+              var end = split.clipEnd;
+              var perc = ((end - begin) / duration) * 100 - 0.01;
+              var percStr = perc + "";
+              if(percStr.indexOf(".") == 1) {
+               percStr = percStr.substr(0, 5);
+              } else if(percStr.indexOf(".") == 2) {
+               percStr = percStr.substr(0, 6);
+              }
+	      perc = parseFloat(percStr);
+	      perc = (perc > 100) ? (perc / 1000) : perc;
           %>
             <div class="splitSegmentItem<%= !split.enabled ? ' splitSegmentDisabled disabled' : '' %>" 
-                 id="splitSegmentItem-<%= key %>" 
+                 id="splitSegmentItem-<%= index %>" 
                  style="width:<%= perc%>%" title="<%= split.description%>">
-              
             </div>
           <% }); %>
       ]]>
@@ -147,7 +152,7 @@
       </div>
     </div>
     <div class="clear"></div>
-    <div>
+    <div id="editorMetaData">
       <div class="form-box layout-centered ui-widget oc-ui-collapsible-widget" style="width: 680px;">
 	<div class="form-box-head ui-widget-header ui-corner-top oc-ui-cursor collapse-control2">
           <div id="additional_icon" class="ui-icon ui-icon-triangle-1-e"></div>
@@ -251,11 +256,11 @@
     </div>
     
     <div id="actions">
-      <input title="Continue processing this recording with any edits (metadata, trim points)"
+      <input id="continueButton" title="Continue processing this recording with any edits (metadata, trim points)"
         style="margin-left: 65px; margin-right: 16px; width: 160px;" onclick="continueWorkflow();" id="continueBtn"
         type="button" class="ui-button ui-corner-all" value="Continue processing" />
       <!-- a id="edit-link" class="secondaryButton">Edit metadata, then continue</a -->
-      <a onclick="cancel()" title="Cancel" class="secondaryButton">Cancel</a>
+      <a id="cancelButton" onclick="cancel()" title="Cancel" class="secondaryButton">Cancel</a>
     </div>
 
     <div id="shortcutsDialog" class="ui-helper-hidden">

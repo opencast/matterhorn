@@ -514,6 +514,8 @@ function getTimeString(val0, val1, val2) {
 function continueWorkflow() {
 
   editor.saveSplitList();
+  return false;
+  // TODO
 
   // if metadata was changed update DC catalog and mediapackage instance
   if (metadataChanged) {
