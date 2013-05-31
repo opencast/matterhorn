@@ -662,7 +662,9 @@ function getAllStringsOf(str, startStr, endStr) {
     var strCpy = str;
     while ((strCpy.indexOf(startStr) != -1) && (strCpy.indexOf(endStr) != -1)) {
         var tmp = strCpy.substring(strCpy.indexOf(startStr), strCpy.indexOf(endStr) + endStr.length);
-        result[result.length] = tmp;
+	if(tmp && (tmp != "")) {
+	    result[result.length] = tmp;
+	}
         strCpy = strCpy.substring(str.indexOf(endStr) + endStr.length, strCpy.length);
     }
     return result;
