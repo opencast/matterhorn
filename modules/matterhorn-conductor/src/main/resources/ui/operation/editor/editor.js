@@ -409,7 +409,7 @@ editor.saveSplitListHelper = function (startAtIndex, func) {
 		//   file: the file
 
 		// generate a random mediapackage element ID
-		var mpElementID = Math.floor((Math.random()*1000)+1);
+		var mpElementID = editor.mediapackageParser.smil_id; // Math.floor((Math.random()*1000)+1);
 
 		// define a boundary -- stole this from Chrome
 		var boundary = "----WebKitFormBoundaryvasZVBiO9iHRlTvY";
@@ -1625,72 +1625,7 @@ function initPlayButtons() {
         });
 }
 
-/**
- * parses the initial smil file and adds segments if already available
- */
-
-function parseInitialSMIL() {
-    if (editor.parsedSmil) {
-        ocUtils.log("smil found. Parsing...");
-        var newStart = false;
-        // check whether SMIL has already cutting points
-        if (editor.parsedSmil.par) {
-            editor.splitData.splits = [];
-            editor.parsedSmil.par = ocUtils.ensureArray(editor.parsedSmil.par);
-            $.each(editor.parsedSmil.par, function (key, value) {
-                    value.video = ocUtils.ensureArray(value.video);
-                    ocUtils.log("Found a split element (" + value.video[0].clipBegin + " - " + value.video[0].clipEnd + ")");
-                    var clipBegin = parseFloat(value.video[0].clipBegin) / 1000;
-                    var clipEnd = parseFloat(value.video[0].clipEnd) / 1000;
-                    if (clipBegin > 0) {
-                        newStart = true;
-                        editor.splitData.splits.push({
-                                clipBegin: 0,
-                                clipEnd: clipBegin,
-                                enabled: false,
-                                description: ""
-                            });
-                    }
-                    editor.splitData.splits.push({
-                            clipBegin: clipBegin,
-                            clipEnd: clipEnd,
-                            enabled: true,
-                            description: value.video[0].description ? value.video[0].description : ""
-                        });
-                    if (clipEnd < editor.parsedSmil.trackDuration / 1000 / 60) {
-                        editor.splitData.splits.push({
-                                clipBegin: clipEnd,
-                                clipEnd: editor.parsedSmil.trackDuration,
-                                enabled: false,
-                                description: ""
-                            });
-                    }
-                });
-
-            window.setTimeout(function () {
-                    if (!newStart) {
-                        $('#splitSegmentItem-0').click();
-                        if (editor.splitData.splits.length == 1) {
-                            $('#splitSegmentItem-0').css('width', '100%');
-                        }
-                    } else {
-                        $('#splitSegmentItem-1').click();
-                    }
-                }, 200);
-        }
-        ocUtils.log("Done");
-    } else {
-        ocUtils.log("No smil found.");
-        /* //  TODO!!!
-	editor.splitData.splits.push({
-		clipBegin: 0,
-		    clipEnd: editor.parsedSmil.trackDuration / 1000 / 60,
-		    enabled: true,
-		    description: ""
-		    });
-	*/
-    }
-
+function prepareUI() {
     // update split list and enable the editor
     editor.updateSplitList();
     $('#editor').removeClass('disabled');
@@ -1765,9 +1700,78 @@ function parseInitialSMIL() {
 }
 
 /**
- * when player is ready
+ * parses the initial smil file and adds segments if already available
  */
 
+function parseInitialSMIL() {
+    if (editor.parsedSmil) {
+        ocUtils.log("smil found. Parsing...");
+	var insertedSplitItem = false;
+        var newStart = false;
+        // check whether SMIL has already cutting points
+        if (editor.parsedSmil.par) {
+            editor.splitData.splits = [];
+            editor.parsedSmil.par = ocUtils.ensureArray(editor.parsedSmil.par);
+            $.each(editor.parsedSmil.par, function (key, value) {
+                    value.video = ocUtils.ensureArray(value.video);
+                    ocUtils.log("Found a split element (" + value.video[0].clipBegin + " - " + value.video[0].clipEnd + ")");
+                    var clipBegin = parseFloat(value.video[0].clipBegin) / 1000;
+                    var clipEnd = parseFloat(value.video[0].clipEnd) / 1000;
+                    if (clipBegin > 0) {
+                        newStart = true;
+                        editor.splitData.splits.push({
+                                clipBegin: 0,
+                                clipEnd: clipBegin,
+                                enabled: false,
+                                description: ""
+                            });
+                    }
+                    editor.splitData.splits.push({
+                            clipBegin: clipBegin,
+                            clipEnd: clipEnd,
+                            enabled: true,
+                            description: value.video[0].description ? value.video[0].description : ""
+                        });
+                    if (clipEnd < editor.parsedSmil.trackDuration / 1000 / 60) {
+                        editor.splitData.splits.push({
+                                clipBegin: clipEnd,
+                                clipEnd: editor.parsedSmil.trackDuration,
+                                enabled: false,
+                                description: ""
+                            });
+                    }
+		    insertedSplitItem = true;
+                });
+        }
+        ocUtils.log("Done");
+    } else {
+        ocUtils.log("No smil found.");
+    }
+    ocUtils.log("Inserting new split segment...");
+    if(!insertedSplitItem) {
+	editor.splitData.splits.push({
+		clipBegin: 0,
+		clipEnd: editor.mediapackageParser.duration / 1000,
+		enabled: true,
+		description: ""
+	});
+    }
+    window.setTimeout(function () {
+	    if (!newStart) {
+		$('#splitSegmentItem-0').click();
+		if (editor.splitData.splits.length == 1) {
+		    $('#splitSegmentItem-0').css('width', '100%');
+		}
+	    } else {
+		$('#splitSegmentItem-1').click();
+	    }
+	}, 200);
+    prepareUI();
+}
+
+/**
+ * when player is ready
+ */
 function playerReady() {
     if (!editor.ready) {
         editor.ready = true;
