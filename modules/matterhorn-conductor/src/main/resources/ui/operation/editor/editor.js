@@ -885,7 +885,9 @@ function splitRemoverClick() {
     if (id == "" || id == "deleteButton") {
         id = $('#splitUUID').val();
     }
+    id = parseInt(id);
     if (editor.splitData.splits[id].enabled) {
+	/*
         $('#deleteDialog').dialog({
                 buttons: {
                     "Yes": function () {
@@ -902,6 +904,33 @@ function splitRemoverClick() {
                 },
                 title: "Remove Item?"
             });
+	*/
+	$('#splitItemDiv-' + id).addClass('disabled');
+	$('#splitRemover-' + id).hide();
+	$('#splitAdder-' + id).show();
+	$('.splitItem').removeClass('splitItemSelected');
+	setEnabled(id, false);
+	if(getCurrentSplitItem().id == id) {
+	    // if current split item is being deleted:
+	    // try to select the next enabled segment, if that fails try to select the previous enabled item
+	    var sthSelected = false;
+	    for(var i = id; i < editor.splitData.splits.length; ++i) {
+		if(editor.splitData.splits[i].enabled) {
+		    sthSelected = true;
+		    selectSegmentListElement(i);
+		    break;
+		}
+	    }
+	    if(!sthSelected) {
+		for(var i = id; i >= 0; --i) {
+		    if(editor.splitData.splits[i].enabled) {
+			sthSelected = true;
+			selectSegmentListElement(i);
+			break;
+		    }
+		}
+	    }
+	}
     } else {
         $('#splitItemDiv-' + id).removeClass('disabled');
         $('#splitRemover-' + id).show();

@@ -224,13 +224,15 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   -webkit-box-sizing: border-box;
   /* Opera 9.5+, Google Chrome */
   box-sizing: border-box;
+  opacity: 0.5;
+  filter:alpha(opacity=50); /* For IE8 and earlier */
 }
 
 .splitSegmentItemSelected {
   border-right: 1px solid #990000;
   float: left;
   height: 100%;
-  background-color: #E8E8E8 !important;
+  background-color: #707070 !important;
   /* Firefox */
   -moz-box-sizing: border-box;
   /* WebKit */
