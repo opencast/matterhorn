@@ -133,6 +133,13 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   width: 350px;
 }
 
+#newTime {
+  margin-left: 10px;
+  margin-top: 10px;
+  float: left;
+  width: 350px;
+}
+
 #shortcuts {
   margin-left: 10px;
   margin-top: 10px;

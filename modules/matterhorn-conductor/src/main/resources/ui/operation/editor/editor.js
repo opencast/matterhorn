@@ -477,6 +477,16 @@ editor.updateSplitList = function (dontClickCancel) {
 	if (!dontClickCancel) {
 	    cancelButtonClick();
 	}
+
+	var tmpTime = 0;
+	$.each(editor.splitData.splits, function(index, value) {
+		if(value.enabled) {
+		    tmpTime += value.clipEnd - value.clipBegin;
+		}
+	    });
+	tmpTime = (tmpTime >= 0) ? tmpTime : 0;
+	$('#newTime').html("Duration after trimming: " + tmpTime.toFixed(4) + "s");
+
 	$('#leftBox').html($('#splitElements').jqote(editor.splitData));
 	$('#splitSegments').html($('#splitSegmentTemplate').jqote(editor.splitData));
 	$('.splitItemDiv').click(splitItemClick);
