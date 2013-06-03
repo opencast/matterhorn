@@ -1082,6 +1082,7 @@ function selectCurrentSplitItem() {
  */
 function selectSegmentListElement(number, dblClick) {
     dblClick = dblClick ? dblClick : false;
+    currSplitItemClickedViaJQ = true;
     if ($('#splitItemDiv-' + number)) {
 	if(dblClick) {
 	    $('#splitItemDiv-' + number).dblclick();
@@ -1392,6 +1393,7 @@ function playWithoutDeleted() {
 		    clipEndTo);
 
         if (hasPrevElem && hasNextElem) {
+	    currSplitItemClickedViaJQ = true;
             setCurrentTime(clipStartFrom);
             clearEvents();
             editor.player.on("play", {
@@ -1403,9 +1405,9 @@ function playWithoutDeleted() {
 
             timeout3 = window.setTimeout(function () {
                     pauseVideo();
+                    currSplitItemClickedViaJQ = true;
                     setCurrentTime(segmentStart);
                     clearEvents();
-                    currSplitItemClickedViaJQ = true;
                     editor.player.on("play", {
                             duration: (segmentEnd - segmentStart) * 1000,
                             endTime: segmentEnd
@@ -1419,9 +1421,9 @@ function playWithoutDeleted() {
                         window.clearTimeout(timeout3);
                         timeout3 = null;
                     }
+                    currSplitItemClickedViaJQ = true;
                     setCurrentTime(clipEndFrom);
                     clearEvents();
-                    currSplitItemClickedViaJQ = true;
                     editor.player.on("play", {
                             duration: (clipEndTo - clipEndFrom) * 1000,
                             endTime: clipEndTo
@@ -1433,6 +1435,7 @@ function playWithoutDeleted() {
                     }
                 }, ((clipStartTo - clipStartFrom) * 1000) + ((segmentEnd - segmentStart) * 1000));
         } else if (!hasPrevElem && hasNextElem) {
+	    currSplitItemClickedViaJQ = true;
             setCurrentTime(segmentStart);
             clearEvents();
             editor.player.on("play", {
@@ -1444,9 +1447,9 @@ function playWithoutDeleted() {
 
             timeout3 = window.setTimeout(function () {
                     pauseVideo();
+                    currSplitItemClickedViaJQ = true;
                     setCurrentTime(clipEndFrom);
                     clearEvents();
-                    currSplitItemClickedViaJQ = true;
                     editor.player.on("play", {
                             duration: (clipEndTo - clipEndFrom) * 1000,
                             endTime: clipEndTo
@@ -1458,6 +1461,7 @@ function playWithoutDeleted() {
                     }
                 }, ((segmentEnd - segmentStart) * 1000));
         } else if (hasPrevElem && !hasNextElem) {
+                    currSplitItemClickedViaJQ = true;
             setCurrentTime(clipStartFrom);
             clearEvents();
             editor.player.on("play", {
@@ -1469,9 +1473,9 @@ function playWithoutDeleted() {
 
             timeout3 = window.setTimeout(function () {
                     pauseVideo();
+                    currSplitItemClickedViaJQ = true;
                     setCurrentTime(segmentStart);
                     clearEvents();
-                    currSplitItemClickedViaJQ = true;
                     editor.player.on("play", {
                             duration: (segmentEnd - segmentStart) * 1000,
                             endTime: segmentEnd
@@ -1518,45 +1522,36 @@ function nextSegment() {
     if (!playerPaused) {
         pauseVideo();
     }
-    var currentTime = getCurrentTime();
-    var new_id = -1;
-    for (var i = 0; i < editor.splitData.splits.length; ++i) {
-        var splitItem = editor.splitData.splits[i];
-        if ((isInInterval(currentTime, splitItem.clipBegin - 0.1, splitItem.clipBegin + 0.1) ||
-	     (currentTime >= splitItem.clipBegin)) &&
-            (!isInInterval(currentTime, splitItem.clipEnd - 0.1, splitItem.clipEnd + 0.1) &&
-	     (currentTime < splitItem.clipEnd))) {
-            new_id = i + 1;
-            break;
-        }
-    }
+
+    var currSplitItem = getCurrentSplitItem();
+    var new_id = currSplitItem.id + 1;
+    new_id = (new_id >= editor.splitData.splits.length) ? 0 : new_id;
+
     var idFound = true;
-    if (new_id < editor.splitData.splits.length) {
-	if(!editor.splitData.splits[new_id].enabled) {
-	    idFound = false;
-	    for(var i = new_id + 1; i < editor.splitData.splits.length; ++i) {
-		if(editor.splitData.splits[i].enabled) {
-		    new_id = i;
-		    idFound = true;
-		}
-	    }
-	    if(!idFound) {
-		for(var i = 0; i < new_id; ++i) {
-		    if(editor.splitData.splits[i].enabled) {
-			new_id = i;
-			idFound = true;
-		    }
-		}
-	    }
-	}
-    } else {
-	for(var i = 0; i < new_id; ++i) {
+    if ((new_id < 0) || (new_id >= editor.splitData.splits.length)) {
+	idFound = false;
+    } else if(!editor.splitData.splits[new_id].enabled) {
+	idFound = false;
+	new_id = (new_id >= (editor.splitData.splits.length - 1)) ? 0 : new_id;
+
+	for(var i = new_id + 1; i < editor.splitData.splits.length; ++i) {
 	    if(editor.splitData.splits[i].enabled) {
 		new_id = i;
 		idFound = true;
+		break;
 	    }
 	}
+	if(!idFound) {
+	    for(var i = 0; i < new_id; ++i) {
+		if(editor.splitData.splits[i].enabled) {
+		    new_id = i;
+		    idFound = true;
+		    break;
+		}
+	    }   
+	}
     }
+
     if(idFound) {
 	selectSegmentListElement(new_id, !playerPaused);
     }
@@ -1573,50 +1568,36 @@ function previousSegment() {
     if (!playerPaused) {
         pauseVideo();
     }
-    var currentTime = getCurrentTime();
-    var new_id = -1;
-    for (var i = 0; i < editor.splitData.splits.length; ++i) {
-        var splitItem = editor.splitData.splits[i];
-        if (((currentTime > splitItem.clipBegin) && (currentTime < splitItem.clipEnd)) ||
-	    isInInterval(currentTime, splitItem.clipEnd - 0.1, splitItem.clipEnd + 0.1)) {
-            new_id = i;
-            break;
-        } else if (isInInterval(currentTime, splitItem.clipBegin - 0.1, splitItem.clipBegin + 0.1)) {
-            new_id = i - 1;
-            break;
-        } else if ((i == (editor.splitData.splits.length - 1)) &&
-		   (currentTime >= splitItem.clipEnd)) {
-            new_id = editor.splitData.splits.length - 1;
-            break;
-        }
-    }
+    var currSplitItem = getCurrentSplitItem();
+    var new_id = currSplitItem.id - 1;
+    new_id = (new_id < 0) ? (editor.splitData.splits.length - 1) : new_id;
+
     var idFound = true;
-    if (new_id < editor.splitData.splits.length) {
-	if((new_id < 0) || !editor.splitData.splits[new_id].enabled) {
+    if((new_id < 0) || (new_id >= editor.splitData.splits.length)) {
+	idFound = false;
+    } else {
+	if(!editor.splitData.splits[new_id].enabled) {
 	    idFound = false;
+	    new_id = (new_id <= 0) ? editor.splitData.splits.length : new_id;
 	    for(var i = new_id - 1; i >= 0; --i) {
 		if(editor.splitData.splits[i].enabled) {
 		    new_id = i;
 		    idFound = true;
+		    break;
 		}
 	    }
 	    if(!idFound) {
-		for(var i = editor.splitData.splits.length - 1; i > new_id; --i) {
+		for(var i = editor.splitData.splits - 1; i >= 0; --i) {
 		    if(editor.splitData.splits[i].enabled) {
 			new_id = i;
 			idFound = true;
+			break;
 		    }
-		}
-	    }
-	}
-    } else {
-	for(var i = new_id; i >= 0; --i) {
-	    if(editor.splitData.splits[i].enabled) {
-		new_id = i;
-		idFound = true;
+		}	
 	    }
 	}
     }
+
     if(idFound) {
 	selectSegmentListElement(new_id, !playerPaused);
     }

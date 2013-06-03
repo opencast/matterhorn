@@ -70,7 +70,7 @@
               var duration = previewTracks[0].duration / 1000.0;
               var begin = split.clipBegin;
               var end = split.clipEnd;
-              var perc = ((end - begin) / duration) * 100.0;
+              var perc = (((end - begin) / duration) * 99.9).toFixed(5);
 	      perc = (perc > 100) ? (perc / 1000) : perc;
           %>
             <div class="splitSegmentItem<%= !split.enabled ? ' splitSegmentDisabled disabled' : '' %>" 
