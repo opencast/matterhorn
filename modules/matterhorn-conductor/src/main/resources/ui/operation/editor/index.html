@@ -67,15 +67,15 @@
         <![CDATA[
           <% $.each(data[j].splits, function(index, split ) {
               split.id = index;
-              var duration = previewTracks[0].duration / 1000;
+              var duration = previewTracks[0].duration / 1000.0;
               var begin = split.clipBegin;
               var end = split.clipEnd;
-              var perc = ((end - begin) / duration) * 99.75;
+              var perc = ((end - begin) / duration) * 100.0;
               var percStr = perc + "";
               if(percStr.indexOf(".") == 1) {
-               percStr = percStr.substr(0, 5);
+               percStr = percStr.substr(0, 8);
               } else if(percStr.indexOf(".") == 2) {
-               percStr = percStr.substr(0, 6);
+               percStr = percStr.substr(0, 9);
               }
 	      perc = parseFloat(percStr);
 	      perc = (perc > 100) ? (perc / 1000) : perc;

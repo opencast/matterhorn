@@ -66,6 +66,8 @@ default_config[PREVIOUS_MARKER] = "Up";
 default_config[NEXT_MARKER] = "Down";
 default_config[PLAY_ENDING_OF_CURRENT_SEGMENT] = "n";
 
+editor.error = false;
+editor.workflowID = undefined;
 editor.splitData = {};
 editor.splitData.splits = [];
 editor.selectedSplit = null;
@@ -74,8 +76,6 @@ editor.canvas = null;
 editor.ready = false;
 editor.smil = null;
 editor.parsedSmil = null;
-editor.error = false;
-editor.id = undefined;
 editor.workflowParser = null;
 editor.mediapackageParser = null;
 editor.smilParser = null;
@@ -83,6 +83,12 @@ editor.smilResponseParser = null;
 
 var windowResizeMS = 500;
 var initMS = 150;
+var lastTimeSplitItemClick = 0;
+var endTime = 0;
+var now = 100;
+var isSeeking = false;
+var timeoutUsed = false;
+var currSplitItemClickedViaJQ = false;
 var timeout1 = null;
 var timeout2 = null;
 var timeout3 = null;
@@ -90,12 +96,6 @@ var timeout4 = null;
 var currEvt = null;
 var jumpBackTime = null;
 var currSplitItem = null;
-var lastTimeSplitItemClick = 0;
-var endTime = 0;
-var now = 100;
-var isSeeking = false;
-var timeoutUsed = false;
-var currSplitItemClickedViaJQ = false;
 
 /******************************************************************************/
 // editor
@@ -111,11 +111,11 @@ editor.getWorkflowID = function () {
     var postData = {
         'id': parent.document.getElementById("holdWorkflowId").value
     };
-    editor.id = postData.id;
-    if (!editor.id) {
+    editor.workflowID = postData.id;
+    if (!editor.workflowID) {
         ocUtils.log("Error: Could not retrieve workflow instance ID...");
         editor.error = true;
-        editor.id = -1;
+        editor.workflowID = -1;
         displayError("Could not retrieve workflow instance ID. "+
 		     "Without it the editor won't work. "+
 		     "This should not happen, please ask your Matterhorn administrator.", "Error");
@@ -230,7 +230,7 @@ editor.getSmil = function (func) {
         $.ajax({
                 type: "GET",
                 dataType: "json",
-                url: WORKFLOW_INSTANCE_PATH + editor.id + WORKFLOW_INSTANCE_SUFFIX_JSON
+                url: WORKFLOW_INSTANCE_PATH + editor.workflowID + WORKFLOW_INSTANCE_SUFFIX_JSON
             }).done(function (data) {
                 ocUtils.log("Done");
                 editor.parseWorkflow(data);
@@ -326,7 +326,7 @@ editor.addPar = function (currParIndex) {
                 $.ajax({
                         type: "GET",
                         dataType: "text", // get it as "text", don't use jQuery smart guess!
-                        url: WORKFLOW_INSTANCE_PATH + editor.id + WORKFLOW_INSTANCE_SUFFIX_XML
+                        url: WORKFLOW_INSTANCE_PATH + editor.workflowID + WORKFLOW_INSTANCE_SUFFIX_XML
                     }).done(function (wfXML) {
                         ocUtils.log("Done");
                         var strs = getAllStringsOf(wfXML, "<ns3:track", "</ns3:track>");
@@ -777,7 +777,7 @@ function checkPrevAndNext(id) {
         if (getTimefieldTimeEnd() != duration) {
             var newLastItem = {
                 description: "",
-                clipBegin: splitItem.clipEnd,
+                clipBegin: editor.splitData.splits[id].clipEnd,
                 clipEnd: duration,
                 enabled: true
             };
@@ -786,7 +786,7 @@ function checkPrevAndNext(id) {
             editor.splitData.splits.push(newLastItem);
         }
         var prev = editor.splitData.splits[id - 1];
-        prev.clipEnd = splitItem.clipBegin;
+        prev.clipEnd = editor.splitData.splits[id].clipBegin;
         // in the middle
     } else {
         var prev = editor.splitData.splits[id - 1];
@@ -1034,9 +1034,36 @@ function splitButtonClick() {
 function selectCurrentSplitItem() {
     var splitItem = getCurrentSplitItem();
     if (splitItem != null) {
-        currSplitItemClickedViaJQ = true;
-        $('#splitSegmentItem-' + splitItem.id).click();
-        $('#descriptionCurrentTime').html(formatTime(getCurrentTime()));
+	var idFound = false;
+	var id = -1;
+	if(splitItem.enabled) {
+	    id = splitItem.id;
+	    idFound = true;
+	} else {
+	    for(var i = splitItem.id; i < editor.splitData.splits.length; ++i) {
+		if(editor.splitData.splits[i].enabled) {
+		    idFound = true;
+		    id = i;
+		    break;
+		}
+	    }
+	    if(!idFound) {
+		for(var i = splitItem.id; i >= 0; --i) {
+		    if(editor.splitData.splits[i].enabled) {
+			idFound = true;
+			id = i;
+			break;
+		    }
+		}
+	    }
+	}
+	if(idFound) {
+	    currSplitItemClickedViaJQ = true;
+	    $('#splitSegmentItem-' + id).click();
+	    $('#descriptionCurrentTime').html(formatTime(getCurrentTime()));
+	} else {
+	    ocUtils.log("Could not find an enabled ID");
+	}
     }
 }
 
@@ -1745,10 +1772,10 @@ function parseInitialSMIL() {
             editor.parsedSmil.par = ocUtils.ensureArray(editor.parsedSmil.par);
             $.each(editor.parsedSmil.par, function (key, value) {
                     value.video = ocUtils.ensureArray(value.video);
-                    ocUtils.log("Found a split element (" + value.video[0].clipBegin + " - " + value.video[0].clipEnd + ")");
                     var clipBegin = parseFloat(value.video[0].clipBegin) / 1000;
                     var clipEnd = parseFloat(value.video[0].clipEnd) / 1000;
-                    if (clipBegin > 0) {
+                    ocUtils.log("Found a split element (" + clipBegin + " - " + clipEnd + ")");
+                    if ((editor.splitData.splits.length == 0) && (clipBegin > 0)) {
                         newStart = true;
                         editor.splitData.splits.push({
                                 clipBegin: 0,
@@ -1763,6 +1790,8 @@ function parseInitialSMIL() {
                             enabled: true,
                             description: value.video[0].description ? value.video[0].description : ""
                         });
+		    checkPrevAndNext(editor.splitData.splits.length - 1);
+		    /*
                     if (clipEnd < editor.parsedSmil.trackDuration / 1000 / 60) {
                         editor.splitData.splits.push({
                                 clipBegin: clipEnd,
@@ -1771,6 +1800,7 @@ function parseInitialSMIL() {
                                 description: ""
                             });
                     }
+		    */
 		    insertedSplitItem = true;
                 });
         }
