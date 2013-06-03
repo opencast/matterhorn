@@ -218,36 +218,31 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   float: left;
   height: 100%;
   background-color: #FFFFFF;
+  color: #000000;
   /* Firefox */
   -moz-box-sizing: border-box;
   /* WebKit */
   -webkit-box-sizing: border-box;
   /* Opera 9.5+, Google Chrome */
   box-sizing: border-box;
-  opacity: 0.5;
-  filter:alpha(opacity=50); /* For IE8 and earlier */
+  opacity: 0.6;
+  filter:alpha(opacity=60); /* For IE8 and earlier */
 }
 
 .splitSegmentItemSelected {
   border-right: 1px solid #990000;
   float: left;
   height: 100%;
-  background-color: #707070 !important;
+  background-color: #00FF00;
+  color: #000000;
   /* Firefox */
   -moz-box-sizing: border-box;
   /* WebKit */
   -webkit-box-sizing: border-box;
   /* Opera 9.5+, Google Chrome */
   box-sizing: border-box;
-  background-color: blue;
-  opacity: 0.5;
-  filter:alpha(opacity=50); /* For IE8 and earlier */
-}
-
-.splitSegmentDisabled {
-  background-color: #787878;
-  opacity: 0.6 !important;
-  filter:alpha(opacity=60) !important; /* For IE8 and earlier */
+  opacity: 0.6;
+  filter:alpha(opacity=60); /* For IE8 and earlier */
 }
 
 .splitItem {
@@ -255,6 +250,7 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   height: 50px;
   margin: 1px;
   overflow: hidden;
+  color: #000000;
   /* Firefox */
   -moz-box-sizing: border-box;
   /* WebKit */
@@ -273,23 +269,23 @@ a.secondaryButton:hover,a.secondaryButton:focus {
 }
 
 .splitItemSelected {
-  /* border: 1px solid blue !important; */
-  background-color: #E8E8E8 !important;
+  border: 1px solid #0000FF;
+  background-color: #00FF00;
+  color: #000000;
 }
 
 .disabled {
-  background-color: #787878;
-  opacity: 0.2;
-  filter: alpha(opacity = 20); /* For IE8 and earlier */
+  background-color: #FF0000;
+  color: #000000;
+  opacity: 0.6;
+  filter: alpha(opacity = 60); /* For IE8 and earlier */
 }
 
 .hover {
-  background-color: #C0C0C0;
-}
-
-.hoverOpacity {
-  opacity: 0.4;
-  filter:alpha(opacity=40); /* For IE8 and earlier */
+  background-color: #0000FF;
+  color: #000000;
+  opacity: 0.6;
+  filter:alpha(opacity=60); /* For IE8 and earlier */
 }
 
 .box_right {

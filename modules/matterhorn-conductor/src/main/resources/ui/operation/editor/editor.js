@@ -967,7 +967,7 @@ function splitItemClick() {
             $('#splitItem-' + id).addClass('splitItemSelected');
             $('#splitSegmentItem-' + id).addClass('splitSegmentItemSelected');
 
-            $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+            $('#splitSegmentItem-' + id).removeClass('hover');
 
             // load data into right box
             splitItem = editor.splitData.splits[id];
@@ -1070,9 +1070,14 @@ function selectCurrentSplitItem() {
 /**
  * selects the split segment with the number number
  */
-function selectSegmentListElement(number) {
+function selectSegmentListElement(number, dblClick) {
+    dblClick = dblClick ? dblClick : false;
     if ($('#splitItemDiv-' + number)) {
-        $('#splitItemDiv-' + number).click();
+	if(dblClick) {
+	    $('#splitItemDiv-' + number).dblclick();
+	} else {
+	    $('#splitItemDiv-' + number).click();
+	}
     }
 }
 
@@ -1136,9 +1141,7 @@ function splitHoverIn(evt) {
     id = id.replace('splitSegmentItem-', '');
 
     $('#splitItem-' + id).addClass('hover');
-    if (!$('#splitSegmentItem-' + id).hasClass("splitSegmentItemSelected")) {
-        $('#splitSegmentItem-' + id).addClass('hover hoverOpacity');
-    }
+    $('#splitSegmentItem-' + id).addClass('hover');
 }
 
 /**
@@ -1153,7 +1156,7 @@ function splitHoverOut(evt) {
     id = id.replace('splitSegmentItem-', '');
 
     $('#splitItem-' + id).removeClass('hover');
-    $('#splitSegmentItem-' + id).removeClass('hover hoverOpacity');
+    $('#splitSegmentItem-' + id).removeClass('hover');
 }
 
 /******************************************************************************/
@@ -1488,7 +1491,6 @@ function playWithoutDeleted() {
 /**
  * jump to beginning of current split item
  */
-
 function jumpToSegment() {
     id = $(this).prop('id');
     id = id.replace('splitItem-', '');
@@ -1501,7 +1503,6 @@ function jumpToSegment() {
 /**
  * jump to next segment
  */
-
 function nextSegment() {
     var playerPaused = getPlayerPaused();
     if (!playerPaused) {
@@ -1518,21 +1519,47 @@ function nextSegment() {
             new_id = i + 1;
             break;
         }
-
     }
-    if (new_id > 0) {
-        if (new_id <= editor.splitData.splits.length - 1) {
-            setCurrentTime(editor.splitData.splits[new_id].clipBegin);
-        } else if (new_id <= editor.splitData.splits.length) {
-            setCurrentTime(getDuration());
-        }
+    if (new_id >= 0) {
+	var idFound = true;
+        if (new_id < editor.splitData.splits.length) {
+	    if(!editor.splitData.splits[new_id].enabled) {
+		idFound = false;
+		for(var i = new_id + 1; i < editor.splitData.splits.length; ++i) {
+		    if(editor.splitData.splits[i].enabled) {
+			new_id = i;
+			idFound = true;
+		    }
+		}
+		if(!idFound) {
+		    for(var i = 0; i < new_id; ++i) {
+			if(editor.splitData.splits[i].enabled) {
+			    new_id = i;
+			    idFound = true;
+			}
+		    }
+		}
+	    }
+        } else {
+	    for(var i = 0; i < new_id; ++i) {
+		if(editor.splitData.splits[i].enabled) {
+		    new_id = i;
+		    idFound = true;
+		}
+	    }
+	}
+	if(idFound) {
+	    selectSegmentListElement(new_id, !playerPaused);
+	}
+    }
+    if (!playerPaused) {
+	playVideo();
     }
 }
 
 /**
  * jump to previous segment
  */
-
 function previousSegment() {
     var playerPaused = getPlayerPaused();
     if (!playerPaused) {
@@ -1556,7 +1583,39 @@ function previousSegment() {
         }
     }
     if (new_id >= 0) {
-        setCurrentTime(editor.splitData.splits[new_id].clipBegin);
+	var idFound = true;
+        if (new_id < editor.splitData.splits.length) {
+	    if(!editor.splitData.splits[new_id].enabled) {
+		idFound = false;
+		for(var i = new_id - 1; i > 0; --i) {
+		    if(editor.splitData.splits[i].enabled) {
+			new_id = i;
+			idFound = true;
+		    }
+		}
+		if(!idFound) {
+		    for(var i = editor.splitData.splits.length - 1; i > new_id; --i) {
+			if(editor.splitData.splits[i].enabled) {
+			    new_id = i;
+			    idFound = true;
+			}
+		    }
+		}
+	    }
+        } else {
+	    for(var i = new_id; i > 0; --i) {
+		if(editor.splitData.splits[i].enabled) {
+		    new_id = i;
+		    idFound = true;
+		}
+	    }
+	}
+	if(idFound) {
+	    selectSegmentListElement(new_id, !playerPaused);
+	}
+    }
+    if (!playerPaused) {
+	playVideo();
     }
 }
 
@@ -1567,7 +1626,6 @@ function previousSegment() {
 /**
  * add all shortcuts
  */
-
 function addShortcuts() {
     $.ajax({
             url: ME_JSON,
@@ -1642,7 +1700,6 @@ function addShortcuts() {
 /**
  * init the playbuttons in the editing box
  */
-
 function initPlayButtons() {
     $('#clipBeginSet, #clipEndSet').button({
             text: false,
@@ -1683,6 +1740,9 @@ function initPlayButtons() {
         });
 }
 
+/**
+ * prepares the UI
+ */
 function prepareUI() {
     // update split list and enable the editor
     editor.updateSplitList();
@@ -1760,7 +1820,6 @@ function prepareUI() {
 /**
  * parses the initial smil file and adds segments if already available
  */
-
 function parseInitialSMIL() {
     if (editor.parsedSmil) {
         ocUtils.log("smil found. Parsing...");
