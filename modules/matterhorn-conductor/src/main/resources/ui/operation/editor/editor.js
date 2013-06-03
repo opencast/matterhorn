@@ -1520,37 +1520,35 @@ function nextSegment() {
             break;
         }
     }
-    if (new_id >= 0) {
-	var idFound = true;
-        if (new_id < editor.splitData.splits.length) {
-	    if(!editor.splitData.splits[new_id].enabled) {
-		idFound = false;
-		for(var i = new_id + 1; i < editor.splitData.splits.length; ++i) {
-		    if(editor.splitData.splits[i].enabled) {
-			new_id = i;
-			idFound = true;
-		    }
-		}
-		if(!idFound) {
-		    for(var i = 0; i < new_id; ++i) {
-			if(editor.splitData.splits[i].enabled) {
-			    new_id = i;
-			    idFound = true;
-			}
-		    }
-		}
-	    }
-        } else {
-	    for(var i = 0; i < new_id; ++i) {
+    var idFound = true;
+    if (new_id < editor.splitData.splits.length) {
+	if(!editor.splitData.splits[new_id].enabled) {
+	    idFound = false;
+	    for(var i = new_id + 1; i < editor.splitData.splits.length; ++i) {
 		if(editor.splitData.splits[i].enabled) {
 		    new_id = i;
 		    idFound = true;
 		}
 	    }
+	    if(!idFound) {
+		for(var i = 0; i < new_id; ++i) {
+		    if(editor.splitData.splits[i].enabled) {
+			new_id = i;
+			idFound = true;
+		    }
+		}
+	    }
 	}
-	if(idFound) {
-	    selectSegmentListElement(new_id, !playerPaused);
+    } else {
+	for(var i = 0; i < new_id; ++i) {
+	    if(editor.splitData.splits[i].enabled) {
+		new_id = i;
+		idFound = true;
+	    }
 	}
+    }
+    if(idFound) {
+	selectSegmentListElement(new_id, !playerPaused);
     }
     if (!playerPaused) {
 	playVideo();
@@ -1582,37 +1580,35 @@ function previousSegment() {
             break;
         }
     }
-    if (new_id >= 0) {
-	var idFound = true;
-        if (new_id < editor.splitData.splits.length) {
-	    if(!editor.splitData.splits[new_id].enabled) {
-		idFound = false;
-		for(var i = new_id - 1; i > 0; --i) {
-		    if(editor.splitData.splits[i].enabled) {
-			new_id = i;
-			idFound = true;
-		    }
-		}
-		if(!idFound) {
-		    for(var i = editor.splitData.splits.length - 1; i > new_id; --i) {
-			if(editor.splitData.splits[i].enabled) {
-			    new_id = i;
-			    idFound = true;
-			}
-		    }
-		}
-	    }
-        } else {
-	    for(var i = new_id; i > 0; --i) {
+    var idFound = true;
+    if (new_id < editor.splitData.splits.length) {
+	if((new_id < 0) || !editor.splitData.splits[new_id].enabled) {
+	    idFound = false;
+	    for(var i = new_id - 1; i >= 0; --i) {
 		if(editor.splitData.splits[i].enabled) {
 		    new_id = i;
 		    idFound = true;
 		}
 	    }
+	    if(!idFound) {
+		for(var i = editor.splitData.splits.length - 1; i > new_id; --i) {
+		    if(editor.splitData.splits[i].enabled) {
+			new_id = i;
+			idFound = true;
+		    }
+		}
+	    }
 	}
-	if(idFound) {
-	    selectSegmentListElement(new_id, !playerPaused);
+    } else {
+	for(var i = new_id; i >= 0; --i) {
+	    if(editor.splitData.splits[i].enabled) {
+		new_id = i;
+		idFound = true;
+	    }
 	}
+    }
+    if(idFound) {
+	selectSegmentListElement(new_id, !playerPaused);
     }
     if (!playerPaused) {
 	playVideo();
