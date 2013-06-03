@@ -419,20 +419,20 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 			public static final String WAVE_HEADER = "WAVE";
 			public static final String FMT_HEADER = "fmt ";
 			public static final String DATA_HEADER = "data";
-			private boolean valid;
-			private String chunkId; // 4 bytes
-			private long chunkSize; // unsigned 4 bytes, little endian
-			private String format; // 4 bytes
-			private String subChunk1Id; // 4 bytes
-			private long subChunk1Size; // unsigned 4 bytes, little endian
-			private int audioFormat; // unsigned 2 bytes, little endian
-			private int channels; // unsigned 2 bytes, little endian
-			private long sampleRate; // unsigned 4 bytes, little endian
-			private long byteRate; // unsigned 4 bytes, little endian
-			private int blockAlign; // unsigned 2 bytes, little endian
-			private int bitsPerSample; // unsigned 2 bytes, little endian
-			private String subChunk2Id; // 4 bytes
-			private long subChunk2Size; // unsigned 4 bytes, little endian
+			private boolean valid = false;
+			private String chunkId = ""; // 4 bytes
+			private long chunkSize = 0L; // unsigned 4 bytes, little endian
+			private String format = ""; // 4 bytes
+			private String subChunk1Id = ""; // 4 bytes
+			private long subChunk1Size = 0L; // unsigned 4 bytes, little endian
+			private int audioFormat = 0; // unsigned 2 bytes, little endian
+			private int channels = 0; // unsigned 2 bytes, little endian
+			private long sampleRate = 0L; // unsigned 4 bytes, little endian
+			private long byteRate = 0L; // unsigned 4 bytes, little endian
+			private int blockAlign = 0; // unsigned 2 bytes, little endian
+			private int bitsPerSample = 0; // unsigned 2 bytes, little endian
+			private String subChunk2Id = ""; // 4 bytes
+			private long subChunk2Size = 0L; // unsigned 4 bytes, little endian
 
 			public WaveHeader(InputStream inputStream) {
 				valid = loadHeader(inputStream);
@@ -525,6 +525,26 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 					return true;
 				} else {
 					logger.error("WaveHeader: Unsupported header format");
+					if (!chunkId.toUpperCase().equals(RIFF_HEADER))
+						logger.error("chunckId {} is not {}", chunkId.toUpperCase(), RIFF_HEADER);
+
+					if (!format.toUpperCase().equals(WAVE_HEADER))
+						logger.error("format {} is not {}", format.toUpperCase(), WAVE_HEADER);
+
+					if (!FMT_HEADER.equals(subChunk1Id))
+						logger.error("subChunk1Id {} is not {}", subChunk1Id, FMT_HEADER);
+
+					if (!DATA_HEADER.equals(subChunk2Id))
+						logger.error("subChunk2Id {} is not {}", subChunk2Id,  DATA_HEADER);
+
+					if (audioFormat != 1)
+						logger.error("audioFormat {} is not 1", audioFormat);
+
+					if (byteRate == sampleRate * channels * bitsPerSample / 8)
+						logger.error("byteRate ({}) == sampleRate ({}) * channels ({}) * bitsPerSample ({}) / 8",  new Object[] { byteRate, sampleRate, channels, bitsPerSample });
+
+					if (blockAlign == channels * bitsPerSample / 8)
+						logger.error("blockAlign ({}) == channels({}) * bitsPerSample ({}) / 8", new Object[] { blockAlign, channels, bitsPerSample });
 				}
 
 				return false;
