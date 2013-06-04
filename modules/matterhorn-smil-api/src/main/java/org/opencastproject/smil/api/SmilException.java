@@ -20,8 +20,6 @@ package org.opencastproject.smil.api;
  */
 public class SmilException extends Exception {
   
-  private static final long serialVersionUID = 1L;
-
   public SmilException(String message) {
     super(message);
   }
