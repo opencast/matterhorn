@@ -100,7 +100,7 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   padding-top: 20px;
   width: 100%;
   float: left;
-  min-width: 1101px;
+  min-width: 1131px;
 }
 
 #leftBoxDescription {
@@ -146,14 +146,14 @@ a.secondaryButton:hover,a.secondaryButton:focus {
 
 #bigMidBox {
   float: left;
-  width: 410px;
+  width: 440px;
 }
 
 #midBox {
   float: left;
   border: 1px solid black;
   margin-left: 10px;
-  width: 400px;
+  width: 430px;
 }
 
 #midBox2 {
@@ -161,7 +161,7 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   border: 1px solid black;
   margin-left: 10px;
   margin-top: 0px;
-  width: 400px;
+  width: 430px;
 }
 
 #rightBox {
