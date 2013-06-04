@@ -379,9 +379,9 @@ editor.addPar = function (currParIndex) {
 }
 
 /**
- * save smil helper
+ * save split list helper
  */
-editor.saveSplitListHelper = function (startAtIndex, func) {
+editor.saveSplitListHelper = function (startAtIndex) {
     if (!editor.error) {
 	startAtIndex = (startAtIndex && (startAtIndex >= 0)) ? startAtIndex : 0;
 	if (startAtIndex == 0) {

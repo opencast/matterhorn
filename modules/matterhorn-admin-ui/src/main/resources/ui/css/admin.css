@@ -21,6 +21,14 @@ table tr:nth-child(odd) td {
   background-color: #FFFFFF !important;
 }
 
+table tr:nth-child(even):hover td {
+  background-color: silver !important;
+}
+
+table tr:nth-child(odd):hover td {
+  background-color: silver !important;
+}
+
 .layout-centered { margin-left: auto; margin-right: auto}
 .layout-inline { display: inline-block; }
 .layout-float-left { float: left; }
