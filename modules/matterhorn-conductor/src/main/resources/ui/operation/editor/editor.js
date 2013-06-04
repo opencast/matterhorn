@@ -564,7 +564,7 @@ function getCurrentSplitItem() {
     var currentTime = getCurrentTime();
     for (var i = 0; i < editor.splitData.splits.length; ++i) {
         var splitItem = editor.splitData.splits[i];
-        if ((splitItem.clipBegin <= currentTime) && (currentTime < splitItem.clipEnd)) {
+        if ((splitItem.clipBegin <= (currentTime + 0.1)) && (currentTime < (splitItem.clipEnd - 1))) {
             splitItem.id = i;
             return splitItem;
         }
@@ -1082,12 +1082,16 @@ function selectCurrentSplitItem() {
  */
 function selectSegmentListElement(number, dblClick) {
     dblClick = dblClick ? dblClick : false;
-    currSplitItemClickedViaJQ = true;
-    if ($('#splitItemDiv-' + number)) {
-	if(dblClick) {
-	    $('#splitItemDiv-' + number).dblclick();
-	} else {
-	    $('#splitItemDiv-' + number).click();
+    var spltItem = editor.splitData.splits[number];
+    if(spltItem) {
+	setCurrentTime(spltItem.clipBegin);
+	currSplitItemClickedViaJQ = true;
+	if ($('#splitItemDiv-' + number)) {
+	    if(dblClick) {
+		$('#splitItemDiv-' + number).dblclick();
+	    } else {
+		$('#splitItemDiv-' + number).click();
+	    }
 	}
     }
 }
@@ -1525,6 +1529,7 @@ function nextSegment() {
 
     var currSplitItem = getCurrentSplitItem();
     var new_id = currSplitItem.id + 1;
+
     new_id = (new_id >= editor.splitData.splits.length) ? 0 : new_id;
 
     var idFound = true;
@@ -1541,15 +1546,15 @@ function nextSegment() {
 		break;
 	    }
 	}
-	if(!idFound) {
-	    for(var i = 0; i < new_id; ++i) {
-		if(editor.splitData.splits[i].enabled) {
-		    new_id = i;
-		    idFound = true;
-		    break;
-		}
-	    }   
-	}
+    }
+    if(!idFound) {
+	for(var i = 0; i < new_id; ++i) {
+	    if(editor.splitData.splits[i].enabled) {
+		new_id = i;
+		idFound = true;
+		break;
+	    }
+	}   
     }
 
     if(idFound) {
@@ -1575,25 +1580,24 @@ function previousSegment() {
     var idFound = true;
     if((new_id < 0) || (new_id >= editor.splitData.splits.length)) {
 	idFound = false;
-    } else {
-	if(!editor.splitData.splits[new_id].enabled) {
-	    idFound = false;
-	    new_id = (new_id <= 0) ? editor.splitData.splits.length : new_id;
-	    for(var i = new_id - 1; i >= 0; --i) {
-		if(editor.splitData.splits[i].enabled) {
-		    new_id = i;
-		    idFound = true;
-		    break;
-		}
+    } else if(!editor.splitData.splits[new_id].enabled) {
+	idFound = false;
+	new_id = (new_id <= 0) ? editor.splitData.splits.length : new_id;
+	for(var i = new_id - 1; i >= 0; --i) {
+
+	    if(editor.splitData.splits[i].enabled) {
+		new_id = i;
+		idFound = true;
+		break;
 	    }
-	    if(!idFound) {
-		for(var i = editor.splitData.splits - 1; i >= 0; --i) {
-		    if(editor.splitData.splits[i].enabled) {
-			new_id = i;
-			idFound = true;
-			break;
-		    }
-		}	
+	}
+    }
+    if(!idFound) {
+	for(var i = editor.splitData.splits.length - 1; i >= 0; --i) {
+	    if(editor.splitData.splits[i].enabled) {
+		new_id = i;
+		idFound = true;
+		break;
 	    }
 	}
     }
