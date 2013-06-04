@@ -485,7 +485,7 @@ editor.updateSplitList = function (dontClickCancel) {
 		}
 	    });
 	tmpTime = (tmpTime >= 0) ? tmpTime : 0;
-	$('#newTime').html("Duration after trimming: " + tmpTime.toFixed(4) + "s");
+	$('#newTime').html("Duration after trimming: " + formatTime(tmpTime.toFixed(4)));
 
 	$('#leftBox').html($('#splitElements').jqote(editor.splitData));
 	$('#splitSegments').html($('#splitSegmentTemplate').jqote(editor.splitData));
@@ -896,7 +896,7 @@ function splitRemoverClick() {
         id = $('#splitUUID').val();
     }
     id = parseInt(id);
-    if (editor.splitData.splits[id].enabled) {
+    if (editor.splitData.splits[id] && editor.splitData.splits[id].enabled) {
 	/*
         $('#deleteDialog').dialog({
                 buttons: {
@@ -927,7 +927,7 @@ function splitRemoverClick() {
 	    for(var i = id; i < editor.splitData.splits.length; ++i) {
 		if(editor.splitData.splits[i].enabled) {
 		    sthSelected = true;
-		    selectSegmentListElement(i);
+		    selectSegmentListElement(i, true);
 		    break;
 		}
 	    }
@@ -935,7 +935,7 @@ function splitRemoverClick() {
 		for(var i = id; i >= 0; --i) {
 		    if(editor.splitData.splits[i].enabled) {
 			sthSelected = true;
-			selectSegmentListElement(i);
+			selectSegmentListElement(i, true);
 			break;
 		    }
 		}
