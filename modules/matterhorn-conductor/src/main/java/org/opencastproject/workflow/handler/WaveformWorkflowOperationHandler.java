@@ -540,11 +540,13 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
 					if (audioFormat != 1)
 						logger.error("audioFormat {} is not 1", audioFormat);
 
-					if (byteRate == sampleRate * channels * bitsPerSample / 8)
-						logger.error("byteRate ({}) == sampleRate ({}) * channels ({}) * bitsPerSample ({}) / 8",  new Object[] { byteRate, sampleRate, channels, bitsPerSample });
+					if (byteRate != sampleRate * channels * bitsPerSample / 8)
+						logger.error("byteRate ({}) != sampleRate ({}) * channels ({}) * bitsPerSample ({}) / 8",
+                    new Object[] { byteRate, sampleRate, channels, bitsPerSample });
 
-					if (blockAlign == channels * bitsPerSample / 8)
-						logger.error("blockAlign ({}) == channels({}) * bitsPerSample ({}) / 8", new Object[] { blockAlign, channels, bitsPerSample });
+					if (blockAlign != channels * bitsPerSample / 8)
+						logger.error("blockAlign ({}) != channels({}) * bitsPerSample ({}) / 8",
+                    new Object[] { blockAlign, channels, bitsPerSample });
 				}
 
 				return false;
