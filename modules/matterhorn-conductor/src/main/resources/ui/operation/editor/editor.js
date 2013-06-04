@@ -876,7 +876,7 @@ function cancelButtonClick() {
     $('.splitItem').removeClass('splitItemSelected');
     $('.splitSegmentItem').removeClass('splitSegmentItemSelected');
     editor.selectedSplit = null;
-    enableRightBox(false);
+    enableInspectorBox(false);
 }
 
 /**
@@ -896,56 +896,59 @@ function splitRemoverClick() {
         id = $('#splitUUID').val();
     }
     id = parseInt(id);
-    if (editor.splitData.splits[id] && editor.splitData.splits[id].enabled) {
-	/*
-        $('#deleteDialog').dialog({
-                buttons: {
-                    "Yes": function () {
-                        $('#splitItemDiv-' + id).addClass('disabled');
-                        $('#splitRemover-' + id).hide();
-                        $('#splitAdder-' + id).show();
-                        $('.splitItem').removeClass('splitItemSelected');
-                        $(this).dialog('close');
-                        setEnabled(id, false);
-                    },
-                    "No": function () {
-                        $(this).dialog('close')
-                    }
-                },
-                title: "Remove Item?"
-            });
-	*/
-	$('#splitItemDiv-' + id).addClass('disabled');
-	$('#splitRemover-' + id).hide();
-	$('#splitAdder-' + id).show();
-	$('.splitItem').removeClass('splitItemSelected');
-	setEnabled(id, false);
-	if(getCurrentSplitItem().id == id) {
-	    // if current split item is being deleted:
-	    // try to select the next enabled segment, if that fails try to select the previous enabled item
-	    var sthSelected = false;
-	    for(var i = id; i < editor.splitData.splits.length; ++i) {
-		if(editor.splitData.splits[i].enabled) {
-		    sthSelected = true;
-		    selectSegmentListElement(i, true);
-		    break;
-		}
-	    }
-	    if(!sthSelected) {
-		for(var i = id; i >= 0; --i) {
+    if(editor.splitData.splits[id]) {
+	if (editor.splitData.splits[id].enabled) {
+	    /*
+	      $('#deleteDialog').dialog({
+	      buttons: {
+	      "Yes": function () {
+	      $('#splitItemDiv-' + id).addClass('disabled');
+	      $('#splitRemover-' + id).hide();
+	      $('#splitAdder-' + id).show();
+	      $('.splitItem').removeClass('splitItemSelected');
+	      $(this).dialog('close');
+	      setEnabled(id, false);
+	      },
+	      "No": function () {
+	      $(this).dialog('close')
+	      }
+	      },
+	      title: "Remove Item?"
+	      });
+	    */
+	    $('#splitItemDiv-' + id).addClass('disabled');
+	    $('#splitRemover-' + id).hide();
+	    $('#splitAdder-' + id).show();
+	    $('.splitItem').removeClass('splitItemSelected');
+	    setEnabled(id, false);
+	    if(getCurrentSplitItem().id == id) {
+		// if current split item is being deleted:
+		// try to select the next enabled segment, if that fails try to select the previous enabled item
+		var sthSelected = false;
+		for(var i = id; i < editor.splitData.splits.length; ++i) {
 		    if(editor.splitData.splits[i].enabled) {
 			sthSelected = true;
 			selectSegmentListElement(i, true);
 			break;
 		    }
 		}
+		if(!sthSelected) {
+		    for(var i = id; i >= 0; --i) {
+			if(editor.splitData.splits[i].enabled) {
+			    sthSelected = true;
+			    selectSegmentListElement(i, true);
+			    break;
+			}
+		    }
+		}
 	    }
+	    selectCurrentSplitItem();
+	} else {
+	    $('#splitItemDiv-' + id).removeClass('disabled');
+	    $('#splitRemover-' + id).show();
+	    $('#splitAdder-' + id).hide();
+	    setEnabled(id, true);
 	}
-    } else {
-        $('#splitItemDiv-' + id).removeClass('disabled');
-        $('#splitRemover-' + id).show();
-        $('#splitAdder-' + id).hide();
-        setEnabled(id, true);
     }
     cancelButtonClick();
 }
@@ -999,7 +1002,7 @@ function splitItemClick() {
                 $('.video-timer').html(formatTime(getCurrentTime()) + "/" + formatTime(getDuration()));
             }
 
-            enableRightBox(true);
+            enableInspectorBox(true);
         }
     }
 }
@@ -1128,13 +1131,13 @@ function updateCurrentTime() {
  * @param enabled
  *          whether enabled or not
  */
-function enableRightBox(enabled) {
+function enableInspectorBox(enabled) {
     if (enabled) {
-        $('#rightBox :input').removeProp('disabled');
+        $('#midBox :input').removeProp('disabled');
         $('.frameButton').button("enable");
         $('#descriptionCurrentTimeDiv').show();
     } else {
-        $('#rightBox :input').prop('disabled', 'disabled');
+        $('#midBox :input').prop('disabled', 'disabled');
         $('.frameButton').button("disable");
         $('#descriptionCurrentTimeDiv').hide();
     }
@@ -1703,18 +1706,10 @@ function initPlayButtons() {
     $('#clipEndSet').click(setCurrentTimeAsNewOutpoint);
 
     $('#shortcuts').button();
-
     $('#shortcuts').click(function () {
-            $('#shortcutsDialog').dialog({
-                    title: "shortcuts for video editing",
-                    resizable: false,
-                    buttons: {
-                        Close: function () {
-                            $(this).dialog("close");
-                        }
-                    }
-                })
-        });
+	    $("#rightBoxDescription").toggle();
+	    $("#rightBox").toggle();
+	});
 
     $('#clearList').button();
 
@@ -1728,6 +1723,7 @@ function initPlayButtons() {
                     description: ""
                 });
             editor.updateSplitList();
+            selectSegmentListElement(0);
         });
 }
 
@@ -1949,7 +1945,11 @@ $(document).ready(function () {
         $('#cancelButton').click(cancelButtonClick);
         $('#deleteButton').click(splitRemoverClick);
 
-        enableRightBox(false);
+	$('#deleteButton').button();
+	$('#cancelButton').button();
+	$('#okButton').button();
+	
+        enableInspectorBox(false);
         initPlayButtons();
         addShortcuts();
 

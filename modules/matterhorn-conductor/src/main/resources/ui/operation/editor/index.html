@@ -113,35 +113,97 @@
     <div id="editor" class="form-box layout-centered ui-widget">
       <div id="boxes">
 	<div id="leftBoxDescription">Segment list</div>
-	<div id="rightBoxDescription">Inspector</div>
+	<div id="midBoxDescription">Inspector</div>
+	<div id="rightBoxDescription">Shortcuts</div>
 	<div class="clear"></div>
         <div id="leftBox"></div>
+	<div id="bigMidBox">
+          <div id="midBox">
+            <div class="splitNumber">
+              <span id="splitIndex">#</span>
+            </div>
+            <div id="descriptionDiv">
+              <input type="hidden" id="splitUUID" />
+              <div id="descriptionCurrentTimeDiv" class="ui-helper-hidden">
+		<span>Current time:</span> <span id="descriptionCurrentTime" title="current time"></span><br />
+              </div>
+              <a id="clipBeginSet" class="frameButton" title="set current time as new inpoint"></a> <span class="clipItem" id="clipBegin"></span> - <span class="clipItem" id="clipEnd"></span> <a id="clipEndSet" class="frameButton" title="set current time as new outpoint"></a> <br />
+              <label for="description">Description</label>
+              <br />
+              <textarea id="splitDescription"></textarea>
+              <div class="box_mid">
+		<input type="button" value="Remove" id="deleteButton" />
+		<input type="button" value="Cancel" id="cancelButton" />
+		<input type="button" value="OK" id="okButton" />
+              </div>
+            </div>
+          </div>
+	  <div id="midBoxDescription2">Information</div>
+          <div id="midBox2">
+	    <div id="newTime"></div>
+	    <div id="buttons">
+              <input type="button" title="show all shortcuts" id="shortcuts" value="Shortcuts" />
+              <input type="button" title="Clear segment split" value="Clear segment list" id="clearList" />
+	    </div>
+	  </div>
+	</div>
         <div id="rightBox">
-          <div class="splitNumber">
-            <span id="splitIndex">#</span>
-          </div>
-          <div id="descriptionDiv">
-            <input type="hidden" id="splitUUID" />
-            <div id="descriptionCurrentTimeDiv" class="ui-helper-hidden">
-              <span>Current time:</span> <span id="descriptionCurrentTime" title="current time"></span><br />
-            </div>
-            <a id="clipBeginSet" class="frameButton" title="set current time as new inpoint"></a> <span class="clipItem"
-              id="clipBegin"></span> - <span class="clipItem" id="clipEnd"></span> <a id="clipEndSet"
-              class="frameButton" title="set current time as new outpoint"></a> <br />
-            <label for="description">Description</label>
-            <br />
-            <textarea id="splitDescription"></textarea>
-            <div class="box_right">
-              <input type="button" value="Remove" id="deleteButton" />
-              <input type="button" value="Cancel" id="cancelButton" />
-              <input type="button" value="OK" id="okButton" />
-            </div>
-          </div>
-        </div>
-	<div id="newTime"></div>
-	<div id="buttons">
-          <input type="button" title="show all shortcuts" id="shortcuts" value="Shortcuts" />
-          <input type="button" title="Clear segment split" value="Clear segment list" id="clearList" />
+	  <table border="1">
+            <tbody>
+	      <tr>
+		<td><span id="trim_play_pause"></span></td>
+		<td>play/pause</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_previous_frame"></span></td>
+		<td>previous frame</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_next_frame"></span></td>
+		<td>next frame</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_previous_marker"></span></td>
+		<td>jump to previous marker</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_next_marker"></span></td>
+		<td>jump to next marker</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_split_at_current_time"></span></td>
+		<td>split at current time</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_play_current_segment"></span></td>
+		<td>play current segment</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_play_current_pre_post"></span></td>
+		<td>play current segment with 2s pre and post roll excluding deleted segments</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_play_ending_of_current_segment"></span></td>
+		<td>play ending of current segment</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_set_current_time_as_inpoint"></span></td>
+		<td>set current time as new inpoint of selected item
+	      </tr>
+	      <tr>
+		<td><span id="trim_set_current_time_as_outpoint"></span></td>
+		<td>set current time as new outpoint of selected item
+	      </tr>
+	      <tr>
+		<td><span id="trim_delete_selected_segment"></span></td>
+		<td>delete currently selected segment</td>
+	      </tr>
+	      <tr>
+		<td><span id="trim_select_item_at_current_time"></span></td>
+		<td>select segment at current time</td>
+	      </tr>
+            </tbody>
+	  </table>
 	</div>
       </div>
     </div>
@@ -255,65 +317,6 @@
         type="button" class="ui-button ui-corner-all" value="Continue processing" />
       <!-- a id="edit-link" class="secondaryButton">Edit metadata, then continue</a -->
       <a id="cancelButton" onclick="cancel()" title="Cancel" class="secondaryButton">Cancel</a>
-    </div>
-
-    <div id="shortcutsDialog" class="ui-helper-hidden">
-      <table border="1">
-        <tbody>
-          <tr>
-            <td><span id="trim_previous_frame"></span></td>
-            <td>previous frame</td>
-          </tr>
-          <tr>
-            <td><span id="trim_next_frame"></span></td>
-            <td>next frame</td>
-          </tr>
-          <tr>
-            <td><span id="trim_split_at_current_time"></span></td>
-            <td>split at current time</td>
-          </tr>
-          <tr>
-            <td><span id="trim_play_current_segment"></span></td>
-            <td>play current segment</td>
-          </tr>
-          <tr>
-            <td><span id="trim_play_current_pre_post"></span></td>
-            <td>play current segment with 2s pre and post roll excluding deleted segments</td>
-          </tr>
-          <tr>
-            <td><span id="trim_set_current_time_as_inpoint"></span></td>
-            <td>set current time as new inpoint of selected item
-          </tr>
-          <tr>
-            <td><span id="trim_set_current_time_as_outpoint"></span></td>
-            <td>set current time as new outpoint of selected item
-          </tr>
-          <tr>
-            <td><span id="trim_play_pause"></span></td>
-            <td>play/pause</td>
-          </tr>
-          <tr>
-            <td><span id="trim_play_ending_of_current_segment"></span></td>
-            <td>play ending of current segment</td>
-          </tr>
-          <tr>
-            <td><span id="trim_delete_selected_segment"></span></td>
-            <td>delete currently selected segment</td>
-          </tr>
-          <tr>
-            <td><span id="trim_select_item_at_current_time"></span></td>
-            <td>select segment at current time</td>
-          </tr>
-          <tr>
-            <td><span id="trim_previous_marker"></span></td>
-            <td>jump to previous marker</td>
-          </tr>
-          <tr>
-            <td><span id="trim_next_marker"></span></td>
-            <td>jump to next marker</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   </div>
 </body>

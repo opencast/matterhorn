@@ -91,17 +91,36 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   width: 90%;
 }
 
+#shortcuts {
+    display: none;
+}
+
 #boxes {
-  padding-left: 20px;
+  padding-left: 0px;
   padding-top: 20px;
-  width: 90%;
+  width: 100%;
   float: left;
-  min-width: 785px;
+  min-width: 1101px;
 }
 
 #leftBoxDescription {
   font-weight:bold;
   float: left;
+  width: 300px;
+}
+
+#midBoxDescription {
+  font-weight:bold;
+  float: left;
+  margin-left: 10px;
+  width: 400px;
+}
+
+#midBoxDescription2 {
+  margin-top: 10px;
+  font-weight:bold;
+  float: left;
+  margin-left: 10px;
   width: 400px;
 }
 
@@ -109,16 +128,40 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   font-weight:bold;
   float: left;
   margin-left: 10px;
-  width: 350px;
+  width: 300px;
 }
 
 #leftBox {
   float: left;
   border: 1px solid black;
-  width: 400px;
-  height: 300px;
-  overflow-y: scroll;
+  width: 300px;
+  height: 340px;
+  overflow-y: auto;
   overflow-x: hidden;
+}
+
+.box_mid {
+  text-align: right;
+}
+
+#bigMidBox {
+  float: left;
+  width: 410px;
+}
+
+#midBox {
+  float: left;
+  border: 1px solid black;
+  margin-left: 10px;
+  width: 400px;
+}
+
+#midBox2 {
+  float: left;
+  border: 1px solid black;
+  margin-left: 10px;
+  margin-top: 0px;
+  width: 400px;
 }
 
 #rightBox {
@@ -126,6 +169,10 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   border: 1px solid black;
   margin-left: 10px;
   width: 350px;
+}
+
+#rightBox table {
+  font-size: 0.9em;
 }
 
 #buttons {
@@ -147,8 +194,9 @@ a.secondaryButton:hover,a.secondaryButton:focus {
 }
 
 #clearList {
+  margin-top: 10px;
   margin-left: 10px;
-  margin-top: 35px;
+  margin-bottom: 10px;
   height: 30px;
 }
 
@@ -169,7 +217,7 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   margin-top: 10px;
 }
 
-#rightBox textarea {
+#midBox textarea {
   margin-bottom: 5px;
   width: 100%;
   height: 70px;
@@ -293,10 +341,6 @@ a.secondaryButton:hover,a.secondaryButton:focus {
   color: #000000;
   opacity: 0.6;
   filter:alpha(opacity=60); /* For IE8 and earlier */
-}
-
-.box_right {
-  text-align: right;
 }
 
 .splitNumber {
