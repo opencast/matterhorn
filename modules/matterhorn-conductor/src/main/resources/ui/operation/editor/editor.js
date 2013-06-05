@@ -1836,7 +1836,12 @@ function parseInitialSMIL() {
                             enabled: true,
                             description: value.video[0].description ? value.video[0].description : ""
                         });
+
 		    checkPrevAndNext(editor.splitData.splits.length - 1);
+
+		    if(clipEnd < (getDuration() - 0.1)) {
+			editor.splitData.splits[editor.splitData.splits.length - 1].enabled = false;
+		    }
 		    /*
                     if (clipEnd < editor.parsedSmil.trackDuration / 1000 / 60) {
                         editor.splitData.splits.push({
