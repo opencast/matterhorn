@@ -495,17 +495,26 @@ public class DublinCoreTest {
   // test that exceptions are thrown correctly
   @Test
   public void testEncodingSchemeUtilsExceptions() {
+    DCMIPeriod period = new DCMIPeriod(new java.util.Date(), new java.util.Date());
+    Precision precision = Precision.Year;
     try {
-      DCMIPeriod period = EasyMock.createNiceMock(DCMIPeriod.class);
-      Precision precision = EasyMock.createNiceMock(Precision.class);
       EncodingSchemeUtils.encodePeriod(null, precision);
-      EncodingSchemeUtils.encodePeriod(period, null);
-      EncodingSchemeUtils.encodePeriod(null, null);
-    } catch (IllegalArgumentException e) {
-      // good
-      return;
+      Assert.fail("Exceptions should be thrown on null values.");
+    } catch (Exception e) {
+      Assert.assertFalse(e instanceof NullPointerException);
     }
-    Assert.fail("Exceptions should be thrown on null values.");
+    try {
+      EncodingSchemeUtils.encodePeriod(period, null);
+      Assert.fail("Exceptions should be thrown on null values.");
+    } catch (Exception e) {
+      Assert.assertFalse(e instanceof NullPointerException);
+    }
+    try {
+      EncodingSchemeUtils.encodePeriod(null, null);
+      Assert.fail("Exceptions should be thrown on null values.");
+    } catch (Exception e) {
+      Assert.assertFalse(e instanceof NullPointerException);
+    }
   }
 
   @Test
