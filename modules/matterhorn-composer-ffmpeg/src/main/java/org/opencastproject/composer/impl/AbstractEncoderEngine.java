@@ -109,6 +109,9 @@ public abstract class AbstractEncoderEngine implements EncoderEngine {
    *          the supported profiles
    */
   void setSupportedProfiles(Map<String, EncodingProfile> profiles) {
+    if (profiles == null) {
+      profiles = new HashMap<String, EncodingProfile>();
+    }
     this.supportedProfiles = profiles;
   }
 
