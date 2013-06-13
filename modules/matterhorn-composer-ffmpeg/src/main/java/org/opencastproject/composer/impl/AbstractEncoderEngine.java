@@ -142,6 +142,9 @@ public abstract class AbstractEncoderEngine implements EncoderEngine {
    * 
    */
   protected File download(Track track) throws IOException {
+    if (track == null || track.getURI() == null) {
+      throw new IOException("Caller provided either a null track or a track without a URI");
+    }
     if ("file".equals(track.getURI().getScheme()))
       return new File(track.getURI().getPath());
 
