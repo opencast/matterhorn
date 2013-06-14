@@ -62,9 +62,6 @@ public class EpisodeEncoderEngineTest {
   public void tearDown() throws Exception {
   }
 
-  /**
-   * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#getXmlrpcHost()}.
-   */
   @Ignore
   @Test
   public void testGetXmlrpcHost() {
@@ -108,7 +105,7 @@ public class EpisodeEncoderEngineTest {
   }
 
   @Test
-  public void testConfigure() throws Exception {
+  public void testConfigureNPE() throws Exception {
     try {
       // since the method is private we need to use reflection to get in there
       Method method = episodeEngine.getClass().getDeclaredMethod("configure", Properties.class);
@@ -120,7 +117,29 @@ public class EpisodeEncoderEngineTest {
     } catch (Exception e) {
       assertTrue("Episode engine setup failed: Properties must not be null".equals(e.getCause().getMessage()));
     }
+  }
 
+  @Test
+  public void testConfigureProperties() throws Exception {
+    try {
+      // since the method is private we need to use reflection to get in there
+      Method method = episodeEngine.getClass().getDeclaredMethod("configure", Properties.class);
+      method.setAccessible(true);
+      // some minimal configuration values we will use in tests
+      Properties p = new Properties();
+      p.put(EpisodeEncoderEngine.OPT_XMLRPC_PATH, "/dogfood");
+      method.invoke(episodeEngine, (Object) p);
+      // still here? let's add some more
+      p.put(EpisodeEncoderEngine.OPT_EPISODE_MONITOR_FREQUENCY, 20);
+      // p.put(EpisodeEncoderEngine.OPT_MONITORTYPE , "monitortype");
+      // p.put(EpisodeEncoderEngine.OPT_XMLRPC_HOST , "24.64.64.64");
+      // p.put(EpisodeEncoderEngine.OPT_XMLRPC_PASSWORD , "a dog eats cat food");
+      // p.put(EpisodeEncoderEngine.OPT_XMLRPC_PORT, 40000);
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      Assert.fail();
+    }
   }
 
 }
