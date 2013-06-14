@@ -21,20 +21,29 @@ import static org.junit.Assert.assertTrue;
 import org.opencastproject.composer.api.EncoderEngine;
 import org.opencastproject.composer.impl.episode.EpisodeEncoderEngine;
 
+import junit.framework.Assert;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.reflect.Method;
+import java.util.Properties;
 
 /**
  * Test suite for the Telestream Episode encoding engine. Since you would need an instance of that engine in order to
  * fully test it, there are no actual encoding tests done, just configuration and setup.
  */
-@Ignore
 public class EpisodeEncoderEngineTest {
 
   /** Instance of the episode encoder engine */
   private EpisodeEncoderEngine episodeEngine = null;
+
+  /** Logging facility */
+  private static final Logger logger = LoggerFactory.getLogger(AbstractEncoderEngineTest.class);
 
   /**
    * @throws java.lang.Exception
@@ -56,6 +65,7 @@ public class EpisodeEncoderEngineTest {
   /**
    * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#getXmlrpcHost()}.
    */
+  @Ignore
   @Test
   public void testGetXmlrpcHost() {
     assertEquals("opencastproject.org", episodeEngine.getXmlrpcHost());
@@ -64,6 +74,7 @@ public class EpisodeEncoderEngineTest {
   /**
    * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#getXmlrpcPort()}.
    */
+  @Ignore
   @Test
   public void testGetXmlrpcPort() {
     assertEquals(12345, episodeEngine.getXmlrpcPort());
@@ -72,6 +83,7 @@ public class EpisodeEncoderEngineTest {
   /**
    * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#getXmlrpcPath()}.
    */
+  @Ignore
   @Test
   public void testGetXmlrpcPath() {
     assertEquals("/RPC2", episodeEngine.getXmlrpcPath());
@@ -80,6 +92,7 @@ public class EpisodeEncoderEngineTest {
   /**
    * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#getXmlrpcPath()}.
    */
+  @Ignore
   @Test
   public void testGetMonitorFrequency() {
     assertEquals(10, episodeEngine.getMonitoringFrequency());
@@ -88,9 +101,26 @@ public class EpisodeEncoderEngineTest {
   /**
    * Test method for {@link org.opencastproject.composer.impl.episode.EpisodeEncoderEngine#needsLocalWorkCopy()}.
    */
+  @Ignore
   @Test
   public void testNeedsLocalWorkCopy() {
     assertTrue(episodeEngine.needsLocalWorkCopy());
+  }
+
+  @Test
+  public void testConfigure() throws Exception {
+    try {
+      // since the method is private we need to use reflection to get in there
+      Method method = episodeEngine.getClass().getDeclaredMethod("configure", Properties.class);
+      method.setAccessible(true);
+      // check for NPE
+      method.invoke(episodeEngine, (Object) null);
+      // if no exception has been thrown then die
+      Assert.fail();
+    } catch (Exception e) {
+      assertTrue("Episode engine setup failed: Properties must not be null".equals(e.getCause().getMessage()));
+    }
+
   }
 
 }
