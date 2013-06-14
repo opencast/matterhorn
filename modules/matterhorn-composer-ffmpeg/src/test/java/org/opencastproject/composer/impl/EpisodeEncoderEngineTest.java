@@ -43,7 +43,7 @@ public class EpisodeEncoderEngineTest {
   private EpisodeEncoderEngine episodeEngine = null;
 
   /** Logging facility */
-  private static final Logger logger = LoggerFactory.getLogger(AbstractEncoderEngineTest.class);
+  private static final Logger logger = LoggerFactory.getLogger(EpisodeEncoderEngineTest.class);
 
   /**
    * @throws java.lang.Exception
@@ -132,7 +132,7 @@ public class EpisodeEncoderEngineTest {
       method.invoke(episodeEngine, (Object) p);
       // still here? let's add some more
       p.put(EpisodeEncoderEngine.OPT_EPISODE_MONITOR_FREQUENCY, "20.0");
-      p.put(EpisodeEncoderEngine.OPT_MONITORTYPE, "monitortype");
+      //p.put(EpisodeEncoderEngine.OPT_MONITORTYPE, "monitortype");
       // p.put(EpisodeEncoderEngine.OPT_XMLRPC_HOST , "24.64.64.64");
       // p.put(EpisodeEncoderEngine.OPT_XMLRPC_PASSWORD , "a dog eats cat food");
       // p.put(EpisodeEncoderEngine.OPT_XMLRPC_PORT, 40000);
