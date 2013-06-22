@@ -442,6 +442,10 @@ public class SchedulerRestService {
         service.updateCaptureAgentMetadata(caProperties, tuple(id, eventCatalog));
 
       return Response.ok().build();
+    } catch (SchedulerException e) {
+      logger.warn("{}", e.getMessage());
+      //TODO: send the reason message for not modified in response
+      return Response.status(Status.NOT_MODIFIED).build();
     } catch (NotFoundException e) {
       logger.warn("Event with id '{}' does not exist.", id);
       return Response.status(Status.NOT_FOUND).build();
