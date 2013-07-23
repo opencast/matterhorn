@@ -137,9 +137,18 @@ public class SchedulerServiceImplTest {
   private Map<String, String> wfProperties = new HashMap<String, String>();
   private Map<String, String> wfPropertiesUpdated = new HashMap<String, String>();
 
+  private long oneHour;
+  private long twoHours;
+  private long oneWeek;
+
   @SuppressWarnings("unchecked")
   @Before
   public void setUp() throws Exception {
+    
+    oneHour = 3600; // Earth time
+    twoHours = 7200;
+    oneWeek = 604800;
+    
     wfProperties.put("test", "true");
     wfProperties.put("clear", "all");
 
@@ -570,7 +579,7 @@ public class SchedulerServiceImplTest {
 
     // Mock the getCurrentDate method to skip to the future
     long currentTime = System.currentTimeMillis();
-    Date futureSystemDate = new Date(currentTime + 6610000);
+    Date futureSystemDate = new Date(currentTime + oneWeek);
     EasyMock.expect(schedSvc2.getCurrentDate()).andReturn(futureSystemDate).anyTimes();
     EasyMock.replay(schedSvc2);
 
@@ -584,8 +593,8 @@ public class SchedulerServiceImplTest {
     schedSvc2.activate(null);
 
     final String initialTitle = "Recording 1";
-    final DublinCoreCatalog initalEvent = generateEvent("Device A", none(0L), some(initialTitle), new Date(
-            currentTime + 10 * 1000), new Date(currentTime + 3610000));
+    final DublinCoreCatalog initalEvent = generateEvent("Device A", none(0L), some(initialTitle), new Date(currentTime
+            + oneHour), new Date(currentTime + twoHours));
     Long eventId = null;
     try {
       eventId = schedSvc2.addEvent(initalEvent, wfProperties);
@@ -605,7 +614,7 @@ public class SchedulerServiceImplTest {
     try {
       final String updatedTitle1 = "Recording 2";
       final DublinCoreCatalog updatedEvent1 = generateEvent("Device A", some(eventId), some(updatedTitle1), new Date(
-              currentTime + 10 * 1000), new Date(currentTime + 3610000));
+              currentTime + oneHour), new Date(currentTime + twoHours));
       schedSvc2.updateEvent(eventId, updatedEvent1, wfPropertiesUpdated);
       checkEvent(eventId, initalCaProps, updatedTitle1);
 
@@ -618,7 +627,7 @@ public class SchedulerServiceImplTest {
       final String updatedTitle2 = "Recording 3";
       final String expectedTitle2 = "Recording 3 1";
       final DublinCoreCatalog updatedEvent2 = generateEvent("Device A", none(0L), some(updatedTitle2), new Date(
-              currentTime + 10 * 1000), new Date(currentTime + 3610000));
+              currentTime + oneHour), new Date(currentTime + twoHours));
       schedSvc2.updateEvents(list(eventId), updatedEvent2);
       checkEvent(eventId, initalCaProps, expectedTitle2);
 
