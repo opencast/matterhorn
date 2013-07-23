@@ -26,7 +26,6 @@ import org.gstreamer.event.EOSEvent;
 import org.opencastproject.videoeditor.gstreamer.GstreamerElements;
 import org.opencastproject.videoeditor.gstreamer.VideoEditorPipeline;
 import org.opencastproject.videoeditor.gstreamer.exceptions.PipelineBuildException;
-import org.opencastproject.videoeditor.gstreamer.exceptions.UnknownSourceTypeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +36,7 @@ public class GnonlinSourceBin {
   
   /** Media source types */
   public static enum SourceType {
-    Null, Audio, Image, Video
+    Audio, Video
   }
   
   /** The logging instance */
@@ -63,7 +62,7 @@ public class GnonlinSourceBin {
    * @throws UnknownSourceTypeException if mediatype can't be processed
    * @throws PipelineBuildException 
    */
-  GnonlinSourceBin(SourceType type, Caps sourceCaps) throws UnknownSourceTypeException, PipelineBuildException {
+  GnonlinSourceBin(SourceType type, Caps sourceCaps) throws PipelineBuildException {
     this.type = type;
     
     bin = new Bin();
@@ -91,7 +90,8 @@ public class GnonlinSourceBin {
           caps = Caps.fromString("video/x-raw-yuv; video/x-raw-rgb");
         break;
       default:
-        throw new UnknownSourceTypeException(type);
+        // can't pass
+        throw new PipelineBuildException();
     }
     
     bin.addMany(gnlComposition, identity, converter, rate, queue);
@@ -111,7 +111,6 @@ public class GnonlinSourceBin {
 
       @Override
       public void padAdded(Element source, Pad pad) {
-        //TODO to debug
         logger.debug("new pad added {}.{} (caps: {}): ", new String[] {
           source.getName(), pad.getName(), pad.getCaps().toString()
         });
@@ -132,7 +131,6 @@ public class GnonlinSourceBin {
       public void noMorePads(Element element) {
         if (!identity.getSinkPads().get(0).isLinked()) {
           logger.error(identity.getName() + " has no peer!");
-          // TODO doesn't working?!
           getBin().sendEvent(new EOSEvent());
           
         }

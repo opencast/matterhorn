@@ -20,7 +20,6 @@ import org.gstreamer.Bin;
 import org.opencastproject.videoeditor.gstreamer.GstreamerTypeFinder;
 import org.opencastproject.videoeditor.gstreamer.exceptions.InputSourceTypeException;
 import org.opencastproject.videoeditor.gstreamer.exceptions.PipelineBuildException;
-import org.opencastproject.videoeditor.gstreamer.exceptions.UnknownSourceTypeException;
 
 /**
  * Source bins factory class.
@@ -47,7 +46,7 @@ public class SourceBinsFactory {
    * @throws InputSourceTypeException if input file does not match source media type
    */
   public void addFileSource(String inputFilePath, long mediaStartMillis, long durationMillis)
-          throws FileNotFoundException, UnknownSourceTypeException, PipelineBuildException, InputSourceTypeException {
+          throws FileNotFoundException, PipelineBuildException, InputSourceTypeException {
 
     GstreamerTypeFinder typeFinder;
     typeFinder = new GstreamerTypeFinder(inputFilePath);

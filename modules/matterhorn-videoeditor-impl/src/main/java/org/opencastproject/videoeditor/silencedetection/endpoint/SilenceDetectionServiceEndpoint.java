@@ -41,7 +41,7 @@ import org.opencastproject.videoeditor.silencedetection.api.SilenceDetectionServ
 @Path("/")
 @RestService(name = "SilenceDetectionServiceEndpoint", title = "Silence Detection Service REST Endpoint",
 		abstractText = "Detect silent sequences in audio file.",
-		notes = {"Detect silent sequences in audio file."})
+		notes = {"All paths above are relative to the REST endpoint base (something like http://your.server/silencedetection)"})
 public class SilenceDetectionServiceEndpoint extends AbstractJobProducerEndpoint {
 
 	private SilenceDetectionService silenceDetectionService;

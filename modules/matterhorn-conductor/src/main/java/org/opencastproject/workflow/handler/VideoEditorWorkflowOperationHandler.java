@@ -17,20 +17,25 @@ package org.opencastproject.workflow.handler;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.UUID;
 import javax.xml.bind.JAXBException;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
 import org.opencastproject.mediapackage.Catalog;
 import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageElement;
+import org.opencastproject.mediapackage.MediaPackageElementBuilderFactory;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
 import org.opencastproject.mediapackage.MediaPackageElementParser;
 import org.opencastproject.mediapackage.MediaPackageException;
@@ -69,12 +74,12 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 	 * Name of the configuration option that provides the source flavors we are
 	 * looking for
 	 */
-	private static final String SOURCE_FLAVOR_PROPERTY = "source-flavor";
+	private static final String SOURCE_FLAVOR_PROPERTY = "source-flavors";
 	/**
 	 * Name of the configuration option that provides the preview flavors we are
 	 * looking for
 	 */
-	private static final String PREVIEW_FLAVOR_PROPERTY = "preview-flavor";
+	private static final String PREVIEW_FLAVOR_PROPERTY = "preview-flavors";
 	/**
 	 * Name of the configuration option that provides the smil flavor
 	 */
@@ -146,34 +151,75 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 		MediaPackage mp = null;
 		try {
 			mp = workflowInstance.getMediaPackage();
-			// get preview tracks
-			MediaPackageElementFlavor previewFlavor = getFlavor(workflowInstance, PREVIEW_FLAVOR_PROPERTY);
-			Track[] previewTracks = getTracksFromFlavor(mp, previewFlavor);
-			// get smil
-			MediaPackageElementFlavor smilFlavor = getFlavor(workflowInstance, SMIL_FLAVOR_PROPERTY);
-			Catalog[] smilCatalogs = mp.getCatalogs(smilFlavor);
 
+      // get smil
+			MediaPackageElementFlavor smilFlavor = MediaPackageElementFlavor.parseFlavor(
+              workflowInstance.getCurrentOperation().getConfiguration(SMIL_FLAVOR_PROPERTY));
+			Catalog[] smilCatalogs = mp.getCatalogs(smilFlavor);
+      
+			// get preview tracks
+      String configuredPreviesFlavors = workflowInstance.getCurrentOperation().getConfiguration(PREVIEW_FLAVOR_PROPERTY);
+      List<Track> previewTracksList = new LinkedList<Track>();
+      for (String f : StringUtils.split(configuredPreviesFlavors, ",")) {
+        String previewFlavorStr = StringUtils.trimToNull(f);
+        if (previewFlavorStr == null) continue;
+        MediaPackageElementFlavor previewFlavor = MediaPackageElementFlavor.parseFlavor(previewFlavorStr);
+        for (Track t : mp.getTracks()) {
+          if ((t.getFlavor().getType().equals(previewFlavor.getType())
+                  && t.getFlavor().getSubtype().equals(previewFlavor.getSubtype()))
+                  || ("*".equals(previewFlavor.getType())
+                  && t.getFlavor().getSubtype().equals(previewFlavor.getSubtype()))) {
+            previewTracksList.add(t);
+          }
+        }
+      }
+      if (previewTracksList.size() == 0) throw new WorkflowOperationException(
+              String.format("No preview tracks found. Configuration property %s is not valid", PREVIEW_FLAVOR_PROPERTY));
+
+      Track[] previewTracks = previewTracksList.toArray(new Track[previewTracksList.size()]);
+
+      // prepare smil
 			Smil smil = null;
 			SmilResponse smilResponse = null;
+      InputStream is = null;
 			if (smilCatalogs.length == 0) {
 				// mediapackage does not contain any smil, create new
 				smilResponse = smilService.createNewSmil(mp);
 				smilResponse = smilService.addParallel(smilResponse.getSmil());
 				smilResponse = smilService.addClips(smilResponse.getSmil(),
 						smilResponse.getEntity().getId(),
-						previewTracks, 0L, previewTracks[0].getDuration());
+						previewTracks, 0L, ((Track)previewTracks[0]).getDuration());
 				smil = smilResponse.getSmil();
-				// ingest new smil
-				mp = ingestService.addCatalog(IOUtils.toInputStream(smil.toXML(), "UTF-8"),
-						SMIL_FILE_NAME, smilFlavor, mp);
-        workflowInstance.setMediaPackage(mp);
+
+        try {
+          // put new smil into workspace
+          is = IOUtils.toInputStream(smil.toXML(), "UTF-8");
+          URI smilURI = workspace.put(mp.getIdentifier().compact(), UUID.randomUUID().toString(), SMIL_FILE_NAME, is);
+          Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
+                  .elementFromURI(smilURI, MediaPackageElement.Type.Catalog, smilFlavor);
+          mp.add(catalog);
+        } finally {
+          IOUtils.closeQuietly(is);
+        }
 			} else {
 				// mediapackage contain a smil, test preview tracks set
 				File smilFile = workspace.get(smilCatalogs[0].getURI());
 				smilResponse = smilService.fromXml(smilFile);
 				smil = replaceAllTracksWith(smilResponse.getSmil(), previewTracks);
-        workspace.put(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier(),
-                SMIL_FILE_NAME, IOUtils.toInputStream(smil.toXML(), "UTF-8"));
+        
+        try {
+          is = IOUtils.toInputStream(smil.toXML(), "UTF-8");
+          // remove old smil
+          workspace.delete(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier());
+          mp.remove(smilCatalogs[0]);
+          // put modified smil into workspace
+          URI newSmilUri = workspace.put(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier(), SMIL_FILE_NAME, is);
+          Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
+                  .elementFromURI(newSmilUri, MediaPackageElement.Type.Catalog, smilFlavor);
+          mp.add(catalog);
+        } finally {
+          IOUtils.closeQuietly(is);
+        }
       }
 		} catch (Exception e) {
 			throw new WorkflowOperationException(e.getMessage(), e);
@@ -197,12 +243,31 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 		// flavor
 		MediaPackage mediaPackage = workflowInstance.getMediaPackage();
 		WorkflowOperationInstance currentOperation = workflowInstance.getCurrentOperation();
-		String configuredSourceFlavor = currentOperation.getConfiguration(SOURCE_FLAVOR_PROPERTY);
-		String configuredTargetFlavorSubtype = currentOperation
-				.getConfiguration(TARGET_FLAVOR_SUBTYPE_PROPERTY);
-		MediaPackageElementFlavor matchingFlavor = MediaPackageElementFlavor
-				.parseFlavor(configuredSourceFlavor);
-		for (Track t : getTracksFromFlavor(mediaPackage, matchingFlavor)) {
+
+    // get target flavor subtype
+		String configuredTargetFlavorSubtype = currentOperation.getConfiguration(TARGET_FLAVOR_SUBTYPE_PROPERTY);
+
+    // get all source tracks
+    String configuredSourceFlavors = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR_PROPERTY);
+    List<Track> sourceTracksList = new LinkedList<Track>();
+    for (String f : StringUtils.split(configuredSourceFlavors, ",")) {
+      String sourceFlavorStr = StringUtils.trimToNull(f);
+      if (sourceFlavorStr == null) continue;
+      MediaPackageElementFlavor sourceFlavor = MediaPackageElementFlavor.parseFlavor(sourceFlavorStr);
+      for (Track t : mediaPackage.getTracks()) {
+        if ((t.getFlavor().getType().equals(sourceFlavor.getType())
+                && t.getFlavor().getSubtype().equals(sourceFlavor.getSubtype()))
+                || ("*".equals(sourceFlavor.getType())
+                && t.getFlavor().getSubtype().equals(sourceFlavor.getSubtype()))) {
+          sourceTracksList.add(t);
+        }
+      }
+    }
+    if (sourceTracksList.size() == 0) throw new WorkflowOperationException(
+            String.format("No source tracks found. Configuration property %s is not valid", SOURCE_FLAVOR_PROPERTY));
+
+
+		for (Track t : sourceTracksList) {
 			Track clonedTrack = (Track) t.clone();
 			clonedTrack.setIdentifier(null);
 			clonedTrack.setURI(t.getURI()); // use the same URI as the original
@@ -226,24 +291,56 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 		logger.info("VideoEdit workflow {} using SMIL Document", workflowInstance.getId());
 		MediaPackage mp = workflowInstance.getMediaPackage();
 
-		// retrieve smil from mediapackage
-		MediaPackageElementFlavor smilFlavor = getFlavor(workflowInstance, SMIL_FLAVOR_PROPERTY);
+		// get smil
+		MediaPackageElementFlavor smilFlavor = MediaPackageElementFlavor.parseFlavor(
+              workflowInstance.getCurrentOperation().getConfiguration(SMIL_FLAVOR_PROPERTY));
 		Catalog[] catalogs = mp.getCatalogs(smilFlavor);
 		if (catalogs.length == 0) {
 			throw new WorkflowOperationException("MediaPackage does not contain a SMIL document.");
 		}
-		
-		MediaPackageElementFlavor sourceFlavor = getFlavor(workflowInstance, SOURCE_FLAVOR_PROPERTY);
-		Track[] sourceTracks = getTracksFromFlavor(mp, sourceFlavor);
+    
+    // get all source tracks
+    String configuredSourceFlavors = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR_PROPERTY);
+    List<Track> sourceTracksList = new LinkedList<Track>();
+    for (String f : StringUtils.split(configuredSourceFlavors, ",")) {
+      String sourceFlavorStr = StringUtils.trimToNull(f);
+      if (sourceFlavorStr == null) continue;
+      MediaPackageElementFlavor sourceFlavor = MediaPackageElementFlavor.parseFlavor(sourceFlavorStr);
+      for (Track t : mp.getTracks()) {
+        if ((t.getFlavor().getType().equals(sourceFlavor.getType())
+                && t.getFlavor().getSubtype().equals(sourceFlavor.getSubtype()))
+                || ("*".equals(sourceFlavor.getType())
+                && t.getFlavor().getSubtype().equals(sourceFlavor.getSubtype()))) {
+          sourceTracksList.add(t);
+        }
+      }
+    }
+    if (sourceTracksList.size() == 0) throw new WorkflowOperationException(
+            String.format("No source tracks found. Configuration property %s is not valid", SOURCE_FLAVOR_PROPERTY));
 
+    // process smil
 		File smilFile;
 		Smil smil = null;
 		try {
 			smilFile = workspace.get(catalogs[0].getURI());
 			smil = smilService.fromXml(smilFile).getSmil();
-			smil = replaceAllTracksWith(smil, sourceTracks);
-      workspace.put(mp.getIdentifier().compact(), catalogs[0].getIdentifier(),
-              SMIL_FILE_NAME, IOUtils.toInputStream(smil.toXML(), "UTF-8"));
+			smil = replaceAllTracksWith(smil, sourceTracksList.toArray(new Track[sourceTracksList.size()]));
+
+      InputStream is = null;
+      try {
+        is = IOUtils.toInputStream(smil.toXML());
+        // remove old smil
+        workspace.delete(mp.getIdentifier().compact(), catalogs[0].getIdentifier());
+        mp.remove(catalogs[0]);
+        // put modified smil into workspace
+        URI newSmilUri = workspace.put(mp.getIdentifier().compact(), catalogs[0].getIdentifier(), SMIL_FILE_NAME, is);
+        Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
+                .elementFromURI(newSmilUri, MediaPackageElement.Type.Catalog, smilFlavor);
+        mp.add(catalog);
+      } finally {
+        IOUtils.closeQuietly(is);
+      }
+
 		} catch (NotFoundException ex) {
 			throw new WorkflowOperationException("MediaPackage does not contain a smil catalog.");
 		} catch (IOException ex) {
@@ -280,7 +377,7 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 				editedTrack = (Track) MediaPackageElementParser.getFromXml(job.getPayload());
 				MediaPackageElementFlavor editedTrackFlavor = editedTrack.getFlavor();
 				sourceTrack = null;
-				for (Track track : sourceTracks) {
+				for (Track track : sourceTracksList) {
 					if (track.getFlavor().getType().equals(editedTrackFlavor.getType())) {
 						sourceTrack = track;
 						break;
@@ -313,22 +410,6 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
 
 		return createResult(mp, Action.CONTINUE);
 
-	}
-
-	protected MediaPackageElementFlavor getFlavor(WorkflowInstance workflowInstance, String configurationKey) {
-		String flavor = workflowInstance.getCurrentOperation().getConfiguration(configurationKey);
-		return MediaPackageElementFlavor.parseFlavor(flavor);
-	}
-
-	protected Track[] getTracksFromFlavor(MediaPackage mediaPackage, MediaPackageElementFlavor flavor) {
-		List<Track> tracks = new LinkedList<Track>();
-		for (Track track : mediaPackage.getTracks()) {
-			MediaPackageElementFlavor trackFlavor = track.getFlavor();
-			if (trackFlavor.matches(flavor)) {
-				tracks.add(track);
-			}
-		}
-		return tracks.toArray(new Track[tracks.size()]);
 	}
 
 	protected Smil replaceAllTracksWith(Smil smil, Track[] otherTracks) throws SmilException {

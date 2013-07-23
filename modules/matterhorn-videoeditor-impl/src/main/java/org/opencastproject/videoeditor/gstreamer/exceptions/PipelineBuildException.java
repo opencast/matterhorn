@@ -15,9 +15,16 @@
  */
 package org.opencastproject.videoeditor.gstreamer.exceptions;
 
+/**
+ * Thrown when Gstreamer pipeline build failed.
+ */
 public class PipelineBuildException extends Exception {
 
   public PipelineBuildException() {
     super("Pipeline build failed!");
+  }
+
+  public PipelineBuildException(String message) {
+    super("Pipeline build failed! " + message);
   }
 }

@@ -43,9 +43,8 @@ import org.slf4j.LoggerFactory;
  */
 @Path("/")
 @RestService(name = "smil", title = "SmilService Rest Endpoint",
-		abstractText = "Provides Smil modification.",
-		notes = {"SmilService Rest Endpoint provide other services "
-				+ "to create and modify Smil objects."})
+		abstractText = "SmilRestService provide other services to create and modify Smil objects.",
+		notes = {"All paths above are relative to the REST endpoint base (something like http://your.server/smil)"})
 public class SmilServiceRest {
 
 	/** Logger */
@@ -78,7 +77,7 @@ public class SmilServiceRest {
 
 			return Response.ok(smilResponse).build();
 		} catch (MediaPackageException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
       return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("MediaPackage not valid.").build();
 		}
 	}
@@ -115,7 +114,7 @@ public class SmilServiceRest {
 			}
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
@@ -141,7 +140,7 @@ public class SmilServiceRest {
 		try {
 			smilResponse = smilService.fromXml(smil);
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 
@@ -153,7 +152,7 @@ public class SmilServiceRest {
 			}
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
@@ -201,7 +200,7 @@ public class SmilServiceRest {
 			smilResponse = smilService.addClip(smilResponse.getSmil(), parentId, trackObj, start, duration);
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
@@ -243,20 +242,19 @@ public class SmilServiceRest {
 			smilResponse = smilService.fromXml(smil);
 			tracksList = (List<Track>) MediaPackageElementParser.getArrayFromXml(tracks);
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		} catch (MediaPackageException ex) {
 			logger.error(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("Tracks are not valid.").build();
 		}
 
-		Track[] tracksArr = new Track[tracksList.size()];
-		tracksArr = tracksList.toArray(tracksArr);
+		Track[] tracksArr = tracksList.toArray(new Track[tracksList.size()]);
 		try {
 			smilResponse = smilService.addClips(smilResponse.getSmil(), parentId, tracksArr, start, duration);
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document doesn't contain an element with given parentId.").build();
 		}
 	}
@@ -311,7 +309,7 @@ public class SmilServiceRest {
 			smilResponse = smilService.removeSmilElement(smilResponse.getSmil(), elementId);
 			return Response.ok(smilResponse).build();
 		} catch (SmilException ex) {
-			logger.error(ex.getMessage(), ex);
+			logger.info(ex.getMessage(), ex);
 			return Response.status(HttpServletResponse.SC_BAD_REQUEST).entity("SMIL document invalid.").build();
 		}
 	}

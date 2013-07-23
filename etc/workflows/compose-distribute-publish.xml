@@ -257,8 +257,8 @@
       exception-handler-workflow="error"
       description="Waiting for user to review / video edit recording">
       <configurations>
-        <configuration key="source-flavor">*/work</configuration>
-	<configuration key="preview-flavor">*/preview</configuration>
+        <configuration key="source-flavors">*/work</configuration>
+	<configuration key="preview-flavors">*/preview</configuration>
 	<configuration key="smil-flavor">smil/smil</configuration>
         <configuration key="target-flavor-subtype">trimmed</configuration>
       </configurations>

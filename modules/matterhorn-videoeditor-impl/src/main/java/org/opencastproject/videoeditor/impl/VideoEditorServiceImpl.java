@@ -272,8 +272,8 @@ public class VideoEditorServiceImpl extends AbstractJobProducer implements Video
       if (runningPipeline != null) {
         // pipeline running ?! => cleanup
         runningPipeline.stop();
-        FileUtils.deleteQuietly(outputPath.getParentFile());
       }
+      FileUtils.deleteQuietly(outputPath.getParentFile());
     }
   }
 

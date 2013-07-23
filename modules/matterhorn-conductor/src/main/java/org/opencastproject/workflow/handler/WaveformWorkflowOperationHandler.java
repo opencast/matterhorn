@@ -26,16 +26,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.UUID;
 import javax.imageio.ImageIO;
 import org.apache.commons.io.IOUtils;
-import org.opencastproject.ingest.api.IngestException;
-import org.opencastproject.ingest.api.IngestService;
 import org.opencastproject.job.api.JobContext;
+import org.opencastproject.mediapackage.Attachment;
 import org.opencastproject.mediapackage.MediaPackage;
+import org.opencastproject.mediapackage.MediaPackageElement;
+import org.opencastproject.mediapackage.MediaPackageElementBuilderFactory;
 import org.opencastproject.mediapackage.MediaPackageElementFlavor;
-import org.opencastproject.mediapackage.MediaPackageException;
 import org.opencastproject.mediapackage.Track;
 import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
@@ -50,65 +52,62 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationHandler {
-	
-	static final Logger logger = LoggerFactory.getLogger(WaveformWorkflowOperationHandler.class);
-  
-	/**
-	 * Source flavor configuration property name.
-	 */
-	private static final String SOURCE_FLAVOR_PROPERTY = "source-flavor";
+
+  static final Logger logger = LoggerFactory.getLogger(WaveformWorkflowOperationHandler.class);
+
+  /**
+   * Source flavor configuration property name.
+   */
+  private static final String SOURCE_FLAVOR_PROPERTY = "source-flavor";
   /**
    * Target flavor configuration property name.
    */
   private static final String TARGET_FLAVOR_PROPERTY = "target-flavor";
-	/** The configuration options for this handler */
-	private static final SortedMap<String, String> CONFIG_OPTIONS;
-	static {
-		CONFIG_OPTIONS = new TreeMap<String, String>();
-		CONFIG_OPTIONS.put(SOURCE_FLAVOR_PROPERTY, "The source wave file flavor.");
-		CONFIG_OPTIONS.put(TARGET_FLAVOR_PROPERTY, "The target png file output flavor.");
-	}
+  /**
+   * The configuration options for this handler
+   */
+  private static final SortedMap<String, String> CONFIG_OPTIONS;
+  static {
+    CONFIG_OPTIONS = new TreeMap<String, String>();
+    CONFIG_OPTIONS.put(SOURCE_FLAVOR_PROPERTY, "The source wave file flavor.");
+    CONFIG_OPTIONS.put(TARGET_FLAVOR_PROPERTY, "The target png file output flavor.");
+  }
 
   /**
    * Waveform image width.
    */
-	static final int IMAGE_WIDTH = 5000;
+  static final int IMAGE_WIDTH = 5000;
   /**
    * Waveform image height.
    */
-	static final int IMAGE_HEIGHT = 500;
-
-	/**
-	 * The workspace.
-	 */
-	private Workspace workspace;
-	/**
-	 * The ingestservice.
-	 */
-	private IngestService ingestService;
-
+  static final int IMAGE_HEIGHT = 500;
+  /**
+   * The workspace.
+   */
+  private Workspace workspace;
 
   @Override
-	public void activate(ComponentContext cc) {
-	 super.activate(cc);
-	 logger.info("activating waveform workflow operation handler");
-	}
-  
-  /**
-	 * {@inheritDoc}
-	 *
-	 * @see org.opencastproject.workflow.api.WorkflowOperationHandler#getConfigurationOptions()
-	 */
-	@Override
-	public SortedMap<String, String> getConfigurationOptions() {
-		return CONFIG_OPTIONS;
-	}
+  public void activate(ComponentContext cc) {
+    super.activate(cc);
+    logger.info("Registering waveform workflow operation handler");
+  }
 
-	@Override
-	public WorkflowOperationResult start(WorkflowInstance workflowInstance, JobContext context) 
-            throws WorkflowOperationException {
-		
-		MediaPackage mediaPackage = workflowInstance.getMediaPackage();
+  /**
+   * {@inheritDoc}
+   *
+   * @see
+   * org.opencastproject.workflow.api.WorkflowOperationHandler#getConfigurationOptions()
+   */
+  @Override
+  public SortedMap<String, String> getConfigurationOptions() {
+    return CONFIG_OPTIONS;
+  }
+
+  @Override
+  public WorkflowOperationResult start(WorkflowInstance workflowInstance, JobContext context)
+          throws WorkflowOperationException {
+
+    MediaPackage mediaPackage = workflowInstance.getMediaPackage();
 
     String sourceFlavorProperty = workflowInstance.getCurrentOperation().getConfiguration(SOURCE_FLAVOR_PROPERTY);
     MediaPackageElementFlavor sourceFlavor = MediaPackageElementFlavor.parseFlavor(sourceFlavorProperty);
@@ -116,559 +115,563 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
     String targetFlavorProperty = workflowInstance.getCurrentOperation().getConfiguration(TARGET_FLAVOR_PROPERTY);
     MediaPackageElementFlavor targetFlavor = MediaPackageElementFlavor.parseFlavor(targetFlavorProperty);
 
-		Track[] tracks = mediaPackage.getTracks(sourceFlavor);
-		if (tracks.length == 0) {
-		  logger.info("Skipping Waveform generation because no wave file is present in the mediapackage {}",
+    Track[] tracks = mediaPackage.getTracks(sourceFlavor);
+    if (tracks.length == 0) {
+      logger.info("Skipping Waveform generation because no wave file is present in the mediapackage {}",
               mediaPackage.getIdentifier().compact());
-		  return createResult(Action.SKIP);
-		}
-		logger.info("Generating waveform png from {}", tracks[0].getURI().toString());
-		
-		WaveUtils waveUtils = null;
-		BufferedImage bufferedImage = null;
-		ByteArrayOutputStream os = null;
-		InputStream is = null;
-		try {
-			File waveFile = workspace.get(tracks[0].getURI());
-			waveUtils = new WaveUtils(waveFile);
-			bufferedImage = waveUtils.generateWaveformImage(true);
-			
-			// finally save the image to file
-			logger.debug("putting bufferedImage in ByteArrayOutputstream");
-			os = new ByteArrayOutputStream();
-			ImageIO.write(bufferedImage, "png", os);
-			is = new ByteArrayInputStream(os.toByteArray());
-			logger.debug("adding waveform as an attachment to mediapackage");
-			mediaPackage = ingestService.addAttachment(is, "waveform.png", targetFlavor, mediaPackage);
-      workflowInstance.setMediaPackage(mediaPackage);
+      return createResult(Action.SKIP);
+    }
+    logger.info("Generating waveform png from {}", tracks[0].getURI().toString());
 
-      logger.info("Generation waveform png for {} finished.", tracks[0].getURI().toString());
-			return createResult(mediaPackage, Action.CONTINUE);
-			
-		} catch (MediaPackageException ex) {
-			logger.error("failed to put waveform image to mediapackage", ex);
-		} catch (IngestException ex) {
-			logger.error("failed to ingest waveform image", ex);
-		} catch (WaveException ex) {
-			logger.error("creating waveform image failed", ex);
-		} catch (NotFoundException ex) {
-			logger.error("wave file not found", ex);
-		} catch (IOException ex) {
-			logger.error("io exception occures while creating waveform image", ex);
-		} finally {
-			if (is != null) {
-				IOUtils.closeQuietly(is);
-			}
-			if (os != null) {
-				IOUtils.closeQuietly(os);
-			}
-		}
-		
-		return createResult(Action.SKIP);
-	}
-	
-	/**
-	 * Set the workspace.
-	 * @param workspace the workspace
-	 */
-	protected void setWorkspace(Workspace workspace) {
-	 this.workspace = workspace;
-	}
+    WaveUtils waveUtils = null;
+    BufferedImage bufferedImage = null;
+    ByteArrayOutputStream os = null;
+    InputStream is = null;
+    try {
+      File waveFile = workspace.get(tracks[0].getURI());
+      waveUtils = new WaveUtils(waveFile);
+      bufferedImage = waveUtils.generateWaveformImage(true);
 
-	/**
-	 * Set the ingestservice.
-	 * @param ingestService 
-	 */
-	protected void setIngestService(IngestService ingestService) {
-	 this.ingestService = ingestService;
-	}
-	
-	/**
-	 * This class provides wave-file operations like waveform extraction.
-	 */
-	public class WaveUtils {
-		
-		private Wave wave;
-		private float max = Float.MIN_VALUE;
-		private float[][] pos = null;
-		private float[][] neg = null;
-		
-		public WaveUtils(String filePath) throws IOException, WaveException {
-			wave = new Wave(filePath);
-			logger.debug("{}:\n{}", filePath, wave.getWaveHeader().toString());
-		}
-		
-		public WaveUtils(File file) throws IOException, WaveException {
-			wave = new Wave(file);
-			logger.debug("{}:\n{}", file.getAbsolutePath(), wave.getWaveHeader().toString());
-		}
+      // finally save the image to file
+      logger.debug("putting bufferedImage in ByteArrayOutputstream");
+      os = new ByteArrayOutputStream();
+      ImageIO.write(bufferedImage, "png", os);
+      is = new ByteArrayInputStream(os.toByteArray());
+      logger.debug("adding waveform png to mediapackage");
+      String elementId = UUID.randomUUID().toString();
+      URI waveformUri = workspace.put(mediaPackage.getIdentifier().compact(), elementId, "waveform.png", is);
+      Attachment attachment = (Attachment) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
+            .elementFromURI(waveformUri, MediaPackageElement.Type.Attachment, targetFlavor);
+      mediaPackage.add(attachment);
 
-		/**
-		 * Extract waveform from audio wave file.
-		 * @param verticalScale if true, the wave will be streched vertically
-		 * @return waveform
-		 * @throws IOException if reading wave audio file failed
-		 */
-		public BufferedImage generateWaveformImage(boolean verticalScale) throws IOException {
-			readWaveFile();
+      logger.info("Generation waveform png from {} finished.", tracks[0].getURI().toString());
+      return createResult(mediaPackage, Action.CONTINUE);
 
-			BufferedImage image = new BufferedImage(IMAGE_WIDTH, IMAGE_HEIGHT, 
-					BufferedImage.TYPE_INT_ARGB);
-			Graphics2D graphic = image.createGraphics();
-			graphic.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-								RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-			graphic.setColor(Color.WHITE);
-			graphic.fill(new Rectangle(IMAGE_WIDTH, IMAGE_HEIGHT));
+    } catch (WaveException ex) {
+      logger.error("creating waveform image failed", ex);
+    } catch (NotFoundException ex) {
+      logger.error("wave file not found", ex);
+    } catch (IOException ex) {
+      logger.error("io exception occures while creating waveform image", ex);
+    } finally {
+      IOUtils.closeQuietly(is);
+      IOUtils.closeQuietly(os);
+    }
 
-			int centerLine = IMAGE_HEIGHT / 2;
-			if (wave.getWaveHeader().getBlockAlign() == 1) {
-				centerLine = IMAGE_HEIGHT;
-			}
+    return createResult(Action.SKIP);
+  }
 
-			// plott first channel
-			graphic.setColor(Color.BLACK);
-			for (int w = 0; w < IMAGE_WIDTH; w++) {
-				int y1;
-				int y2;
-				if (verticalScale) {
-					y1 = (int) (centerLine - ((pos[w][0] / max) * centerLine));
-					y2 = (int) (centerLine - ((neg[w][0] / max) * centerLine));
-				} else {
-					y1 = (int) (centerLine - (pos[w][0] * centerLine));
-					y2 = (int) (centerLine - (neg[w][0] * centerLine));
-				}
+  /**
+   * Set the workspace.
+   *
+   * @param workspace the workspace
+   */
+  protected void setWorkspace(Workspace workspace) {
+    this.workspace = workspace;
+  }
 
-				graphic.drawLine(w, y1, w, y2);
-			}
-			return image;
-		}
+  /**
+   * This class provides wave-file operations like waveform extraction.
+   */
+  public class WaveUtils {
 
-		private void readWaveFile() throws IOException {
-			int framesCount = 0;
+    private Wave wave;
+    private float max = Float.MIN_VALUE;
+    private float[][] pos = null;
+    private float[][] neg = null;
 
-			WaveHeader header = wave.getWaveHeader();
-			int channels = wave.getWaveHeader().getChannels();
-			// audio length in seconds
-			long sec = header.getSubChunk2Size() / header.getByteRate();
-			// n Samples per pixel
-			int nSamples = (int)(header.getSampleRate() * sec / IMAGE_WIDTH);
-			logger.debug("sec: {}, nSamples: {}", sec, nSamples);
+    public WaveUtils(String filePath) throws IOException, WaveException {
+      wave = new Wave(filePath);
+      logger.debug("{}:\n{}", filePath, wave.getWaveHeader().toString());
+    }
 
-			float[][] frames;
-			pos = new float[IMAGE_WIDTH][channels];
-			neg = new float[IMAGE_WIDTH][channels];
+    public WaveUtils(File file) throws IOException, WaveException {
+      wave = new Wave(file);
+      logger.debug("{}:\n{}", file.getAbsolutePath(), wave.getWaveHeader().toString());
+    }
 
-			for (int chunk = 0; chunk < IMAGE_WIDTH; chunk++) {
-				frames = wave.getNFrames(nSamples);
-				if (frames == null) break;
-				framesCount += frames.length;
+    /**
+     * Extract waveform from audio wave file.
+     *
+     * @param verticalScale if true, the wave will be streched vertically
+     * @return waveform
+     * @throws IOException if reading wave audio file failed
+     */
+    public BufferedImage generateWaveformImage(boolean verticalScale) throws IOException {
+      readWaveFile();
 
-				double[] posTmp = new double[channels];
-				double[] negTmp = new double[channels];
+      BufferedImage image = new BufferedImage(IMAGE_WIDTH, IMAGE_HEIGHT, BufferedImage.TYPE_INT_ARGB);
+      Graphics2D graphic = image.createGraphics();
+      graphic.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+      graphic.setColor(Color.WHITE);
+      graphic.fill(new Rectangle(IMAGE_WIDTH, IMAGE_HEIGHT));
 
-				for (int f = 0; f < frames.length; f++) {
-					for (int c = 0; c < channels; c++) {
-						if (frames[f][0] > 0) {
-							posTmp[c] += frames[f][c];
-						} else {
-							negTmp[c] += frames[f][c];
-						}
-					}
-				}
+      int centerLine = IMAGE_HEIGHT / 2;
+      if (wave.getWaveHeader().getBlockAlign() == 1) {
+        centerLine = IMAGE_HEIGHT;
+      }
 
-				if (frames.length > 0) {
-					for (int c = 0; c < channels; c++) {
-						pos[chunk][c] = (float) (posTmp[c] / frames.length);
-						neg[chunk][c] = (float) (negTmp[c] / frames.length);
-						max = max > pos[chunk][c] ? max : pos[chunk][c];
-						max = max > -1 * neg[chunk][c] ? max : -1 * neg[chunk][c];
-					}
-				}
-			}
-			wave.closeDataStream();
+      // plott first channel
+      graphic.setColor(Color.BLACK);
+      for (int w = 0; w < IMAGE_WIDTH; w++) {
+        int y1;
+        int y2;
+        if (verticalScale) {
+          y1 = (int) (centerLine - ((pos[w][0] / max) * centerLine));
+          y2 = (int) (centerLine - ((neg[w][0] / max) * centerLine));
+        } else {
+          y1 = (int) (centerLine - (pos[w][0] * centerLine));
+          y2 = (int) (centerLine - (neg[w][0] * centerLine));
+        }
 
-			logger.debug("read: {} of {}", framesCount, header.getSubChunk2Size() / (header.getBlockAlign()));
-		}
+        graphic.drawLine(w, y1, w, y2);
+      }
+      return image;
+    }
 
-		/**
-		 * Exception can occure by processing Wave data.
-		 */
-		public class WaveException extends Exception {
-			public WaveException(String message) {
-				super(message);
-			}
-		}
+    private void readWaveFile() throws IOException {
+      int framesCount = 0;
 
-		/**
-		 * Wave class encapsulates the wave data in a waveheader and have some methods to read content.
-		 */
-		class Wave {
+      WaveHeader header = wave.getWaveHeader();
+      int channels = wave.getWaveHeader().getChannels();
+      // audio length in seconds
+      long sec = header.getSubChunk2Size() / header.getByteRate();
+      // n Samples per pixel
+      int nSamples = (int) (header.getSampleRate() * sec / IMAGE_WIDTH);
+      logger.debug("sec: {}, nSamples: {}", sec, nSamples);
 
-			private WaveUtils.WaveHeader waveHeader;
-			private InputStream inputStream;
+      float[][] frames;
+      pos = new float[IMAGE_WIDTH][channels];
+      neg = new float[IMAGE_WIDTH][channels];
 
-			/**
-			 * Constructor
-			 *
-			 * @param filename Wave file
-			 * @throws IOException
-			 */
-			public Wave(String filename) throws IOException, WaveException {
-				this(new File(filename));
-			}
+      for (int chunk = 0; chunk < IMAGE_WIDTH; chunk++) {
+        frames = wave.getNFrames(nSamples);
+        if (frames == null) {
+          break;
+        }
+        framesCount += frames.length;
 
-			/**
-			 * Constructor
-			 *
-			 * @param f the wav file
-			 * @throws IOException
-			 */
-			public Wave(File f) throws IOException, WaveException {
-				this(new FileInputStream(f));
-			}
+        double[] posTmp = new double[channels];
+        double[] negTmp = new double[channels];
 
-			/**
-			 * Constructor
-			 *
-			 * @param inputStream Wave file input stream
-			 * @throws IOException
-			 */
-			public Wave(InputStream inputStream) throws IOException, WaveException {
-				this.inputStream = inputStream;
-				waveHeader = new WaveUtils.WaveHeader(inputStream);
-
-				if (!waveHeader.isValid()) {
-					throw new WaveException("Invalid Wave Header");
-				}
-			}
-
-			/**
-			 * Get the wave header
-			 *
-			 * @return waveHeader
-			 */
-			public WaveUtils.WaveHeader getWaveHeader() {
-				return waveHeader;
-			}
-
-			/**
-			 * Returns true if not EOF.
-			 * @return true if not EOF
-			 */
-			public boolean hasMoreSamples() {
-				try {
-					return inputStream.available() > 0;
-				} catch (IOException ex) {
-					// stream closed
-					return false;
-				}
-			}
-
-			/**
-			 * Get n samples. 
-			 * First index specifies sample index and the second a channel.
-			 * @param n samples to read
-			 * @return samples readed, the length can be different from n
-			 * @throws IOException 
-			 */
-			public float[][] getNFrames(int n) throws IOException {
-                // read raw audio data for n samples
-				byte[] rawSamples = new byte[n * getWaveHeader().getBlockAlign()];
-				int bytesRead = inputStream.read(rawSamples);
-				if (bytesRead == -1) {
-					closeDataStream();
-					return null;
-				}
-				int channels = getWaveHeader().getChannels();
-				int bytesPerSample = getWaveHeader().getBlockAlign();
-				float[][] frames = new float[bytesRead / bytesPerSample][channels];
-
-				int maxAmplitude = 1 << (waveHeader.getBitsPerSample() - 1);
-				if (getWaveHeader().getBitsPerSample() == 8) { // one more bit for unsigned value
-					maxAmplitude <<= 1;
-				}
-
-                // parse and normalize raw data
-				for (int f = 0; f < frames.length; f++) {
-					for (int c = 0; c < channels; c++) {
-						short sample = 0;
-						for (int b = 0; b < bytesPerSample / channels; b++) {
-							sample |= (short)(rawSamples[f * bytesPerSample + b] & 0xFF) << (b * 8);
-						}
-						frames[f][c] = (float) sample / maxAmplitude;
-					}
-				}
-
-				return frames;
-			}
-
-			/**
-			 * Close file stream.
-			 */
-			public void closeDataStream() {
-				IOUtils.closeQuietly(inputStream);
-			}
-		}
-
-		/**
-		 * Class for encapsulating all information for the wave file
-		 */
-		class WaveHeader {
-
-			public static final String RIFF_HEADER = "RIFF";
-			public static final String WAVE_HEADER = "WAVE";
-			public static final String FMT_HEADER = "fmt ";
-			public static final String DATA_HEADER = "data";
-			private boolean valid = false;
-			private String chunkId = ""; // 4 bytes
-			private long chunkSize = 0L; // unsigned 4 bytes, little endian
-			private String format = ""; // 4 bytes
-			private String subChunk1Id = ""; // 4 bytes
-			private long subChunk1Size = 0L; // unsigned 4 bytes, little endian
-			private int audioFormat = 0; // unsigned 2 bytes, little endian
-			private int channels = 0; // unsigned 2 bytes, little endian
-			private long sampleRate = 0L; // unsigned 4 bytes, little endian
-			private long byteRate = 0L; // unsigned 4 bytes, little endian
-			private int blockAlign = 0; // unsigned 2 bytes, little endian
-			private int bitsPerSample = 0; // unsigned 2 bytes, little endian
-			private String subChunk2Id = ""; // 4 bytes
-			private long subChunk2Size = 0L; // unsigned 4 bytes, little endian
-
-			public WaveHeader(InputStream inputStream) {
-				valid = loadHeader(inputStream);
-			}
-
-			private boolean loadHeader(InputStream inputStream) {
-
-				byte[] headerBuffer = null;
-				try {
-
-					// get RIFF chunk descriptor
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					chunkId = new String(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					chunkSize = parseLongLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					format = new String(headerBuffer);
-
-					// get fmt sub-chunk 1
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					subChunk1Id = new String(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					subChunk1Size = parseLongLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[2];
-					inputStream.read(headerBuffer);
-					audioFormat = parseIntLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[2];
-					inputStream.read(headerBuffer);
-					channels = parseIntLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					sampleRate = parseLongLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					byteRate = parseLongLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[2];
-					inputStream.read(headerBuffer);
-					blockAlign = parseIntLittleEndian(headerBuffer);
-
-					headerBuffer = new byte[2];
-					inputStream.read(headerBuffer);
-					bitsPerSample = parseIntLittleEndian(headerBuffer);
-
-					if (subChunk1Size > 16) {
-						// should be empty on PCM
-						headerBuffer = new byte[(int)subChunk1Size - 16];
-						inputStream.read(headerBuffer);
-					}
-
-					// get data sub-chunk 2
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					subChunk2Id = new String(headerBuffer);
-
-					headerBuffer = new byte[4];
-					inputStream.read(headerBuffer);
-					subChunk2Size = parseLongLittleEndian(headerBuffer);
-
-				} catch (IOException e) {
-					logger.error("Waveheader read failure", e);
-					return false;
-				} catch (IllegalArgumentException ex) {
-                    logger.error("Waveheader parsing failed", ex);
-                    return false;
-                }
-
-				if (bitsPerSample != 8 && bitsPerSample != 16) {
-					logger.error("WaveHeader: only supports bitsPerSample 8 or 16");
-					return false;
-				}
-
-				// check the format is supported
-				if (chunkId.toUpperCase().equals(RIFF_HEADER) && format.toUpperCase().equals(WAVE_HEADER)
-						&& FMT_HEADER.equals(subChunk1Id) && DATA_HEADER.equals(subChunk2Id)
-						&& audioFormat == 1 && byteRate == sampleRate * channels * bitsPerSample / 8
-						&& blockAlign == channels * bitsPerSample / 8) {
-					return true;
-				} else {
-					logger.error("WaveHeader: Unsupported header format");
-					if (!chunkId.toUpperCase().equals(RIFF_HEADER))
-						logger.error("chunckId {} is not {}", chunkId.toUpperCase(), RIFF_HEADER);
-
-					if (!format.toUpperCase().equals(WAVE_HEADER))
-						logger.error("format {} is not {}", format.toUpperCase(), WAVE_HEADER);
-
-					if (!FMT_HEADER.equals(subChunk1Id))
-						logger.error("subChunk1Id {} is not {}", subChunk1Id, FMT_HEADER);
-
-					if (!DATA_HEADER.equals(subChunk2Id))
-						logger.error("subChunk2Id {} is not {}", subChunk2Id,  DATA_HEADER);
-
-					if (audioFormat != 1)
-						logger.error("audioFormat {} is not 1", audioFormat);
-
-					if (byteRate != sampleRate * channels * bitsPerSample / 8)
-						logger.error("byteRate ({}) != sampleRate ({}) * channels ({}) * bitsPerSample ({}) / 8",
-                    new Object[] { byteRate, sampleRate, channels, bitsPerSample });
-
-					if (blockAlign != channels * bitsPerSample / 8)
-						logger.error("blockAlign ({}) != channels({}) * bitsPerSample ({}) / 8",
-                    new Object[] { blockAlign, channels, bitsPerSample });
-				}
-
-				return false;
-			}
-            
-            /**
-             * Parse an 2 byte (16 bit) signed value from raw byte array (little endian).
-             * @param rawData byte array in little endian format
-             * @return parsed value
-             * @throws IllegalArgumentException array length != 2
-             */
-            private int parseIntLittleEndian(byte[] rawData) throws IllegalArgumentException {
-                if (rawData.length != 2) {
-                    throw new IllegalArgumentException("rawData schould be 2 byte long");
-                }
-                
-                return (int)(rawData[0] & 0xFF) | (int)(rawData[1] & 0xFF) << 8;
+        for (int f = 0; f < frames.length; f++) {
+          for (int c = 0; c < channels; c++) {
+            if (frames[f][0] > 0) {
+              posTmp[c] += frames[f][c];
+            } else {
+              negTmp[c] += frames[f][c];
             }
-            
-            /**
-             * Parse an 4 byte (32 bit) signed value from raw byte array (little endian).
-             * @param rawData byte array in little endian format
-             * @return parsed value
-             * @throws IllegalArgumentException array length != 4
-             */
-            private long parseLongLittleEndian(byte[] rawData) throws IllegalArgumentException {
-                if (rawData.length != 4) {
-                    throw new IllegalArgumentException("rawData schould be 4 byte long");
-                }
-                
-                return (long)(rawData[0] & 0xFF)
-                        | (long)(rawData[1] & 0xFF) << 8
-                        | (long)(rawData[2] & 0xFF) << 16
-                        | (long)(rawData[3] & 0xFF) << 24;
+          }
+        }
+
+        if (frames.length > 0) {
+          for (int c = 0; c < channels; c++) {
+            pos[chunk][c] = (float) (posTmp[c] / frames.length);
+            neg[chunk][c] = (float) (negTmp[c] / frames.length);
+            max = max > pos[chunk][c] ? max : pos[chunk][c];
+            max = max > -1 * neg[chunk][c] ? max : -1 * neg[chunk][c];
+          }
+        }
+      }
+      wave.closeDataStream();
+
+      logger.debug("read: {} of {}", framesCount, header.getSubChunk2Size() / (header.getBlockAlign()));
+    }
+
+    /**
+     * Exception can occure by processing Wave data.
+     */
+    public class WaveException extends Exception {
+
+      public WaveException(String message) {
+        super(message);
+      }
+    }
+
+    /**
+     * Wave class encapsulates the wave data in a waveheader and have some
+     * methods to read content.
+     */
+    class Wave {
+
+      private WaveUtils.WaveHeader waveHeader;
+      private InputStream inputStream;
+
+      /**
+       * Constructor
+       *
+       * @param filename Wave file
+       * @throws IOException
+       */
+      public Wave(String filename) throws IOException, WaveException {
+        this(new File(filename));
+      }
+
+      /**
+       * Constructor
+       *
+       * @param f the wav file
+       * @throws IOException
+       */
+      public Wave(File f) throws IOException, WaveException {
+        this(new FileInputStream(f));
+      }
+
+      /**
+       * Constructor
+       *
+       * @param inputStream Wave file input stream
+       * @throws IOException
+       */
+      public Wave(InputStream inputStream) throws IOException, WaveException {
+        this.inputStream = inputStream;
+        waveHeader = new WaveUtils.WaveHeader(inputStream);
+
+        if (!waveHeader.isValid()) {
+          throw new WaveException("Invalid Wave Header");
+        }
+      }
+
+      /**
+       * Get the wave header
+       *
+       * @return waveHeader
+       */
+      public WaveUtils.WaveHeader getWaveHeader() {
+        return waveHeader;
+      }
+
+      /**
+       * Returns true if not EOF.
+       *
+       * @return true if not EOF
+       */
+      public boolean hasMoreSamples() {
+        try {
+          return inputStream.available() > 0;
+        } catch (IOException ex) {
+          // stream closed
+          return false;
+        }
+      }
+
+      /**
+       * Get n samples. First index specifies sample index and the second a
+       * channel.
+       *
+       * @param n samples to read
+       * @return samples readed, the length can be different from n
+       * @throws IOException
+       */
+      public float[][] getNFrames(int n) throws IOException {
+        // read raw audio data for n samples
+        byte[] rawSamples = new byte[n * getWaveHeader().getBlockAlign()];
+        int bytesRead = inputStream.read(rawSamples);
+        if (bytesRead == -1) {
+          closeDataStream();
+          return null;
+        }
+        int channels = getWaveHeader().getChannels();
+        int bytesPerSample = getWaveHeader().getBlockAlign();
+        float[][] frames = new float[bytesRead / bytesPerSample][channels];
+
+        int maxAmplitude = 1 << (waveHeader.getBitsPerSample() - 1);
+        if (getWaveHeader().getBitsPerSample() == 8) { // one more bit for unsigned value
+          maxAmplitude <<= 1;
+        }
+
+        // parse and normalize raw data
+        for (int f = 0; f < frames.length; f++) {
+          for (int c = 0; c < channels; c++) {
+            short sample = 0;
+            for (int b = 0; b < bytesPerSample / channels; b++) {
+              sample |= (short) (rawSamples[f * bytesPerSample + b] & 0xFF) << (b * 8);
             }
+            frames[f][c] = (float) sample / maxAmplitude;
+          }
+        }
 
-			public boolean isValid() {
-				return valid;
-			}
+        return frames;
+      }
 
-			public String getChunkId() {
-				return chunkId;
-			}
+      /**
+       * Close file stream.
+       */
+      public void closeDataStream() {
+        IOUtils.closeQuietly(inputStream);
+      }
+    }
 
-			public long getChunkSize() {
-				return chunkSize;
-			}
+    /**
+     * Class for encapsulating all information for the wave file
+     */
+    class WaveHeader {
 
-			public String getFormat() {
-				return format;
-			}
+      public static final String RIFF_HEADER = "RIFF";
+      public static final String WAVE_HEADER = "WAVE";
+      public static final String FMT_HEADER = "fmt ";
+      public static final String DATA_HEADER = "data";
+      private boolean valid = false;
+      private String chunkId = ""; // 4 bytes
+      private long chunkSize = 0L; // unsigned 4 bytes, little endian
+      private String format = ""; // 4 bytes
+      private String subChunk1Id = ""; // 4 bytes
+      private long subChunk1Size = 0L; // unsigned 4 bytes, little endian
+      private int audioFormat = 0; // unsigned 2 bytes, little endian
+      private int channels = 0; // unsigned 2 bytes, little endian
+      private long sampleRate = 0L; // unsigned 4 bytes, little endian
+      private long byteRate = 0L; // unsigned 4 bytes, little endian
+      private int blockAlign = 0; // unsigned 2 bytes, little endian
+      private int bitsPerSample = 0; // unsigned 2 bytes, little endian
+      private String subChunk2Id = ""; // 4 bytes
+      private long subChunk2Size = 0L; // unsigned 4 bytes, little endian
 
-			public String getSubChunk1Id() {
-				return subChunk1Id;
-			}
+      public WaveHeader(InputStream inputStream) {
+        valid = loadHeader(inputStream);
+      }
 
-			public long getSubChunk1Size() {
-				return subChunk1Size;
-			}
+      private boolean loadHeader(InputStream inputStream) {
 
-			public int getAudioFormat() {
-				return audioFormat;
-			}
+        byte[] headerBuffer = null;
+        try {
 
-			public int getChannels() {
-				return channels;
-			}
+          // get RIFF chunk descriptor
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          chunkId = new String(headerBuffer);
 
-			public int getSampleRate() {
-				return (int) sampleRate;
-			}
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          chunkSize = parseLongLittleEndian(headerBuffer);
 
-			public int getByteRate() {
-				return (int) byteRate;
-			}
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          format = new String(headerBuffer);
 
-			public int getBlockAlign() {
-				return blockAlign;
-			}
+          // get fmt sub-chunk 1
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          subChunk1Id = new String(headerBuffer);
 
-			public int getBitsPerSample() {
-				return bitsPerSample;
-			}
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          subChunk1Size = parseLongLittleEndian(headerBuffer);
 
-			public String getSubChunk2Id() {
-				return subChunk2Id;
-			}
+          headerBuffer = new byte[2];
+          inputStream.read(headerBuffer);
+          audioFormat = parseIntLittleEndian(headerBuffer);
 
-			public long getSubChunk2Size() {
-				return subChunk2Size;
-			}
+          headerBuffer = new byte[2];
+          inputStream.read(headerBuffer);
+          channels = parseIntLittleEndian(headerBuffer);
 
-			public String toString() {
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          sampleRate = parseLongLittleEndian(headerBuffer);
 
-				StringBuffer sb = new StringBuffer();
-				sb.append("chunkId: " + chunkId);
-				sb.append("\n");
-				sb.append("chunkSize: " + chunkSize);
-				sb.append("\n");
-				sb.append("format: " + format);
-				sb.append("\n");
-				sb.append("subChunk1Id: " + subChunk1Id);
-				sb.append("\n");
-				sb.append("subChunk1Size: " + subChunk1Size);
-				sb.append("\n");
-				sb.append("audioFormat: " + audioFormat);
-				sb.append("\n");
-				sb.append("channels: " + channels);
-				sb.append("\n");
-				sb.append("sampleRate: " + sampleRate);
-				sb.append("\n");
-				sb.append("byteRate: " + byteRate);
-				sb.append("\n");
-				sb.append("blockAlign: " + blockAlign);
-				sb.append("\n");
-				sb.append("bitsPerSample: " + bitsPerSample);
-				sb.append("\n");
-				sb.append("subChunk2Id: " + subChunk2Id);
-				sb.append("\n");
-				sb.append("subChunk2Size: " + subChunk2Size);
-				return sb.toString();
-			}
-		}
-	}
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          byteRate = parseLongLittleEndian(headerBuffer);
+
+          headerBuffer = new byte[2];
+          inputStream.read(headerBuffer);
+          blockAlign = parseIntLittleEndian(headerBuffer);
+
+          headerBuffer = new byte[2];
+          inputStream.read(headerBuffer);
+          bitsPerSample = parseIntLittleEndian(headerBuffer);
+
+          if (subChunk1Size > 16) {
+            // should be empty on PCM
+            headerBuffer = new byte[(int) subChunk1Size - 16];
+            inputStream.read(headerBuffer);
+          }
+
+          // get data sub-chunk 2
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          subChunk2Id = new String(headerBuffer);
+
+          headerBuffer = new byte[4];
+          inputStream.read(headerBuffer);
+          subChunk2Size = parseLongLittleEndian(headerBuffer);
+
+        } catch (IOException e) {
+          logger.error("Waveheader read failure", e);
+          return false;
+        } catch (IllegalArgumentException ex) {
+          logger.error("Waveheader parsing failed", ex);
+          return false;
+        }
+
+        if (bitsPerSample != 8 && bitsPerSample != 16) {
+          logger.error("WaveHeader: only supports bitsPerSample 8 or 16");
+          return false;
+        }
+
+        // check the format is supported
+        if (chunkId.toUpperCase().equals(RIFF_HEADER) && format.toUpperCase().equals(WAVE_HEADER)
+                && FMT_HEADER.equals(subChunk1Id) && DATA_HEADER.equals(subChunk2Id)
+                && audioFormat == 1 && byteRate == sampleRate * channels * bitsPerSample / 8
+                && blockAlign == channels * bitsPerSample / 8) {
+          return true;
+        } else {
+          logger.error("WaveHeader: Unsupported header format");
+          if (!chunkId.toUpperCase().equals(RIFF_HEADER)) {
+            logger.error("chunckId {} is not {}", chunkId.toUpperCase(), RIFF_HEADER);
+          }
+
+          if (!format.toUpperCase().equals(WAVE_HEADER)) {
+            logger.error("format {} is not {}", format.toUpperCase(), WAVE_HEADER);
+          }
+
+          if (!FMT_HEADER.equals(subChunk1Id)) {
+            logger.error("subChunk1Id {} is not {}", subChunk1Id, FMT_HEADER);
+          }
+
+          if (!DATA_HEADER.equals(subChunk2Id)) {
+            logger.error("subChunk2Id {} is not {}", subChunk2Id, DATA_HEADER);
+          }
+
+          if (audioFormat != 1) {
+            logger.error("audioFormat {} is not 1", audioFormat);
+          }
+
+          if (byteRate != sampleRate * channels * bitsPerSample / 8) {
+            logger.error("byteRate ({}) != sampleRate ({}) * channels ({}) * bitsPerSample ({}) / 8",
+                    new Object[]{byteRate, sampleRate, channels, bitsPerSample});
+          }
+
+          if (blockAlign != channels * bitsPerSample / 8) {
+            logger.error("blockAlign ({}) != channels({}) * bitsPerSample ({}) / 8",
+                    new Object[]{blockAlign, channels, bitsPerSample});
+          }
+        }
+
+        return false;
+      }
+
+      /**
+       * Parse an 2 byte (16 bit) signed value from raw byte array (little
+       * endian).
+       *
+       * @param rawData byte array in little endian format
+       * @return parsed value
+       * @throws IllegalArgumentException array length != 2
+       */
+      private int parseIntLittleEndian(byte[] rawData) throws IllegalArgumentException {
+        if (rawData.length != 2) {
+          throw new IllegalArgumentException("rawData schould be 2 byte long");
+        }
+
+        return (int) (rawData[0] & 0xFF) | (int) (rawData[1] & 0xFF) << 8;
+      }
+
+      /**
+       * Parse an 4 byte (32 bit) signed value from raw byte array (little
+       * endian).
+       *
+       * @param rawData byte array in little endian format
+       * @return parsed value
+       * @throws IllegalArgumentException array length != 4
+       */
+      private long parseLongLittleEndian(byte[] rawData) throws IllegalArgumentException {
+        if (rawData.length != 4) {
+          throw new IllegalArgumentException("rawData schould be 4 byte long");
+        }
+
+        return (long) (rawData[0] & 0xFF)
+                | (long) (rawData[1] & 0xFF) << 8
+                | (long) (rawData[2] & 0xFF) << 16
+                | (long) (rawData[3] & 0xFF) << 24;
+      }
+
+      public boolean isValid() {
+        return valid;
+      }
+
+      public String getChunkId() {
+        return chunkId;
+      }
+
+      public long getChunkSize() {
+        return chunkSize;
+      }
+
+      public String getFormat() {
+        return format;
+      }
+
+      public String getSubChunk1Id() {
+        return subChunk1Id;
+      }
+
+      public long getSubChunk1Size() {
+        return subChunk1Size;
+      }
+
+      public int getAudioFormat() {
+        return audioFormat;
+      }
+
+      public int getChannels() {
+        return channels;
+      }
+
+      public int getSampleRate() {
+        return (int) sampleRate;
+      }
+
+      public int getByteRate() {
+        return (int) byteRate;
+      }
+
+      public int getBlockAlign() {
+        return blockAlign;
+      }
+
+      public int getBitsPerSample() {
+        return bitsPerSample;
+      }
+
+      public String getSubChunk2Id() {
+        return subChunk2Id;
+      }
+
+      public long getSubChunk2Size() {
+        return subChunk2Size;
+      }
+
+      public String toString() {
+
+        StringBuffer sb = new StringBuffer();
+        sb.append("chunkId: " + chunkId);
+        sb.append("\n");
+        sb.append("chunkSize: " + chunkSize);
+        sb.append("\n");
+        sb.append("format: " + format);
+        sb.append("\n");
+        sb.append("subChunk1Id: " + subChunk1Id);
+        sb.append("\n");
+        sb.append("subChunk1Size: " + subChunk1Size);
+        sb.append("\n");
+        sb.append("audioFormat: " + audioFormat);
+        sb.append("\n");
+        sb.append("channels: " + channels);
+        sb.append("\n");
+        sb.append("sampleRate: " + sampleRate);
+        sb.append("\n");
+        sb.append("byteRate: " + byteRate);
+        sb.append("\n");
+        sb.append("blockAlign: " + blockAlign);
+        sb.append("\n");
+        sb.append("bitsPerSample: " + bitsPerSample);
+        sb.append("\n");
+        sb.append("subChunk2Id: " + subChunk2Id);
+        sb.append("\n");
+        sb.append("subChunk2Size: " + subChunk2Size);
+        return sb.toString();
+      }
+    }
+  }
 }

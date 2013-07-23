@@ -114,10 +114,6 @@ public class SilenceDetectionServiceImpl extends AbstractJobProducer implements 
 			throw new ProcessFailedException("Generating Smil failed!");
 		} catch (PipelineBuildException ex) {
 			throw new ProcessFailedException("Unable to build detection Pipeline!");
-//    } catch (NotFoundException ex) {
-//      throw new ProcessFailedException(ex.getMessage());
-//    } catch (IOException ex) {
-//      throw new ProcessFailedException(ex.getMessage());
 		} catch (Exception ex) {
 			throw new ProcessFailedException(ex.getMessage());
 		}

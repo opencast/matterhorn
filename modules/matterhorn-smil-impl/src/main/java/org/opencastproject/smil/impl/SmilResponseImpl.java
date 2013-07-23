@@ -167,7 +167,12 @@ public class SmilResponseImpl implements SmilResponse {
    * @throws JAXBException if deserialization fail
    */
   public static SmilResponse fromXml(String smilResponseXml) throws JAXBException {
-    return fromXml(IOUtils.toInputStream(smilResponseXml));
+    InputStream smilStream = IOUtils.toInputStream(smilResponseXml);
+    try {
+      return fromXml(smilStream);
+    } finally {
+      IOUtils.closeQuietly(smilStream);
+    }
   }
 
   /**
@@ -178,7 +183,12 @@ public class SmilResponseImpl implements SmilResponse {
    * @throws JAXBException if deserialization fail
    */
   public static SmilResponse fromXml(File smilResponseXmlFile) throws JAXBException, FileNotFoundException {
-    return fromXml(new FileInputStream(smilResponseXmlFile));
+    FileInputStream smilStream = new FileInputStream(smilResponseXmlFile);
+    try {
+      return fromXml(smilStream);
+    } finally {
+      IOUtils.closeQuietly(smilStream);
+    }
   }
 
   /**

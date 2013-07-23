@@ -10,6 +10,4 @@
   </service>
   <reference cardinality="1..1" interface="org.opencastproject.workspace.api.Workspace" name="Workspace"
     policy="static" bind="setWorkspace" />
-  <reference cardinality="1..1" interface="org.opencastproject.ingest.api.IngestService" name="IngestService"
-    policy="static" bind="setIngestService" />
 </scr:component>

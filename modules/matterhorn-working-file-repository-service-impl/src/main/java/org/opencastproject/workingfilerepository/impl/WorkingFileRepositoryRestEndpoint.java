@@ -293,8 +293,6 @@ public class WorkingFileRepositoryRestEndpoint extends WorkingFileRepositoryImpl
       try {
         Response response = partialFileResponse(getFile(mediaPackageID, mediaPackageElementID),
             mimeMap.getContentType(fileName), some(fileName), range).tag(md5).build();
-//        response = fileResponse(getFile(mediaPackageID, mediaPackageElementID),
-//            mimeMap.getContentType(fileName), some(fileName)).tag(md5).build();
 
         return response;
       } catch (IllegalStateException e) {

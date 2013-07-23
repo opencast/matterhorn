@@ -17,6 +17,9 @@ package org.opencastproject.videoeditor.gstreamer.exceptions;
 
 import java.io.File;
 
+/**
+ * Thrown when input file does not contain any streams, that can be processed by Gstreamer.
+ */
 public class InputSourceTypeException extends Exception {
 
   public InputSourceTypeException(File inputFile) {
