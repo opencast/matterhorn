@@ -9,7 +9,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-rc7</version>
+    <version>1.4.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -84,7 +84,10 @@
         <configuration>
           <instructions>
             <Bundle-SymbolicName> ${project.artifactId} </Bundle-SymbolicName>
-            <Export-Package> org.opencastproject.fileupload.api;version=${project.version} </Export-Package>
+            <Export-Package> 
+              org.opencastproject.fileupload.api;version=${project.version},
+              org.opencastproject.fileupload.service;version=${project.version} 
+            </Export-Package>
             <Import-Package>
                org.opencastproject.workspace.api;version=${project.version},
               *;resolution:=optional

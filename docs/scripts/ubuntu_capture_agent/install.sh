@@ -26,16 +26,16 @@ export START_PATH=$PWD
 export WORKING_DIR=/tmp/cainstallscript
 
 # Root for the source code repository
-export SVN_URL=http://opencast.jira.com/svn/MH
+export SVN_URL=https://opencast.jira.com/svn/MH
 # Extension for the SVN_URL to reach the trunk
 export TRUNK_URL=$SVN_URL/trunk
 # Extension for the SVN_URL to reach the branches
 export BRANCHES_URL=$SVN_URL/branches/1.4.x
 # Extension for the SVN_URL to reach the tags
-export TAGS_URL=$SVN_URL/tags
+export TAGS_URL=$SVN_URL/tags/1.4.0
 
 # Default URL from where scripts and java source will be dowloaded
-export SRC_DEFAULT=$BRANCHES_URL
+export SRC_DEFAULT=$TAGS_URL
 
 # File containing the rules to be applied by udev to the configured devices -- not a pun!
 export DEV_RULES=/etc/udev/rules.d/matterhorn.rules
@@ -93,9 +93,11 @@ export UBUNTU_11_10="Ubuntu 11.10 \n \l"
 export UBUNTU_11_10_PACKAGES_FILE="Ubuntu-11-10.packages"
 export UBUNTU_12_04="Ubuntu 12.04"
 export UBUNTU_12_04_PACKAGES_FILE="Ubuntu-12-04.packages"
+export UBUNTU_12_10="Ubuntu 12.10"
+export UBUNTU_12_10_PACKAGES_FILE="Ubuntu-12-10.packages"
 export PACKAGE_LIST_DEFAULT_FILE="default.packages"
 
-PACKAGE_LISTS=("$UBUNTU_10_10_PACKAGES_FILE" "$UBUNTU_11_04_PACKAGES_FILE" "$UBUNTU_11_10_PACKAGES_FILE" "$UBUNTU_12_04_PACKAGES_FILE" "$PACKAGE_LIST_DEFAULT_FILE")
+PACKAGE_LISTS=("$UBUNTU_10_10_PACKAGES_FILE" "$UBUNTU_11_04_PACKAGES_FILE" "$UBUNTU_11_10_PACKAGES_FILE" "$UBUNTU_12_04_PACKAGES_FILE" "$UBUNTU_12_10_PACKAGES_FILE" "$PACKAGE_LIST_DEFAULT_FILE")
 
 # Packages that require the user approval to be installed (Please note the quotation mark at the end!!!)
 # There should be one package per line, but several packages may be included if they need to be treated 'as a block'
@@ -174,6 +176,10 @@ export POLL_HELP="A too short value will cause excessive polls to the core, whil
 Testers should choose a value of 1 minute so that they can schedule recordings to start immediately"
 
 ## Keys for several properties in the config files
+# Url and port of the admin node (or all in one server) (config.properties)
+export ADMIN_KEY="org.opencastproject.admin.ui.url"
+# Url and port of the engage node (or all in one server) (config.properties)
+export ENGAGE_KEY="org.opencastproject.engage.ui.url"
 # Storage dir in the general felix config file (config.properties)
 export STORAGE_KEY="org.opencastproject.storage.dir"
 # CA's own url in the general felix config file (config.properties)

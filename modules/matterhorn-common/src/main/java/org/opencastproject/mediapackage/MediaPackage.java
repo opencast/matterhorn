@@ -180,17 +180,6 @@ public interface MediaPackage extends Cloneable {
   MediaPackageElement getElementByReference(MediaPackageReference reference);
 
   /**
-   * Returns the element that is identified by the given reference or <code>null</code> if no such element exists.
-   * 
-   * @param reference
-   *          the reference
-   * @param includeDerived
-   *          <code>true</code> to also include derived elements
-   * @return the element
-   */
-  MediaPackageElement[] getElementsByReference(MediaPackageReference reference, boolean includeDerived);
-
-  /**
    * Returns the element that is identified by the given identifier or <code>null</code> if no such element exists.
    * 
    * @param id
@@ -393,6 +382,13 @@ public interface MediaPackage extends Cloneable {
    * @return the attachments with the specified reference
    */
   Attachment[] getAttachments(MediaPackageElementFlavor flavor, MediaPackageReference reference);
+
+  /**
+   * Returns the presentations that are part of this media package.
+   *
+   * @return the attachments
+   */
+  Publication[] getPublications();
 
   /**
    * Returns <code>true</code> if the media package contains attachments of any kind.

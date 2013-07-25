@@ -8,7 +8,7 @@
   <parent>
     <groupId>org.opencastproject</groupId>
     <artifactId>base</artifactId>
-    <version>1.4-rc7</version>
+    <version>1.4.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <properties>
@@ -64,6 +64,16 @@
     <dependency>
       <groupId>org.opencastproject</groupId>
       <artifactId>matterhorn-distribution-service-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.opencastproject</groupId>
+      <artifactId>matterhorn-publication-service-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.opencastproject</groupId>
+      <artifactId>matterhorn-working-file-repository-service-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -210,23 +220,22 @@
               OSGI-INF/operations/coverart.xml,
               OSGI-INF/operations/editor.xml,
               OSGI-INF/operations/distribute-acl.xml,
-              OSGI-INF/operations/distribute-download.xml,
-              OSGI-INF/operations/distribute-streaming.xml,
-              OSGI-INF/operations/distribute-youtube.xml,
               OSGI-INF/operations/download-dvd.xml,
               OSGI-INF/operations/email.xml,
               OSGI-INF/operations/embed.xml,
+              OSGI-INF/operations/publish-engage.xml,
+              OSGI-INF/operations/publish-youtube.xml,
               OSGI-INF/operations/error-handler.xml,
               OSGI-INF/operations/error-resolution.xml,
               OSGI-INF/operations/failing.xml,
               OSGI-INF/operations/image.xml,
               OSGI-INF/operations/ingest.xml,
+              OSGI-INF/operations/ingest-download.xml,
               OSGI-INF/operations/inspect.xml,
               OSGI-INF/operations/prepare-av.xml,
-              OSGI-INF/operations/publish.xml,
               OSGI-INF/operations/republish.xml,
-              OSGI-INF/operations/retract-download.xml,
-              OSGI-INF/operations/retract-streaming.xml,
+              OSGI-INF/operations/retract-engage.xml,
+              OSGI-INF/operations/retract-youtube.xml,
               OSGI-INF/operations/review.xml,
               OSGI-INF/operations/searchindex-remove.xml,
               OSGI-INF/operations/schedule.xml,
@@ -237,8 +246,7 @@
               OSGI-INF/operations/trim.xml,
               OSGI-INF/operations/zip.xml,
               OSGI-INF/operations/waveform.xml,
-              OSGI-INF/operations/watermark.xml,
-              <!-- OSGI-INF/operations/distribute-itunesu.xml -->
+              OSGI-INF/operations/watermark.xml
             </Service-Component>
           </instructions>
         </configuration>

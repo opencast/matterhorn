@@ -22,6 +22,7 @@ import static org.opencastproject.job.api.Job.Status.FINISHED;
 import static org.opencastproject.mediapackage.MediaPackageElementParser.getFromXml;
 import static org.opencastproject.mediapackage.MediaPackageElements.XACML_POLICY;
 import static org.opencastproject.security.api.SecurityConstants.GLOBAL_ADMIN_ROLE;
+import static org.opencastproject.workflow.handler.EngagePublicationChannel.CHANNEL_ID;
 
 import org.opencastproject.distribution.api.DistributionException;
 import org.opencastproject.distribution.api.DistributionService;
@@ -66,6 +67,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -226,22 +228,13 @@ public class SeriesUpdatedEventHandler implements EventHandler {
             // If the security policy has been updated, make sure to distribute that change
             // to the distribution channels as well
             if (SERIES_ACL_TOPIC.equals(event.getTopic())) {
-
-              // Remove the original xacml policy attachments
-              Attachment[] originalXacmlAttachments = mp.getAttachments(XACML_POLICY);
-              if (originalXacmlAttachments.length > 0) {
-                for (Attachment xacml : originalXacmlAttachments) {
-                  mp.remove(xacml);
-                }
-              }
-
               // Build a new XACML file for this mediapackage
               AccessControlList acl = AccessControlParser.parseAcl((String) event.getProperty(PAYLOAD));
               authorizationService.setAccessControl(mp, acl);
               Attachment fileRepoCopy = mp.getAttachments(XACML_POLICY)[0];
 
               // Distribute the updated XACML file
-              Job distributionJob = distributionService.distribute(mp, fileRepoCopy.getIdentifier());
+              Job distributionJob = distributionService.distribute(CHANNEL_ID, mp, fileRepoCopy.getIdentifier());
               JobBarrier barrier = new JobBarrier(serviceRegistry, distributionJob);
               Result jobResult = barrier.waitForJobs();
               if (jobResult.getStatus().get(distributionJob).equals(FINISHED)) {
@@ -262,13 +255,23 @@ public class SeriesUpdatedEventHandler implements EventHandler {
             if (seriesCatalogs.length == 1) {
               Catalog c = seriesCatalogs[0];
               String filename = FilenameUtils.getName(c.getURI().toString());
-              workspace.put(mp.getIdentifier().toString(), c.getIdentifier(), filename,
+              URI uri = workspace.put(mp.getIdentifier().toString(), c.getIdentifier(), filename,
                       dublinCoreService.serialize(seriesDublinCore));
+              c.setURI(uri);
+              // setting the URI to a new source so the checksum will most like be invalid
+              c.setChecksum(null);
 
               // Distribute the updated series dc
-              Job distributionJob = distributionService.distribute(mp, c.getIdentifier());
+              Job distributionJob = distributionService.distribute(CHANNEL_ID, mp, c.getIdentifier());
               JobBarrier barrier = new JobBarrier(serviceRegistry, distributionJob);
-              barrier.waitForJobs();
+              Result jobResult = barrier.waitForJobs();
+              if (jobResult.getStatus().get(distributionJob).equals(FINISHED)) {
+                mp.remove(c);
+                mp.add(getFromXml(serviceRegistry.getJob(distributionJob.getId()).getPayload()));
+              } else {
+                logger.error("Unable to distribute series catalog {}", c.getIdentifier());
+                continue;
+              }
             }
 
             // Update the search index with the modified mediapackage

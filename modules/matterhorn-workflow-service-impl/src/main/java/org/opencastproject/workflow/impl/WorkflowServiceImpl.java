@@ -410,9 +410,14 @@ public class WorkflowServiceImpl implements WorkflowService, JobProducer, Manage
     } catch (InvalidSyntaxException e) {
       throw new IllegalStateException(e);
     }
-    for (ServiceReference ref : refs) {
-      WorkflowOperationHandler handler = (WorkflowOperationHandler) componentContext.getBundleContext().getService(ref);
-      set.add(new HandlerRegistration((String) ref.getProperty(WORKFLOW_OPERATION_PROPERTY), handler));
+    if (refs != null) {
+      for (ServiceReference ref : refs) {
+        WorkflowOperationHandler handler = (WorkflowOperationHandler) componentContext.getBundleContext().getService(
+                ref);
+        set.add(new HandlerRegistration((String) ref.getProperty(WORKFLOW_OPERATION_PROPERTY), handler));
+      }
+    } else {
+      logger.warn("No registered workflow operation handlers found");
     }
     return set;
   }
@@ -1008,7 +1013,7 @@ public class WorkflowServiceImpl implements WorkflowService, JobProducer, Manage
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         props.store(out, null);
         List<String> newArguments = new ArrayList<String>(operationJob.getArguments());
-        newArguments.add(new String(out.toByteArray(), "ISO-8859-1"));
+        newArguments.add(new String(out.toByteArray(), "UTF-8"));
         operationJob.setArguments(newArguments);
       }
       serviceRegistry.updateJob(operationJob);
@@ -1677,6 +1682,9 @@ public class WorkflowServiceImpl implements WorkflowService, JobProducer, Manage
       } catch (IndexOutOfBoundsException e) {
         throw new ServiceRegistryException("This argument list for operation '" + op + "' does not meet expectations",
                 e);
+      } catch (NotFoundException e) {
+        logger.warn(e.getMessage());
+        updateOperationJob(job.getId(), OperationState.FAILED);
       }
       return null;
     } catch (Exception e) {

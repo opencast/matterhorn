@@ -34,7 +34,6 @@ import org.opencastproject.util.doc.rest.RestResponse;
 import org.opencastproject.util.doc.rest.RestService;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowParser;
-import org.opencastproject.workspace.api.Workspace;
 
 import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
@@ -49,14 +48,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -94,9 +92,6 @@ public class IngestRestService {
 
   private static final Logger logger = LoggerFactory.getLogger(IngestRestService.class);
 
-  /** The collection name used for temporarily storing uploaded zip files */
-  private static final String COLLECTION_ID = "ingest-temp";
-
   /** Key for the default workflow definition in config.properties */
   protected static final String DEFAULT_WORKFLOW_DEFINITION = "org.opencastproject.workflow.default.definition";
 
@@ -112,9 +107,18 @@ public class IngestRestService {
   /** The default workflow definition */
   private String defaultWorkflowDefinitionId = null;
 
+  /** Dublin Core Terms: http://purl.org/dc/terms/ */
+  private static List<String> dcterms = Arrays.asList("abstract", "accessRights", "accrualMethod",
+          "accrualPeriodicity", "accrualPolicy", "alternative", "audience", "available", "bibliographicCitation",
+          "conformsTo", "contributor", "coverage", "created", "creator", "date", "dateAccepted", "dateCopyrighted",
+          "dateSubmitted", "description", "educationLevel", "extent", "format", "hasFormat", "hasPart", "hasVersion",
+          "identifier", "instructionalMethod", "isFormatOf", "isPartOf", "isReferencedBy", "isReplacedBy",
+          "isRequiredBy", "issued", "isVersionOf", "language", "license", "mediator", "medium", "modified",
+          "provenance", "publisher", "references", "relation", "replaces", "requires", "rights", "rightsHolder",
+          "source", "spatial", "subject", "tableOfContents", "temporal", "title", "type", "valid");
+
   private MediaPackageBuilderFactory factory = null;
   private IngestService ingestService = null;
-  private Workspace workspace = null;
   private DublinCoreCatalogService dublinCoreService;
   protected PersistenceProvider persistenceProvider;
   protected Map<String, Object> persistenceProperties;
@@ -151,10 +155,6 @@ public class IngestRestService {
 
   public void setPersistenceProvider(PersistenceProvider persistenceProvider) {
     this.persistenceProvider = persistenceProvider;
-  }
-
-  public void setWorkspace(Workspace workspace) {
-    this.workspace = workspace;
   }
 
   public void setPersistenceProperties(Map<String, Object> persistenceProperties) {
@@ -371,8 +371,8 @@ public class IngestRestService {
               mp = factory.newMediaPackageBuilder().loadFromXml(item.openStream());
             }
           } else {
-            // once the body gets read iter.hasNext must not be invoked
-            // or the stream can not be read
+            // once the body gets read iter.hasNext must not be invoked or the stream can not be read
+            // MH-9579
             fileName = item.getName();
             in = item.openStream();
             isDone = true;
@@ -410,7 +410,8 @@ public class IngestRestService {
   @Produces(MediaType.TEXT_XML)
   @Consumes(MediaType.MULTIPART_FORM_DATA)
   @Path("addMediaPackage")
-  @RestQuery(name = "addMediaPackage", description = "Create media package from a media tracks and optional Dublin Core metadata fields", restParameters = {
+  @RestQuery(name = "addMediaPackage", description = "Create media package from a media tracks and optional Dublin Core metadata fields", 
+      restParameters = {
           @RestParameter(description = "The kind of media track", isRequired = true, name = "flavor", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "abstract", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "accessRights", type = RestParameter.Type.STRING),
@@ -439,10 +440,17 @@ public class IngestRestService {
           @RestParameter(description = "Metadata value", isRequired = false, name = "subject", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "temporal", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = true, name = "title", type = RestParameter.Type.STRING),
-          @RestParameter(description = "Metadata value", isRequired = false, name = "type", type = RestParameter.Type.STRING) }, bodyParameter = @RestParameter(description = "The media track file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE), reponses = {
+          @RestParameter(description = "Metadata value", isRequired = false, name = "type", type = RestParameter.Type.STRING),
+          @RestParameter(description = "URL of series DublinCore Catalog", isRequired = false, name = "seriesDCCatalogUri", type = RestParameter.Type.STRING),
+          @RestParameter(description = "Series DublinCore Catalog", isRequired = false, name = "seriesDCCatalog", type = RestParameter.Type.STRING),
+          @RestParameter(description = "URL of a media track file", isRequired = false, name = "mediaUri", type = RestParameter.Type.STRING),
+      },
+      bodyParameter = @RestParameter(description = "The media track file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE),
+      reponses = {
           @RestResponse(description = "Returns augmented media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST),
-          @RestResponse(description = "", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR) }, returnDescription = "")
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR) }, 
+      returnDescription = "")
   public Response addMediaPackage(@Context HttpServletRequest request) {
     return addMediaPackage(request, null);
   }
@@ -451,8 +459,13 @@ public class IngestRestService {
   @Produces(MediaType.TEXT_XML)
   @Consumes(MediaType.MULTIPART_FORM_DATA)
   @Path("addMediaPackage/{wdID}")
-  @RestQuery(name = "addMediaPackage", description = "Create media package from a media tracks and optional Dublin Core metadata fields", pathParameters = { @RestParameter(description = "Workflow definition id", isRequired = true, name = "wdID", type = RestParameter.Type.STRING) }, restParameters = {
-          @RestParameter(description = "The kind of media track", isRequired = true, name = "flavor", type = RestParameter.Type.STRING),
+  @RestQuery(name = "addMediaPackage", 
+      description = "Create and ingest media package from media tracks and optional Dublin Core metadata fields", 
+      pathParameters = { 
+          @RestParameter(description = "Workflow definition id", isRequired = true, name = "wdID", type = RestParameter.Type.STRING) }, 
+      restParameters = {
+          @RestParameter(description = "The kind of media track. This has to be specified in the request prior to each media track",
+              isRequired = true, name = "flavor", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "abstract", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "accessRights", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "available", type = RestParameter.Type.STRING),
@@ -480,7 +493,13 @@ public class IngestRestService {
           @RestParameter(description = "Metadata value", isRequired = false, name = "subject", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "temporal", type = RestParameter.Type.STRING),
           @RestParameter(description = "Metadata value", isRequired = false, name = "title", type = RestParameter.Type.STRING),
-          @RestParameter(description = "Metadata value", isRequired = false, name = "type", type = RestParameter.Type.STRING) }, bodyParameter = @RestParameter(description = "The media track file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE), reponses = {
+          @RestParameter(description = "Metadata value", isRequired = false, name = "type", type = RestParameter.Type.STRING), 
+          @RestParameter(description = "URL of series DublinCore Catalog", isRequired = false, name = "seriesDCCatalogUri", type = RestParameter.Type.STRING),
+          @RestParameter(description = "Series DublinCore Catalog", isRequired = false, name = "seriesDCCatalog", type = RestParameter.Type.STRING),
+          @RestParameter(description = "URL of a media track file", isRequired = false, name = "mediaUri", type = RestParameter.Type.STRING)
+      },
+      bodyParameter = @RestParameter(description = "The media track file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE), 
+      reponses = {
           @RestResponse(description = "Returns augmented media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_INTERNAL_SERVER_ERROR) }, returnDescription = "")
@@ -489,22 +508,81 @@ public class IngestRestService {
     try {
       MediaPackage mp = ingestService.createMediaPackage();
       DublinCoreCatalog dcc = dublinCoreService.newInstance();
+      Map<String, String> workflowProperties = new HashMap<String, String>();
+      int seriesDCCatalogNumber = 0;
+      boolean hasMedia = false;
       if (ServletFileUpload.isMultipartContent(request)) {
         for (FileItemIterator iter = new ServletFileUpload().getItemIterator(request); iter.hasNext();) {
           FileItemStream item = iter.next();
           if (item.isFormField()) {
             String fieldName = item.getFieldName();
+
+            /* “Remember” the flavor for the next media. */
             if ("flavor".equals(fieldName)) {
               flavor = MediaPackageElementFlavor.parseFlavor(Streams.asString(item.openStream()));
-            } else {
-              // TODO not all form fields should be treated as dublin core fields
+
+            /* Fields for DC catalog */
+            } else if (dcterms.contains(fieldName)) {
               EName en = new EName(DublinCore.TERMS_NS_URI, fieldName);
               dcc.add(en, Streams.asString(item.openStream()));
+
+            /* Series by URL */
+            } else if ("seriesDCCatalogUri".equals(fieldName)) {
+              URI dcurl;
+              try {
+                dcurl = new URI(Streams.asString(item.openStream()));
+              } catch (java.net.URISyntaxException e) {
+                /* Parameter was not a valid URL: Return 400 Bad Request */
+                logger.warn(e.getMessage(), e);
+                return Response.serverError().status(Status.BAD_REQUEST).build();
+              }
+              ingestService.addCatalog(dcurl, MediaPackageElements.SERIES, mp);
+
+            /* Series DC catalog (XML) as string */
+            } else if ("seriesDCCatalog".equals(fieldName)) {
+              String fileName = "series" + seriesDCCatalogNumber + ".xml";
+              seriesDCCatalogNumber += 1;
+              ingestService.addCatalog(item.openStream(), fileName, MediaPackageElements.SERIES, mp);
+
+            /* Add media files by URL */
+            } else if ("mediaUri".equals(fieldName)) {
+              if (flavor == null) {
+                /* A flavor has to be specified in the request prior the media file */
+                return Response.serverError().status(Status.BAD_REQUEST).build();
+              }
+              URI mediaUrl;
+              try {
+                mediaUrl = new URI(Streams.asString(item.openStream()));
+              } catch (java.net.URISyntaxException e) {
+                /* Parameter was not a valid URL: Return 400 Bad Request */
+                logger.warn(e.getMessage(), e);
+                return Response.serverError().status(Status.BAD_REQUEST).build();
+              }
+              ingestService.addTrack(mediaUrl, flavor, mp);
+              hasMedia = true;
+
+            } else {
+              /* Tread everything else as workflow properties */
+              workflowProperties.put(fieldName, Streams.asString(item.openStream()));
             }
+
+          /* Media files as request parameter */
           } else {
+            if (flavor == null) {
+              /* A flavor has to be specified in the request prior the video file */
+              return Response.serverError().status(Status.BAD_REQUEST).build();
+            }
             ingestService.addTrack(item.openStream(), item.getName(), flavor, mp);
+            hasMedia = true;
           }
         }
+
+        /* Check if we got any media. Fail if not. */
+        if (!hasMedia) {
+          logger.warn("Rejected ingest without actual media.");
+          return Response.serverError().status(Status.BAD_REQUEST).build();
+        }
+
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         dcc.toXml(out, true);
         InputStream in = new ByteArrayInputStream(out.toByteArray());
@@ -513,7 +591,7 @@ public class IngestRestService {
         if (wdID == null) {
           workflow = ingestService.ingest(mp);
         } else {
-          workflow = ingestService.ingest(mp, wdID);
+          workflow = ingestService.ingest(mp, wdID, workflowProperties);
         }
         return Response.ok(workflow).build();
       }
@@ -525,91 +603,140 @@ public class IngestRestService {
   }
 
   @POST
-  @Path("addZippedMediaPackage")
+  @Path("addZippedMediaPackage/{workflowDefinitionId}")
   @Produces(MediaType.TEXT_XML)
-  @RestQuery(name = "addZippedMediaPackage", description = "Create media package from a compressed file containing a manifest.xml document and all media tracks, metadata catalogs and attachments", restParameters = {
-          @RestParameter(description = "The workflow definition ID to run on this mediapackage", isRequired = false, name = WORKFLOW_DEFINITION_ID_PARAM, type = RestParameter.Type.STRING),
-          @RestParameter(description = "The workflow instance ID to associate with this zipped mediapackage", isRequired = false, name = WORKFLOW_INSTANCE_ID_PARAM, type = RestParameter.Type.STRING) }, bodyParameter = @RestParameter(description = "The compressed (application/zip) media package file", isRequired = true, name = "BODY", type = RestParameter.Type.FILE), reponses = {
+  @RestQuery(name = "addZippedMediaPackage", 
+      description = "Create media package from a compressed file containing a manifest.xml document and all media tracks, metadata catalogs and attachments", 
+      pathParameters = { 
+        @RestParameter(description = "Workflow definition id", 
+          isRequired = true, 
+          name = WORKFLOW_DEFINITION_ID_PARAM,
+          type = RestParameter.Type.STRING) },
+      restParameters = {
+        @RestParameter(description = "The workflow instance ID to associate with this zipped mediapackage", 
+          isRequired = false, 
+          name = WORKFLOW_INSTANCE_ID_PARAM, 
+          type = RestParameter.Type.STRING) }, 
+      bodyParameter = @RestParameter(
+        description = "The compressed (application/zip) media package file", 
+        isRequired = true, name = "BODY", 
+        type = RestParameter.Type.FILE), 
+      reponses = {
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST),
-          @RestResponse(description = "", responseCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE) }, returnDescription = "")
-  public Response addZippedMediaPackage(@Context HttpServletRequest request) {
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE) },
+      returnDescription = "")
+  public Response addZippedMediaPackage(@Context HttpServletRequest request, @PathParam("workflowDefinitionId") String wdID, @QueryParam("id") String wiID) {
     logger.debug("addZippedMediaPackage(HttpRequest)");
     if (!isIngestLimitEnabled() || getIngestLimit() > 0) {
-      return ingestZippedMediaPackage(request);
+      return ingestZippedMediaPackage(request, wdID, wiID);
     } else {
       logger.warn("Delaying ingest because we have exceeded the maximum number of ingests this server is setup to do concurrently.");
       return Response.status(Status.SERVICE_UNAVAILABLE).build();
     }
   }
 
-  private Response ingestZippedMediaPackage(HttpServletRequest request) {
+  @POST
+  @Path("addZippedMediaPackage")
+  @Produces(MediaType.TEXT_XML)
+  @RestQuery(name = "addZippedMediaPackage", 
+      description = "Create media package from a compressed file containing a manifest.xml document and all media tracks, metadata catalogs and attachments", 
+      restParameters = {
+        @RestParameter(description = "The workflow definition ID to run on this mediapackage. "
+            + "This parameter has to be set in the request prior to the zipped mediapackage "
+            + "(This parameter is deprecated. Please use /addZippedMediaPackage/{workflowDefinitionId} instead)",
+          isRequired = false, 
+          name = WORKFLOW_DEFINITION_ID_PARAM, 
+          type = RestParameter.Type.STRING),
+        @RestParameter(description = "The workflow instance ID to associate with this zipped mediapackage. "
+            + "This parameter has to be set in the request prior to the zipped mediapackage "
+            + "(This parameter is deprecated. Please use /addZippedMediaPackage/{workflowDefinitionId} with a path parameter instead)",
+          isRequired = false, 
+          name = WORKFLOW_INSTANCE_ID_PARAM, 
+          type = RestParameter.Type.STRING) }, 
+      bodyParameter = @RestParameter(
+        description = "The compressed (application/zip) media package file", 
+        isRequired = true, name = "BODY", 
+        type = RestParameter.Type.FILE), 
+      reponses = {
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_OK),
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_BAD_REQUEST),
+          @RestResponse(description = "", responseCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE) },
+      returnDescription = "")
+  public Response addZippedMediaPackage(@Context HttpServletRequest request) {
+    logger.debug("addZippedMediaPackage(HttpRequest)");
+    if (!isIngestLimitEnabled() || getIngestLimit() > 0) {
+      return ingestZippedMediaPackage(request, null, null);
+    } else {
+      logger.warn("Delaying ingest because we have exceeded the maximum number of ingests this server is setup to do concurrently.");
+      return Response.status(Status.SERVICE_UNAVAILABLE).build();
+    }
+  }
+
+  private Response ingestZippedMediaPackage(HttpServletRequest request, String wdID, String wiID) {
     if (isIngestLimitEnabled()) {
       setIngestLimit(getIngestLimit() - 1);
       logger.debug("An ingest has started so remaining ingest limit is " + getIngestLimit());
     }
-    FileInputStream zipInputStream = null;
-    String zipFileName = UUID.randomUUID().toString() + ".zip";
-    URI zipFileUri = null;
+    InputStream in = null;
+
+    logger.info("Received new request from {} to ingest a zipped mediapackage", request.getRemoteHost());
+
     try {
-      String workflowDefinitionId = defaultWorkflowDefinitionId;
+      String workflowDefinitionId   = wdID;
+      String workflowIdAsString     = wiID;
       Long workflowInstanceIdAsLong = null;
       Map<String, String> workflowConfig = new HashMap<String, String>();
       if (ServletFileUpload.isMultipartContent(request)) {
+        boolean isDone = false;
         for (FileItemIterator iter = new ServletFileUpload().getItemIterator(request); iter.hasNext();) {
           FileItemStream item = iter.next();
           if (item.isFormField()) {
             if (WORKFLOW_INSTANCE_ID_PARAM.equals(item.getFieldName())) {
-              String workflowIdAsString = IOUtils.toString(item.openStream(), "UTF-8");
-              try {
-                workflowInstanceIdAsLong = Long.parseLong(workflowIdAsString);
-              } catch (NumberFormatException e) {
-                logger.warn("{} '{}' is not numeric", WORKFLOW_INSTANCE_ID_PARAM, workflowIdAsString);
-              }
+              workflowIdAsString = IOUtils.toString(item.openStream(), "UTF-8");
+              continue;
             } else if (WORKFLOW_DEFINITION_ID_PARAM.equals(item.getFieldName())) {
               workflowDefinitionId = IOUtils.toString(item.openStream(), "UTF-8");
-              if (StringUtils.isBlank(workflowDefinitionId))
-                workflowDefinitionId = defaultWorkflowDefinitionId;
+              continue;
             } else {
               logger.debug("Processing form field: " + item.getFieldName());
               workflowConfig.put(item.getFieldName(), IOUtils.toString(item.openStream(), "UTF-8"));
             }
           } else {
             logger.debug("Processing file item");
-            InputStream in = item.openStream();
-            try {
-              zipFileUri = workspace.putInCollection(COLLECTION_ID, zipFileName, in);
-            } finally {
-              IOUtils.closeQuietly(in);
-            }
+            // once the body gets read iter.hasNext must not be invoked or the stream can not be read
+            // MH-9579
+            in = item.openStream();
+            isDone = true;
           }
+          if (isDone)
+            break;
         }
       } else {
-        InputStream in = request.getInputStream();
+        logger.debug("Processing file item");
+        in = request.getInputStream();
+      }
+
+      /* Try to convert the workflowId to integer */
+      if (!StringUtils.isBlank(workflowIdAsString)) {
         try {
-          zipFileUri = workspace.putInCollection(COLLECTION_ID, zipFileName, in);
-        } finally {
-          IOUtils.closeQuietly(in);
+          workflowInstanceIdAsLong = Long.parseLong(workflowIdAsString);
+        } catch (NumberFormatException e) {
+          logger.warn("{} '{}' is not numeric", WORKFLOW_INSTANCE_ID_PARAM, workflowIdAsString);
         }
       }
-      File zipFileFromWorkspace = workspace.get(zipFileUri);
-      zipInputStream = new FileInputStream(zipFileFromWorkspace);
-      WorkflowInstance workflow = ingestService.addZippedMediaPackage(zipInputStream, workflowDefinitionId,
-              workflowConfig, workflowInstanceIdAsLong);
+      if (StringUtils.isBlank(workflowDefinitionId)) {
+        workflowDefinitionId = defaultWorkflowDefinitionId;
+      }
+
+      WorkflowInstance workflow = ingestService.addZippedMediaPackage(in, workflowDefinitionId, workflowConfig,
+              workflowInstanceIdAsLong);
       return Response.ok(WorkflowParser.toXml(workflow)).build();
     } catch (Exception e) {
       logger.warn(e.getMessage(), e);
       return Response.serverError().status(Status.INTERNAL_SERVER_ERROR).build();
     } finally {
-      IOUtils.closeQuietly(zipInputStream);
-      try {
-        if (zipFileUri != null)
-          workspace.delete(zipFileUri);
-      } catch (NotFoundException nfe) {
-        logger.error("Error removing missing temporary ingest file " + COLLECTION_ID + "/" + zipFileUri, nfe);
-      } catch (IOException ioe) {
-        logger.error("Error removing temporary ingest file " + zipFileUri, ioe);
-      }
+      IOUtils.closeQuietly(in);
       if (isIngestLimitEnabled()) {
         setIngestLimit(getIngestLimit() + 1);
         logger.debug("An ingest has finished so increased ingest limit to " + getIngestLimit());
@@ -938,11 +1065,7 @@ public class IngestRestService {
   @Path("addDCCatalog")
   @RestQuery(name = "addDCCatalog", description = "Add a dublincore episode catalog to a given media package using an url", restParameters = {
           @RestParameter(description = "The media package as XML", isRequired = true, name = "mediaPackage", type = RestParameter.Type.TEXT),
-          @RestParameter(description = "DublinCore catalog as XML", isRequired = true, name = "dublinCore", type = RestParameter.Type.STRING), // TODO
-                                                                                                                                               // should
-                                                                                                                                               // this
-                                                                                                                                               // be
-                                                                                                                                               // TEXT??
+          @RestParameter(description = "DublinCore catalog as XML", isRequired = true, name = "dublinCore", type = RestParameter.Type.TEXT),
           @RestParameter(defaultValue = "dublincore/episode", description = "DublinCore Flavor", isRequired = false, name = "flavor", type = RestParameter.Type.STRING) }, reponses = {
           @RestResponse(description = "Returns augmented media package", responseCode = HttpServletResponse.SC_OK),
           @RestResponse(description = "Media package not valid", responseCode = HttpServletResponse.SC_BAD_REQUEST),

@@ -23,8 +23,8 @@ import org.opencastproject.util.data.Function;
 import org.opencastproject.util.data.Function0;
 import org.opencastproject.util.data.Function2;
 import org.opencastproject.util.data.Option;
+import org.opencastproject.util.data.Predicate;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.opencastproject.util.data.Monadics.mlist;
@@ -159,6 +159,15 @@ public final class Functions {
     };
   }
 
+  /** Flip arguments of a function of arity 2. */
+  public static <A, B, C> Function2<B, A, C> flip(final Function2<A, B, C> f) {
+    return new Function2<B, A, C>() {
+      @Override public C apply(B b, A a) {
+        return f.apply(a, b);
+      }
+    };
+  }
+
   /** Turn a function of arity 0 into an effect by discarding its result. */
   public static <A> Effect0 toEffect(final Function0<A> f) {
     return new Effect0() {
@@ -182,6 +191,14 @@ public final class Functions {
     return new Effect2<A, B>() {
       @Override protected void run(A a, B b) {
         f.apply(a, b);
+      }
+    };
+  }
+
+  public static <A> Predicate<A> toPredicate(final Function<A, Boolean> f) {
+    return new Predicate<A>() {
+      @Override public Boolean apply(A a) {
+        return f.apply(a);
       }
     };
   }
@@ -272,14 +289,6 @@ public final class Functions {
     };
   }
 
-  public static <A, B> List<B> bind(List<A> as, Function<A, List<B>> f) {
-    List<B> target = new ArrayList<B>();
-    for (A a : as) {
-      target.addAll(f.apply(a));
-    }
-    return target;
-  }
-
   /** Create an effect that runs its argument. */
   public static final Effect<Effect0> run = new Effect<Effect0>() {
     @Override protected void run(Effect0 e) {
@@ -333,5 +342,14 @@ public final class Functions {
    */
   public static <A> A chuck(Throwable t) {
     return Functions.<RuntimeException, A>castGeneric(t);
+  }
+
+  /** Kleisli composition of list monads. (a -> m b) -> (b -> m c) -> a -> m c */
+  public static <A, B, C> Function<A, List<C>> kleisliCompList(final Function<A, List<B>> m, final Function<B, List<C>> n) {
+    return new Function<A, List<C>>() {
+      @Override public List<C> apply(A a) {
+        return mlist(m.apply(a)).bind(n).value();
+      }
+    };
   }
 }

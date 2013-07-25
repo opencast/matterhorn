@@ -37,6 +37,7 @@ import org.opencastproject.util.NotFoundException;
 import org.opencastproject.workflow.api.AbstractWorkflowOperationHandler;
 import org.opencastproject.workflow.api.WorkflowInstance;
 import org.opencastproject.workflow.api.WorkflowOperationException;
+import org.opencastproject.workflow.api.WorkflowOperationInstance;
 import org.opencastproject.workflow.api.WorkflowOperationResult;
 import org.opencastproject.workflow.api.WorkflowOperationResult.Action;
 import org.opencastproject.workspace.api.Workspace;
@@ -64,8 +65,12 @@ public class InspectWorkflowOperationHandler extends AbstractWorkflowOperationHa
   /** The configuration options for this handler */
   private static final SortedMap<String, String> CONFIG_OPTIONS;
 
+  /** Option for rewriting existing metadata */
+  private static final String OPT_OVERWRITE = "overwrite";
+
   static {
     CONFIG_OPTIONS = new TreeMap<String, String>();
+    CONFIG_OPTIONS.put(OPT_OVERWRITE, "Whether to rewrite existing metadata");
   }
 
   /** The inspection service */
@@ -125,13 +130,17 @@ public class InspectWorkflowOperationHandler extends AbstractWorkflowOperationHa
     // Inspect the tracks
     long totalTimeInQueue = 0;
     long timeToExecute = 0;
+
+    WorkflowOperationInstance operation = workflowInstance.getCurrentOperation();
+    boolean rewrite = "true".equalsIgnoreCase(operation.getConfiguration(OPT_OVERWRITE));
+
     for (Track track : mediaPackage.getTracks()) {
 
       logger.info("Inspecting track '{}' of {}", track.getIdentifier(), mediaPackage);
 
       Job inspectJob = null;
       try {
-        inspectJob = inspectionService.enrich(track, false);
+        inspectJob = inspectionService.enrich(track, rewrite);
         if (!waitForStatus(inspectJob).isSuccess()) {
           throw new WorkflowOperationException("Track " + track + " could not be inspected");
         }
@@ -190,16 +199,14 @@ public class InspectWorkflowOperationHandler extends AbstractWorkflowOperationHa
       DublinCoreCatalog dublinCore = loadDublinCoreCatalog(dcCatalogs[0]);
 
       // Extent
-      if (!dublinCore.hasValue(DublinCore.PROPERTY_EXTENT)) {
+      if (mediaPackage.getDuration() != null && !dublinCore.hasValue(DublinCore.PROPERTY_EXTENT)) {
         DublinCoreValue extent = EncodingSchemeUtils.encodeDuration(mediaPackage.getDuration());
-        if (mediaPackage.getDuration() != null) {
-          dublinCore.set(DublinCore.PROPERTY_EXTENT, extent);
-          logger.debug("Setting dc:extent to '{}'", extent.getValue());
-        }
+        dublinCore.set(DublinCore.PROPERTY_EXTENT, extent);
+        logger.debug("Setting dc:extent to '{}'", extent.getValue());
       }
 
       // Date created
-      if (!dublinCore.hasValue(DublinCore.PROPERTY_CREATED)) {
+      if (mediaPackage.getDate() != null && !dublinCore.hasValue(DublinCore.PROPERTY_CREATED)) {
         DublinCoreValue date = EncodingSchemeUtils.encodeDate(mediaPackage.getDate(), Precision.Minute);
         dublinCore.set(DublinCore.PROPERTY_CREATED, date);
         logger.debug("Setting dc:date to '{}'", date.getValue());

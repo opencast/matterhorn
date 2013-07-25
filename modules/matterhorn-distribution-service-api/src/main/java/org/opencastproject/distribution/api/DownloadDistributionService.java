@@ -23,8 +23,6 @@ import org.opencastproject.mediapackage.MediaPackageException;
  * Distributes elements from MediaPackages to distribution channels.
  */
 public interface DownloadDistributionService extends DistributionService {
-
-  Job distribute(MediaPackage mediapackage, String elementId, boolean checkAvailability) throws DistributionException,
-          MediaPackageException;
-
+  Job distribute(String channelId, MediaPackage mediapackage, String elementId, boolean checkAvailability)
+          throws DistributionException, MediaPackageException;
 }

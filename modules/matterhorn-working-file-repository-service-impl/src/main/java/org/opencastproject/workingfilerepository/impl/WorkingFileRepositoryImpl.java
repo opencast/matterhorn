@@ -43,6 +43,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import javax.management.ObjectInstance;
 
@@ -274,8 +277,31 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
         logger.debug("Attempting to overwrite the file at {}", f.getAbsolutePath());
       }
       out = new FileOutputStream(f);
-      IOUtils.copy(in, out);
-      createMd5(f);
+
+      // Wrap the input stream and copy the input stream to the file
+      MessageDigest messageDigest = null;
+      DigestInputStream dis = null;
+      try {
+        messageDigest = MessageDigest.getInstance("MD5");
+        dis = new DigestInputStream(in, messageDigest);
+        IOUtils.copy(dis, out);
+      } catch (NoSuchAlgorithmException e1) {
+        logger.error("Unable to create md5 message digest");
+      }
+
+      // Store the hash
+      String md5 = DigestUtils.md5Hex(dis.getMessageDigest().digest());
+      File md5File = null;
+      try {
+        md5File = getMd5File(f);
+        FileUtils.writeStringToFile(md5File, md5);
+      } catch (IOException e) {
+        FileUtils.deleteQuietly(md5File);
+        throw e;
+      } finally {
+        IOUtils.closeQuietly(dis);
+      }
+
     } catch (IOException e) {
       FileUtils.deleteDirectory(dir);
       throw e;
@@ -309,6 +335,26 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
       throw e;
     } finally {
       IOUtils.closeQuietly(md5In);
+    }
+  }
+
+  /**
+   * Creates a file containing the md5 hash for the contents of a source file.
+   * 
+   * @param is
+   *          the input stream containing the data to hash
+   * @throws IOException
+   *           if the hash cannot be created
+   */
+  protected String createMd5(InputStream is) throws IOException {
+    File md5File = null;
+    try {
+      return DigestUtils.md5Hex(is);
+    } catch (IOException e) {
+      FileUtils.deleteQuietly(md5File);
+      throw e;
+    } finally {
+      IOUtils.closeQuietly(is);
     }
   }
 
@@ -524,8 +570,31 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
         logger.debug("Attempting to overwrite the file at {}", f.getAbsolutePath());
       }
       out = new FileOutputStream(f);
-      IOUtils.copy(in, out);
-      createMd5(f);
+
+      // Wrap the input stream and copy the input stream to the file
+      MessageDigest messageDigest = null;
+      DigestInputStream dis = null;
+      try {
+        messageDigest = MessageDigest.getInstance("MD5");
+        dis = new DigestInputStream(in, messageDigest);
+        IOUtils.copy(dis, out);
+      } catch (NoSuchAlgorithmException e1) {
+        logger.error("Unable to create md5 message digest");
+      }
+
+      // Store the hash
+      String md5 = DigestUtils.md5Hex(dis.getMessageDigest().digest());
+      File md5File = null;
+      try {
+        md5File = getMd5File(f);
+        FileUtils.writeStringToFile(md5File, md5);
+      } catch (IOException e) {
+        FileUtils.deleteQuietly(md5File);
+        throw e;
+      } finally {
+        IOUtils.closeQuietly(dis);
+      }
+
     } catch (IOException e) {
       FileUtils.deleteQuietly(f);
       throw e;
@@ -560,7 +629,7 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
     }
     File destFile;
     try {
-      destFile = new File(destDir, toFileName);
+      destFile = new File(destDir, PathSupport.toSafeName(toFileName));
       FileSupport.link(source, destFile);
       createMd5(destFile);
     } catch (Exception e) {
@@ -600,14 +669,12 @@ public class WorkingFileRepositoryImpl implements WorkingFileRepository, PathMap
       logger.debug("Removing existing file from target location at {}", dest);
       delete(toMediaPackage, toMediaPackageElement);
     } catch (NotFoundException e) {
-      dest = new File(getElementDirectory(toMediaPackage, toMediaPackageElement), toFileName);
+      dest = new File(getElementDirectory(toMediaPackage, toMediaPackageElement), PathSupport.toSafeName(toFileName));
     }
 
     try {
       FileUtils.moveFile(source, dest);
-      if (!sourceMd5.delete())
-        throw new IOException("Unable to delete " + sourceMd5.getAbsolutePath());
-      createMd5(dest);
+      FileUtils.moveFile(sourceMd5, getMd5File(dest));
     } catch (IOException e) {
       FileUtils.deleteDirectory(destDir);
       throw new IllegalStateException("unable to copy file" + e);

@@ -73,7 +73,7 @@ ocRecordings = new (function() {
     this.refresh = 5;
     this.doRefresh = 'true';
     this.sortField = 'Date';
-    this.sortOrder = 'ASC';
+    this.sortOrder = 'DESC';
     this.filterField = null;
     this.filterText = '';
     
@@ -333,6 +333,7 @@ ocRecordings = new (function() {
     ocRecordings.refreshingStats = false;
     var stats = {
       all: 0,
+      instantiated:0,
       upcoming:0,
       capturing:0,
       processing:0,
@@ -351,7 +352,7 @@ ocRecordings = new (function() {
       }
     }
     
-    stats.all = stats.upcoming + stats.capturing + stats.processing + stats.finished + stats.failed + stats.hold;
+    stats.all = stats.instantiated + stats.upcoming + stats.capturing + stats.processing + stats.finished + stats.failed + stats.hold;
     if (ocRecordings.statistics != null
       && ocRecordings.statistics[ocRecordings.Configuration.state] != stats[ocRecordings.Configuration.state]) {
       refresh();
@@ -375,6 +376,7 @@ ocRecordings = new (function() {
         }
       });
     } else {
+      stats.instantiated += parseInt(definition.instantiated);
       stats.processing += parseInt(definition.running);
       stats.finished += parseInt(definition.finished);
       stats.hold += parseInt(definition.paused);
@@ -1069,9 +1071,12 @@ ocRecordings = new (function() {
       if (ocUtils.exists(series['http://purl.org/dc/terms/'])) {
         series = series['http://purl.org/dc/terms/'];
         var item = {
-          label: series.title[0].value + ' - ' + series.creator[0].value,
+          label: series.title[0].value,
           value: series.title[0].value,
           id: series.identifier[0].value
+        }
+        if (typeof series.creator != 'undefined') {
+          item['label'] += ' - ' + series.creator[0].value;
         }
         source.push(item);
       }
@@ -1463,7 +1468,7 @@ ocRecordings = new (function() {
             success: function(data){
               window.debug = data;
               creationSucceeded = true;
-              seriesComponent.fields.series.val($('dcterms\\:identifier',data).text());
+              seriesComponent.fields.series.val($('dcterms|identifier',data).text());
             },
             error: function() {
               creationSucceeded = false;

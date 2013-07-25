@@ -9,4 +9,8 @@
   </service>
   <reference cardinality="1..1" interface="org.opencastproject.workspace.api.Workspace" name="Workspace"
     policy="static" bind="setWorkspace" />
+  <reference cardinality="1..1" interface="org.opencastproject.security.api.TrustedHttpClient" name="trustedHttpClient"
+    policy="static" bind="setTrustedHttpClient" />
+  <reference name="ServiceRegistry" cardinality="1..1" interface="org.opencastproject.serviceregistry.api.ServiceRegistry"
+    policy="static" bind="setServiceRegistry" />
 </scr:component>

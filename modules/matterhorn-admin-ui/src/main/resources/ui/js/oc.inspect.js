@@ -121,6 +121,9 @@ Opencast.WorkflowInspect = (function() {
       if (mp.duration) {
         mp.duration = ocUtils.formatSeconds(mp.duration/ 1000)
       }
+      
+      // Publications
+      mp.publications.publication = Opencast.RenderUtils.ensureArray(mp.publications.publication);
 
       // Attachments
       mp.attachments = Opencast.RenderUtils.ensureArray(mp.attachments.attachment);
@@ -224,7 +227,8 @@ Opencast.WorkflowInspect = (function() {
         $content.show('fast');
       }
     });
-    renderWorkflowPerformance(workflow);
+//    Temporary removed since the highcharts license is not supported
+//    renderWorkflowPerformance(workflow);
   }
 
   /** Render workflow info page (View Info) to specified container

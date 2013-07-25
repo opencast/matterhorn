@@ -412,13 +412,14 @@ public class SolrRequester {
           int segmentHits = 0;
           int textLength = segmentText.length();
           for (String t : queryTerms) {
+            String strippedTerm = StringUtils.strip(t, "*");
             int startIndex = 0;
             while (startIndex < textLength - 1) {
-              int foundAt = segmentText.indexOf(t, startIndex);
+              int foundAt = segmentText.indexOf(strippedTerm, startIndex);
               if (foundAt < 0)
                 break;
               segmentHits++;
-              startIndex = foundAt + t.length();
+              startIndex = foundAt + strippedTerm.length();
             }
           }
 
@@ -679,16 +680,16 @@ public class SolrRequester {
       }
     }
 
-    if (q.isIncludeSeries() && !q.isIncludeEpisodes()) {
+    if (!q.isIncludeEpisodes()) {
       if (sb.length() > 0)
         sb.append(" AND ");
-      sb.append(Schema.OC_MEDIATYPE + ":" + SearchResultItemType.Series);
+      sb.append("-" + Schema.OC_MEDIATYPE + ":" + SearchResultItemType.AudioVisual);
     }
 
-    if (q.isIncludeEpisodes() && !q.isIncludeSeries()) {
+    if (!q.isIncludeSeries()) {
       if (sb.length() > 0)
         sb.append(" AND ");
-      sb.append(Schema.OC_MEDIATYPE + ":" + SearchResultItemType.AudioVisual);
+      sb.append("-" + Schema.OC_MEDIATYPE + ":" + SearchResultItemType.Series);
     }
 
     if (q.getDeletedDate() == null) {
@@ -699,8 +700,11 @@ public class SolrRequester {
 
     SolrQuery query = new SolrQuery(sb.toString());
 
-    if (q.getLimit() > 0)
-      query.setRows(q.getLimit());
+    if (q.getLimit() > 0) {
+        query.setRows(q.getLimit());
+    } else {
+        query.setRows(Integer.MAX_VALUE);
+    }
 
     if (q.getOffset() > 0)
       query.setStart(q.getOffset());

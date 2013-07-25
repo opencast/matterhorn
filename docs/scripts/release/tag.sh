@@ -2,23 +2,23 @@
 
 #The comments in this file assume you are creating a tag from a branch
 #Eg:  The defaults in the comments here will take the current version of 
-#http://opencast.jira.com/svn/MH/branches/1.3.x and tag it as 
-#http://opencast.jira.com/svn/MH/tags/1.3-rc5
+#https://opencast.jira.com/svn/MH/branches/1.3.x and tag it as 
+#https://opencast.jira.com/svn/MH/tags/1.3-rc5
 
 #The name of the branch in SVN that we are looking to turn into a release
 #E.g. BRANCH_NAME=1.3.x
-BRANCH_NAME=1.4.x
+BRANCH_NAME=
 
 #The version the POMs are in the development branch.
 #E.g. BRANCH_POM_VER=1.3-SNAPSHOT
-BRANCH_POM_VER=1.4-SNAPSHOT
+BRANCH_POM_VER=
 
 #The new version of our release as it will show up in the tags directory
 #E.g. RELEASE_VER=1.3-rc5
-RELEASE_VER=1.4-rc4
+RELEASE_VER=
 
 #The jira ticket this work is being done under (must be open)
-JIRA_TICKET=MH-8765
+JIRA_TICKET=
 
 #The scratch directory where the work is performed.  Make sure you have enough
 #space.  Should not already include a subdirectory of $WORK_DIR/$JIRA_TICKET

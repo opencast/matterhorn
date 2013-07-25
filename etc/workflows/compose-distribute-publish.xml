@@ -44,7 +44,7 @@
 	    </span>
 	  </li>
       </ul>
-    </fieldset>  
+    </fieldset>
     <fieldset>
       <legend>Distribution</legend>
       <ul class="oc-ui-form-list">
@@ -67,15 +67,15 @@
       var trimHold = $('input#trimHold');
 	  var captionHold = $('input#captionHold');
       var videoPreview = $('input#videoPreview');
-      
+
       var checkVideoPreview = function(){
       	var checkValue = trimHold.is(':checked') || captionHold.is(':checked');
       	videoPreview.attr('checked', checkValue);
       }
-      
+
       trimHold.click(checkVideoPreview);
 	  captionHold.click(checkVideoPreview);
-      
+
       ocWorkflowPanel.registerComponents = function(components){
         /* components with keys that begin with 'org.opencastproject.workflow.config' will be passed
          * into the workflow. The component's nodeKey must match the components array key.
@@ -87,30 +87,29 @@
           {key: 'org.opencastproject.workflow.config.trimHold'},
           {getValue: function(){ return this.fields.trimHold.is(":checked"); }
           });
-          
+
         components['org.opencastproject.workflow.config.archiveOp'] = new ocAdmin.Component(
           ['archiveOp'],
           {key: 'org.opencastproject.workflow.config.archiveOp'},
           {getValue: function(){ return this.fields.archiveOp.is(":checked");}
           });
-          
+
         components['org.opencastproject.workflow.config.captionHold'] = new ocAdmin.Component(
           ['captionHold'],
           {key: 'org.opencastproject.workflow.config.captionHold'},
           {getValue: function(){ return this.fields.captionHold.is(":checked");}
           });
-          
-        components['org.opencastproject.workflow.config.videoPreview'] = new ocAdmin.Component(
-          ['videoPreview'],
-          {key: 'org.opencastproject.workflow.config.videoPreview'},
-          {getValue: function(){ return this.fields.videoPreview.is(":checked");}
-          });
-          
-        ocScheduler.dublinCore.components['license'] = new ocAdmin.Component(
+
+	components['org.opencastproject.workflow.config.videoPreview'] = new ocAdmin.Component(
+	  ['videoPreview'],
+	  {key: 'org.opencastproject.workflow.config.videoPreview'},
+	  {getValue: function(){ return this.fields.videoPreview.is(":checked");}
+	  });
+
+	ocScheduler.dublinCore.components['license'] = new ocAdmin.Component(
           ['license'],
           {label: 'licenseLabel', key: 'license'}
           );
-          
           //etc...
       }
       ocWorkflowPanel.setComponentValues = function(values, components){
@@ -125,7 +124,6 @@
   </configuration_panel>
 
   <operations>
-	
 	<!-- Apply ACL from series to the mediapackage -->
 
     <operation
@@ -134,7 +132,7 @@
       exception-handler-workflow="error"
       description="Applying access control rules">
     </operation>
-    
+
     <!-- tag the incoming source material for archival -->
 
     <operation
@@ -146,16 +144,16 @@
       </configurations>
     </operation>
 
-    <!-- tag the dublin core catalogs so they will be distributed and added to search -->
-    
+    <!-- tag the incoming metadata catalogs for publishing -->
+
     <operation
       id="tag"
-      description="Tagging dublin core catalogs for publishing">
+      description="Tagging source metadata for publishing">
       <configurations>
         <configuration key="source-flavors">dublincore/*</configuration>
         <configuration key="target-tags">+engage</configuration>
       </configurations>
-    </operation> 
+    </operation>
 
     <!-- inspect the media -->
     
@@ -274,7 +272,18 @@
         <configuration key="target-tags">+archive</configuration>
       </configurations>
     </operation>
-    
+
+    <!-- tag the episode or serie catalog created during trim operation -->
+
+    <operation
+      id="tag"
+      description="Tagging trimmed media for archive">
+      <configurations>
+        <configuration key="source-flavors">dublincore/*</configuration>
+        <configuration key="target-tags">+archive,+engage</configuration>
+      </configurations>
+    </operation>
+
     <!-- hold for captions -->
     <operation
       id="caption"
@@ -288,7 +297,7 @@
     </operation>
 
    <!-- encode to engage player preview images -->
- 
+
     <operation
       id="image"
       fail-on-error="true"
@@ -358,11 +367,10 @@
         <configuration key="target-tags">engage</configuration>
         <configuration key="encoding-profile">flash-audio.http</configuration>
       </configurations>
-    </operation>   
-     
+    </operation>
 
     <!-- run the videosegmentation -->
-    
+
     <operation
       id="segment-video"
       fail-on-error="false"
@@ -419,7 +427,7 @@
         <configuration key="encoding-profiles">feed-m4a.http, feed-avi.http</configuration>
       </configurations>
     </operation>
-    
+
     <!-- encode to feed preview images -->
 
     <operation
@@ -453,7 +461,7 @@
     </operation>
 
     <!-- Generate segment previews -->
-    
+
     <operation
       id="segmentpreviews"
       fail-on-error="false"
@@ -484,42 +492,18 @@
       </configurations>
     </operation>
 
-    <!-- Distribute to download server -->
-    
-    <operation
-      id="distribute-download"
+    <!-- Distribute and publish to engage player -->
+
+	<operation
+      id="publish-engage"
       max-attempts="2"
       fail-on-error="true"
       exception-handler-workflow="error"
-      description="Distributing to progressive downloads">
+      description="Distribute and publish to engage player">
       <configurations>
+        <configuration key="download-source-tags">engage,atom,rss</configuration>
+        <configuration key="streaming-source-tags">engage</configuration>
         <configuration key="check-availability">true</configuration>
-        <configuration key="source-tags">engage,atom,rss,-publish</configuration>
-        <configuration key="target-tags">publish</configuration>
-      </configurations>
-    </operation>
-
-    <operation
-      id="distribute-streaming"
-      max-attempts="2"
-      fail-on-error="true"
-      if="${org.opencastproject.streaming.url}"
-      exception-handler-workflow="error"
-      description="Distributing to streaming server">
-      <configurations>
-        <configuration key="source-tags">engage,-publish</configuration>
-        <configuration key="target-tags">publish</configuration>
-      </configurations>
-    </operation>
-
-    <!-- Remove archive tag from distributed material -->
-
-    <operation
-      id="tag"
-      description="Removing archive tag from distributed material">
-      <configurations>
-	    <configuration key="source-tags">publish</configuration>
-        <configuration key="target-tags">-archive</configuration>
       </configurations>
     </operation>
 
@@ -536,26 +520,15 @@
       </configurations>
     </operation>
  
-    <!-- Publish to engage search index -->
-
-    <operation
-      id="publish"
-      fail-on-error="true"
-      exception-handler-workflow="error"
-      description="Publishing">
-      <configurations>
-        <configuration key="source-tags">publish</configuration>
-      </configurations>
-    </operation>
- 
     <!-- Cleanup the working file repository -->
- 
+
     <operation
       id="cleanup"
       fail-on-error="false"
       description="Cleaning up">
       <configurations>
         <configuration key="preserve-flavors"></configuration>
+        <configuration key="delete-external">true</configuration>
       </configurations>
     </operation>
   </operations>
