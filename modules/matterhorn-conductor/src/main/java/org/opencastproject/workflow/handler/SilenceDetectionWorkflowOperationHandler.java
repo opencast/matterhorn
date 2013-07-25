@@ -19,7 +19,6 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.UUID;
 import org.apache.commons.io.IOUtils;
 import org.opencastproject.job.api.Job;
 import org.opencastproject.job.api.JobContext;
@@ -119,9 +118,10 @@ public class SilenceDetectionWorkflowOperationHandler extends AbstractWorkflowOp
         InputStream is = null;
         try {
           is = IOUtils.toInputStream(smil.toXML(), "UTF-8");
-          URI smilURI = workspace.put(mp.getIdentifier().compact(), UUID.randomUUID().toString(), TARGET_FILE_NAME, is);
+          URI smilURI = workspace.put(mp.getIdentifier().compact(), smil.getId(), TARGET_FILE_NAME, is);
           Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
                   .elementFromURI(smilURI, MediaPackageElement.Type.Catalog, MediaPackageElementFlavor.parseFlavor(targetFlavor));
+          catalog.setIdentifier(smil.getId());
           mp.add(catalog);
         } finally {
           IOUtils.closeQuietly(is);

@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.UUID;
 import javax.xml.bind.JAXBException;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
@@ -194,9 +193,10 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
         try {
           // put new smil into workspace
           is = IOUtils.toInputStream(smil.toXML(), "UTF-8");
-          URI smilURI = workspace.put(mp.getIdentifier().compact(), UUID.randomUUID().toString(), SMIL_FILE_NAME, is);
+          URI smilURI = workspace.put(mp.getIdentifier().compact(), smil.getId(), SMIL_FILE_NAME, is);
           Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
                   .elementFromURI(smilURI, MediaPackageElement.Type.Catalog, smilFlavor);
+          catalog.setIdentifier(smil.getId());
           mp.add(catalog);
         } finally {
           IOUtils.closeQuietly(is);
@@ -213,9 +213,10 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
           workspace.delete(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier());
           mp.remove(smilCatalogs[0]);
           // put modified smil into workspace
-          URI newSmilUri = workspace.put(mp.getIdentifier().compact(), smilCatalogs[0].getIdentifier(), SMIL_FILE_NAME, is);
+          URI newSmilUri = workspace.put(mp.getIdentifier().compact(), smil.getId(), SMIL_FILE_NAME, is);
           Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
                   .elementFromURI(newSmilUri, MediaPackageElement.Type.Catalog, smilFlavor);
+          catalog.setIdentifier(smil.getId());
           mp.add(catalog);
         } finally {
           IOUtils.closeQuietly(is);
@@ -333,9 +334,10 @@ public class VideoEditorWorkflowOperationHandler extends ResumableWorkflowOperat
         workspace.delete(mp.getIdentifier().compact(), catalogs[0].getIdentifier());
         mp.remove(catalogs[0]);
         // put modified smil into workspace
-        URI newSmilUri = workspace.put(mp.getIdentifier().compact(), catalogs[0].getIdentifier(), SMIL_FILE_NAME, is);
+        URI newSmilUri = workspace.put(mp.getIdentifier().compact(), smil.getId(), SMIL_FILE_NAME, is);
         Catalog catalog = (Catalog) MediaPackageElementBuilderFactory.newInstance().newElementBuilder()
                 .elementFromURI(newSmilUri, MediaPackageElement.Type.Catalog, smilFlavor);
+        catalog.setIdentifier(smil.getId());
         mp.add(catalog);
       } finally {
         IOUtils.closeQuietly(is);
