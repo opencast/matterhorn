@@ -150,7 +150,7 @@ export DEFAULT_NTP_SERVER=ntp.ubuntu.com
 export NTP_CONF=/etc/ntp.conf
 
 # Location of the jv4linfo jar
-export JV4LINFO_URL=http://luniks.net/luniksnet/download/java/jv4linfo
+export JV4LINFO_URL=http://aifile.usask.ca/matterhorn/mirror/thirdparty/
 # Name of the jv4linfo file
 export JV4LINFO_JAR=jv4linfo-0.2.1-src.jar
 # Shared object required by the jv4linfo jar to function
