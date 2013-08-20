@@ -279,7 +279,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
     }
 
     /**
-     * Exception can occure by processing Wave data.
+     * Exception can occure by processing wave data.
      */
     public class WaveException extends Exception {
 
@@ -289,7 +289,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
     }
 
     /**
-     * Wave class encapsulates the wave data in a waveheader and have some
+     * Wave class encapsulates the wave data in a wave header and have some
      * methods to read content.
      */
     class Wave {
@@ -298,37 +298,42 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       private InputStream inputStream;
 
       /**
-       * Constructor
+       * Constructor.
        *
        * @param filename Wave file
-       * @throws IOException
+       * @throws IOException if reading from input stream failed
+       * @throws WaveException if wave file has invalid or unsupported header format
        */
       public Wave(String filename) throws IOException, WaveException {
         this(new File(filename));
       }
 
       /**
-       * Constructor
+       * Constructor.
        *
        * @param f the wav file
-       * @throws IOException
+       * @throws IOException if reading from input stream failed
+       * @throws WaveException if wave file has invalid or unsupported header format
        */
       public Wave(File f) throws IOException, WaveException {
         this(new FileInputStream(f));
       }
 
       /**
-       * Constructor
+       * Constructor.
+       * On any thrown exception the input stream will be closed.
        *
        * @param inputStream Wave file input stream
-       * @throws IOException
+       * @throws IOException if reading from input stream failed
+       * @throws WaveException if wave file has invalid or unsupported header format
        */
-      public Wave(InputStream inputStream) throws IOException, WaveException {
+      protected Wave(InputStream inputStream) throws IOException, WaveException  {
         this.inputStream = inputStream;
         waveHeader = new WaveUtils.WaveHeader(inputStream);
 
         if (!waveHeader.isValid()) {
-          throw new WaveException("Invalid Wave Header");
+          IOUtils.closeQuietly(inputStream);
+          throw new WaveException("Invalid wave header");
         }
       }
 
@@ -361,12 +366,20 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
        *
        * @param n samples to read
        * @return samples readed, the length can be different from n
-       * @throws IOException
+       * @throws IOException if an I/O error occurs.
        */
       public float[][] getNFrames(int n) throws IOException {
         // read raw audio data for n samples
         byte[] rawSamples = new byte[n * getWaveHeader().getBlockAlign()];
-        int bytesRead = inputStream.read(rawSamples);
+        int bytesRead = -1;
+
+        try {
+          bytesRead = inputStream.read(rawSamples);
+        } catch (IOException ex) {
+          closeDataStream();
+          throw ex;
+        }
+
         if (bytesRead == -1) {
           closeDataStream();
           return null;
@@ -427,11 +440,25 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       private String subChunk2Id = ""; // 4 bytes
       private long subChunk2Size = 0L; // unsigned 4 bytes, little endian
 
-      public WaveHeader(InputStream inputStream) {
+      /**
+       * Read the wave file header.
+       * Check isValid flag, if the wave file supported.
+       * 
+       * @param inputStream wave file input stream
+       * @throws IOException if an I/O error occurs.
+       */
+      public WaveHeader(InputStream inputStream) throws IOException {
         valid = loadHeader(inputStream);
       }
 
-      private boolean loadHeader(InputStream inputStream) {
+      /**
+       * Read header data from wav file.
+       *
+       * @param inputStream wave file input stream
+       * @return true if wave file is valid and supported
+       * @throws IOException if an I/O error occurs.
+       */
+      private boolean loadHeader(InputStream inputStream) throws IOException {
 
         byte[] headerBuffer = null;
         try {
@@ -518,9 +545,6 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
             } while (LIST_HEADER.equals(subChunk2Id.toUpperCase()));
           }
 
-        } catch (IOException e) {
-          logger.error("Waveheader read failure", e);
-          return false;
         } catch (IllegalArgumentException ex) {
           logger.error("Waveheader parsing failed", ex);
           return false;
