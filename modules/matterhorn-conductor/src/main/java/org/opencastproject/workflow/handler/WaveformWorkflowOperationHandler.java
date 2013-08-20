@@ -411,6 +411,7 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
       public static final String WAVE_HEADER = "WAVE";
       public static final String FMT_HEADER = "fmt ";
       public static final String DATA_HEADER = "data";
+      public static final String LIST_HEADER = "LIST";
       private boolean valid = false;
       private String chunkId = ""; // 4 bytes
       private long chunkSize = 0L; // unsigned 4 bytes, little endian
@@ -496,6 +497,27 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
           inputStream.read(headerBuffer);
           subChunk2Size = parseLongLittleEndian(headerBuffer);
 
+          if (LIST_HEADER.equals(subChunk2Id.toUpperCase())) {
+            do {
+              // list info header wrap some metadata like encoder software, author, etc.
+              // we are not interesting on it but should read them till raw wav data chunk
+              byte[] listHeader = new byte[(int)subChunk2Size];
+              inputStream.read(listHeader);
+              // drop list data chunk
+
+              // read next chunk id and size
+              // get data sub-chunk 2
+              headerBuffer = new byte[4];
+              inputStream.read(headerBuffer);
+              subChunk2Id = new String(headerBuffer);
+
+              headerBuffer = new byte[4];
+              inputStream.read(headerBuffer);
+              subChunk2Size = parseLongLittleEndian(headerBuffer);
+
+            } while (LIST_HEADER.equals(subChunk2Id.toUpperCase()));
+          }
+
         } catch (IOException e) {
           logger.error("Waveheader read failure", e);
           return false;
@@ -517,20 +539,20 @@ public class WaveformWorkflowOperationHandler extends AbstractWorkflowOperationH
           return true;
         } else {
           logger.error("WaveHeader: Unsupported header format");
-          if (!chunkId.toUpperCase().equals(RIFF_HEADER)) {
+          if (!RIFF_HEADER.equals(chunkId.toUpperCase())) {
             logger.error("chunckId {} is not {}", chunkId.toUpperCase(), RIFF_HEADER);
           }
 
-          if (!format.toUpperCase().equals(WAVE_HEADER)) {
+          if (!WAVE_HEADER.equals(format.toUpperCase())) {
             logger.error("format {} is not {}", format.toUpperCase(), WAVE_HEADER);
           }
 
-          if (!FMT_HEADER.equals(subChunk1Id)) {
-            logger.error("subChunk1Id {} is not {}", subChunk1Id, FMT_HEADER);
+          if (!FMT_HEADER.equals(subChunk1Id.toLowerCase())) {
+            logger.error("subChunk1Id {} is not {}", subChunk1Id.toLowerCase(), FMT_HEADER);
           }
 
-          if (!DATA_HEADER.equals(subChunk2Id)) {
-            logger.error("subChunk2Id {} is not {}", subChunk2Id, DATA_HEADER);
+          if (!DATA_HEADER.equals(subChunk2Id.toLowerCase())) {
+            logger.error("subChunk2Id {} is not {}", subChunk2Id.toLowerCase(), DATA_HEADER);
           }
 
           if (audioFormat != 1) {
